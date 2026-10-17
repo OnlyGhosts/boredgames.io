@@ -1406,6 +1406,10 @@ describe('GameTopBar', () => {
     const css = stylesheet('gamebar.css');
     expect(ruleOf(css, '.gbar__count')).toContain('height: 44px');
     expect(ruleOf(css, '.gbar__count-pill')).toContain('border-radius: var(--radius-pill)');
+    // A live control, not a greyed one: the outline buttons' strong border, the icon and the count in full text colour.
+    expect(ruleOf(css, '.gbar__count-pill')).toContain('border: 1px solid var(--color-border-strong)');
+    expect(ruleOf(css, '.gbar__count-pill')).toContain('color: var(--color-text)');
+    expect(ruleOf(css, '.gbar__count-pill svg')).not.toContain('--color-text-muted');
   });
 
   it('gives every player a chip with a status badge: the platform says Ready, Away and Watching', () => {
