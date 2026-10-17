@@ -18,6 +18,8 @@ test.describe.configure({ mode: 'serial' });
 const ROOM_CODE_RE = /^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{4}$/;
 const PORTRAIT = { width: 390, height: 844 };
 const SMALL = { width: 320, height: 568 };
+/** A 360px phone: the How to play tiles are a size between the two, where a long value once overran. */
+const MID = { width: 360, height: 740 };
 /** playwright.config's default viewport, restored after a small-screen check. */
 const DESKTOP = { width: 1280, height: 800 };
 /** The smallest desktop-sized screen, where How to play is a popover with little room under its button. */
@@ -439,7 +441,10 @@ test('How to play shows the rules of the game picked, follows the host’s switc
   await expect(card.getByTestId('rules-name')).toHaveText('The Spy Game');
   await expect(card.getByTestId('rules-section')).toHaveCount(5);
   await expect(card.getByTestId('rules-section').first()).toContainText('How a round goes');
-  await expect(card).toContainText(`${SPYGAME_ROUND_MINUTES} minutes`);
+  // The hero (the place card and the spy's) and the four key facts, the round clock first, from the shared constant.
+  await expect(card.getByTestId('rules-hero')).toHaveAttribute('data-kind', 'place');
+  await expect(card.getByTestId('rules-fact')).toHaveCount(4);
+  await expect(card.getByTestId('rules-fact').first()).toContainText(`${SPYGAME_ROUND_MINUTES} min`);
   await expect(card).toContainText('Watching');
   // Attached to the button: right under it, inside the screen, and nothing dims the room (the players stay reachable).
   const anchor = await button.boundingBox();
@@ -461,7 +466,8 @@ test('How to play shows the rules of the game picked, follows the host’s switc
   await expect(page.getByRole('dialog', { name: 'How to play Blackjack' })).toBeVisible();
   await expect(card.getByTestId('rules-name')).toHaveText('Blackjack');
   await expect(card.getByTestId('rules-section').first()).toContainText('How a hand goes');
-  await expect(card).toContainText(`stands on every ${DEALER_STANDS_AT}`);
+  await expect(card.getByTestId('rules-hero')).toHaveAttribute('data-kind', 'cards');
+  await expect(card.getByTestId('rules-fact').nth(2)).toContainText(`Stands on ${DEALER_STANDS_AT}`);
   await expect(page.getByTestId('game-picker-meta')).toHaveCount(0);
   await expect(host.page.getByTestId('game-picker-meta')).toHaveText('Blackjack · 1+ players');
 
@@ -490,12 +496,17 @@ test('How to play shows the rules of the game picked, follows the host’s switc
   expect((lowPanel?.y ?? 0) + (lowPanel?.height ?? 0), 'the card ends above the footer').toBeLessThanOrEqual((footer?.y ?? 0) + 0.5);
   await expectInsideViewport(host.page, 'how-to-play-popover', LANDSCAPE_TABLET);
   await expect(host.page.getByTestId('rules-section')).toHaveCount(5);
+  // The hero and the facts fill the top of a short card: the sections are a scroll away, inside the card, never off the screen.
+  await host.page.locator('.how-to-play__scroll').evaluate((el) => el.scrollTo(0, el.scrollHeight));
+  const lastSection = await host.page.getByTestId('rules-section').last().boundingBox();
+  expect((lastSection?.y ?? 0) + (lastSection?.height ?? 0), 'the last section scrolls into view inside the card').toBeLessThanOrEqual((lowPanel?.y ?? 0) + (lowPanel?.height ?? 0) + 0.5);
+  expect(lastSection?.y ?? -1, 'the last section scrolls into view inside the card').toBeGreaterThanOrEqual((lowPanel?.y ?? 0) - 0.5);
   await host.page.keyboard.press('Escape');
   await expect(host.page.getByTestId('how-to-play-popover')).toHaveCount(0);
   await host.page.setViewportSize(DESKTOP);
 
-  // On a phone the rules come up in the sheet; the button is a 44px target that fits beside the picker at 390 and 320.
-  for (const size of [PORTRAIT, SMALL]) {
+  // On a phone the rules come up in the sheet; the button is a 44px target that fits beside the picker at 390, 360 and 320.
+  for (const size of [PORTRAIT, MID, SMALL]) {
     await pia.page.setViewportSize(size);
     const phoneButton = pia.page.getByTestId('how-to-play');
     const box = await phoneButton.boundingBox();
@@ -510,6 +521,22 @@ test('How to play shows the rules of the game picked, follows the host’s switc
     await expect(pia.page.getByTestId('how-to-play-card')).toHaveAttribute('data-mode', 'sheet');
     await expect(sheet.getByTestId('rules-name')).toHaveText('The Spy Game');
     await expect(sheet.getByTestId('rules-section')).toHaveCount(5);
+    await expect(sheet.getByTestId('rules-fact')).toHaveCount(4);
+    // The hero and the tiles fit the sheet: no sideways scroll, and every big value keeps to its tile.
+    const keepsToTiles = async (game: string) => {
+      await noHorizontalOverflow(pia.page, size.width);
+      const clipped = await pia.page.evaluate(() => [...document.querySelectorAll('.rules-fact__value')].filter((el) => el.scrollWidth > el.clientWidth + 0.5).map((el) => el.textContent));
+      expect(clipped, `${size.width}: every key fact of ${game} keeps to its tile`).toEqual([]);
+    };
+    await keepsToTiles('The Spy Game');
+    // The sheet follows the host's switch like the popover does, so Blackjack's "Stands on 17", the longest value, is measured at this size too.
+    await host.page.getByTestId('game-picker').locator('[data-testid="game-tile"][data-game="blackjack"]').click();
+    const blackjackSheet = pia.page.getByRole('dialog', { name: 'How to play Blackjack' });
+    await expect(blackjackSheet).toBeVisible();
+    await expect(blackjackSheet.getByTestId('rules-fact').nth(2)).toContainText(`Stands on ${DEALER_STANDS_AT}`);
+    await keepsToTiles('Blackjack');
+    await host.page.getByTestId('game-picker').locator('[data-testid="game-tile"][data-game="spygame"]').click();
+    await expect(sheet).toBeVisible();
     await expectInsideViewport(pia.page, 'how-to-play-sheet-close', size);
     await pia.page.keyboard.press('Escape');
     await expect(pia.page.getByTestId('how-to-play-sheet')).toHaveCount(0);

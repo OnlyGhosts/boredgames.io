@@ -461,6 +461,48 @@ describe('the light theme', () => {
     expect(ruleOf(stylesheet('table.css'), '.tbl-panel .btn:disabled')).toContain('background: var(--btn-disabled-bg)');
   });
 
+  it('cuts every game accent for text at AA on the panel, the raised surface and its own wash in both themes, and keeps the tab pills legible', () => {
+    const tokens = stylesheet('tokens.css');
+    const dark = tokens.slice(0, tokens.indexOf(":root[data-theme='light']"));
+    const light = lightBlock();
+    const value = (block: string, name: string): string => {
+      const match = block.match(new RegExp(`${name}: (#[0-9a-f]{6});`));
+      expect(match, name).not.toBeNull();
+      return match?.[1] ?? '';
+    };
+    const luminance = (hex: string): number => {
+      const channel = (i: number) => {
+        const c = parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16) / 255;
+        return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+      };
+      return 0.2126 * channel(0) + 0.7152 * channel(1) + 0.0722 * channel(2);
+    };
+    const contrast = (a: string, b: string): number => {
+      const [lighter, darker] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+      return (lighter + 0.05) / (darker + 0.05);
+    };
+    for (const [theme, block] of [['dark', dark], ['light', light]] as const) {
+      const surfaces = [value(block, '--color-surface'), value(block, '--color-surface-2')];
+      for (const g of GAME_LIST) {
+        const text = value(block, `--game-${g.id}-text`);
+        const soft = value(block, `--game-${g.id}-soft`);
+        for (const bg of [...surfaces, soft]) expect(contrast(text, bg), `${theme} ${g.id}: ${text} on ${bg}`).toBeGreaterThanOrEqual(4.5);
+        // The wash carries the hero's summary in muted text.
+        expect(contrast(value(block, '--color-text-muted'), soft), `${theme} ${g.id}: muted text on ${soft}`).toBeGreaterThanOrEqual(4.5);
+        // The round's pill is the accent itself with ink on it.
+        expect(contrast(value(dark, '--game-ink'), value(dark, `--game-${g.id}`)), `${g.id}: ink on the accent`).toBeGreaterThanOrEqual(4.5);
+      }
+      for (const [fg, bg] of [
+        ['--color-primary-text', '--color-primary-soft'],
+        ['--color-warning-text', '--color-warning-soft'],
+        ['--color-secondary-text', '--color-secondary-soft'],
+        ['--color-text-muted', '--color-info-soft'],
+      ]) {
+        expect(contrast(value(block, fg), value(block, bg)), `${theme}: ${fg} on ${bg}`).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  });
+
   it('keeps the felt on a light table: a pale green with white seats and ribbon, so cards never sit white on white', () => {
     const felt = ruleOf(stylesheet('table.css'), ":root[data-theme='light'] .tbl-felt");
     expect(felt).toContain('--color-surface: #e2e9d1');
@@ -584,8 +626,8 @@ describe('wordmark and mascots', () => {
     // Only the picked tile wears the check badge.
     expect(html.match(/class="game-tile__check"/g)).toHaveLength(1);
     expect(html.indexOf('game-tile__check')).toBeLessThan(html.indexOf('data-game="spygame"'));
-    // The line glyph still names the game at the top of How to play.
-    expect(renderToString(createElement(RulesCard, { meta: gameById('poker'), rules: { summary: '', round: '', scoring: '', end: '', settings: '', watchers: '' }, mode: 'popover' }))).toContain('data-glyph="poker"');
+    // The line glyph still names the game at the top of How to play: on the accent plate of a hero that has no illustration of its own (RulesHero.tsx).
+    expect(renderToString(createElement(RulesCard, { meta: gameById('poker'), rules: { summary: '', hero: { kind: 'glyph' }, facts: [], round: '', scoring: '', end: '', settings: '', watchers: '' }, mode: 'popover' }))).toContain('data-glyph="poker"');
     // Three to a row, a short last row stretching to fill; one neutral panel with the name on its strip; the picked tile is the lilac fill with ink.
     const lobby = stylesheet('lobby.css');
     expect(ruleOf(lobby, '.game-picker__list .game-tile')).toContain('flex: 1 1 calc(33.33% - 6px)');
@@ -1437,7 +1479,7 @@ describe('player chips', () => {
 
   it("use the game’s own status when it has one", () => {
     const r = room({ phase: 'playing' });
-    const game = { meta: gameById('scribble'), Screen: () => null, Art: () => null, rules: { summary: '', round: '', scoring: '', end: '', settings: '', watchers: '' }, playerStatus: () => ({ label: 'Drawing', icon: null, tone: 'active' as const }) };
+    const game = { meta: gameById('scribble'), Screen: () => null, Art: () => null, rules: { summary: '', hero: { kind: 'glyph' as const }, facts: [], round: '', scoring: '', end: '', settings: '', watchers: '' }, playerStatus: () => ({ label: 'Drawing', icon: null, tone: 'active' as const }) };
     expect(chipStatus(r, player('host'), game).label).toBe('Drawing');
     expect(chipStatus(r, player('host', { connected: false }), game).label).toBe('Away');
     expect(chipStatus(r, player('host'), null).label).toBe('Ready');

@@ -5,8 +5,8 @@ import { noOrphan } from '../lib/format';
 import { DESKTOP_QUERY, useMediaQuery } from '../lib/media';
 import { rulesSections } from '../lib/rules';
 import { BottomSheet } from './BottomSheet';
-import { GameGlyph } from './GameGlyph';
 import { CloseIcon, HelpIcon } from './Icons';
+import { RulesHeroArt } from './RulesHero';
 
 interface Props {
   meta: GameMeta;
@@ -182,25 +182,39 @@ function Popover({ meta, rules, label, onClose, anchorRef, keepOpenIn, id }: Pop
   );
 }
 
-/** The rules themselves: the game's name and glyph, its one-line summary, then the five sections. */
+/**
+ * The rules themselves: the hero (the game's illustration, name and summary on a wash of its
+ * accent), the four key facts in tiles, then the five sections under coloured tab pills. The
+ * game's accent and its text and wash cuts come in as custom properties on the card.
+ */
 export function RulesCard({ meta, rules, mode }: { meta: GameMeta; rules: GameRules; mode: 'popover' | 'sheet' }) {
-  const accent = { '--game-accent': `var(--game-${meta.id})` } as CSSProperties;
+  const accent = { '--game-accent': `var(--game-${meta.id})`, '--game-accent-text': `var(--game-${meta.id}-text)`, '--game-accent-soft': `var(--game-${meta.id}-soft)` } as CSSProperties;
   return (
-    <div className="rules" data-testid="how-to-play-card" data-game={meta.id} data-mode={mode}>
-      <div className="rules__head">
-        <span className="rules__glyph" style={accent} aria-hidden="true">
-          <GameGlyph game={meta} size={22} strokeWidth={2} />
-        </span>
-        <div className="rules__intro">
+    <div className="rules" style={accent} data-testid="how-to-play-card" data-game={meta.id} data-mode={mode}>
+      <div className="rules-hero">
+        <RulesHeroArt hero={rules.hero} meta={meta} />
+        <div className="rules-hero__intro">
           <h3 className="rules__name" data-testid="rules-name">
             {noOrphan(meta.name)}
           </h3>
           <p className="rules__summary">{noOrphan(rules.summary)}</p>
         </div>
       </div>
+      <section className="rules__section rules__section--facts" aria-label="Key facts">
+        <h4 className="rules__heading">Key facts</h4>
+        <div className="rules-facts" data-testid="rules-facts">
+          {rules.facts.map((fact) => (
+            <div key={fact.label} className="rules-fact" data-testid="rules-fact">
+              <span className="rules-fact__label">{fact.label}</span>
+              <span className="rules-fact__value">{fact.value}</span>
+              <span className="rules-fact__note">{noOrphan(fact.note)}</span>
+            </div>
+          ))}
+        </div>
+      </section>
       {rulesSections(rules).map((s) => (
         <section key={s.key} className="rules__section" data-testid="rules-section" data-section={s.key}>
-          <h4 className="rules__heading">{s.heading}</h4>
+          <h4 className={`rules__tab rules__tab--${s.tone}`}>{s.heading}</h4>
           <p className="rules__text">{noOrphan(s.text)}</p>
         </section>
       ))}

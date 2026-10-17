@@ -685,15 +685,47 @@ export interface SettingsFieldsProps<S = Record<string, unknown>> {
   patch(partial: Partial<S>): void;
 }
 
+/** One tile of the How to play card's Key facts: a small label, a big value and a short note under it. */
+export interface RuleFact {
+  /** "Goal", "Dealer", "Draw it": a word or two, set in small caps. */
+  label: string;
+  /** The big accent-coloured value, a number or a short phrase ("21", "Stands on 17"); at most 12 characters, so it keeps to one line on a 320px phone. */
+  value: string;
+  /** A few words under the value ("Draws to 16"). Prose: curly apostrophes, the last two words kept together. */
+  note: string;
+}
+
 /**
- * The rules of a game as the lobby's How to play card shows them: a one-line summary, then five
- * short plain sections. Written from the server's rules in `client/src/games/<id>/rules.ts`, with
- * every number a template over the game's shared constants so the copy can never drift from the
- * code. Short plain words, curly apostrophes, no dashes; the card keeps each paragraph's last two
- * words together.
+ * The illustration at the top of the How to play card, drawn by the platform (RulesHero.tsx) from
+ * plain data in the game's accent, so a game ships no artwork: inline SVG and CSS only, rendered
+ * server-side too. `badge` is the lime pill at the illustration's corner (a key number, "21" or "80 s").
+ */
+export type RulesHero =
+  /** Two of the site's playing cards, fanned ("AS", "KH": rank then suit letter). */
+  | { kind: 'cards'; cards: [string, string]; badge: string }
+  /** Scribble: a mini white canvas with a doodle and the pencil over it. */
+  | { kind: 'canvas'; badge: string }
+  /** The Spy Game: a place card beside the spy's "?" card. */
+  | { kind: 'place'; badge: string }
+  /** Quip Game: two speech bubbles, one taking the votes. */
+  | { kind: 'quips'; badge: string }
+  /** The game's glyph on its accent plate: the fallback a new game starts with. */
+  | { kind: 'glyph' };
+
+/**
+ * The rules of a game as the lobby's How to play card shows them: an illustrated hero with a
+ * one-line summary, four key facts in tiles, then five short plain sections under coloured tab
+ * pills. Written from the server's rules in `client/src/games/<id>/rules.ts`, with every number a
+ * template over the game's shared constants so the copy can never drift from the code. Short
+ * plain words, curly apostrophes, no dashes; the card keeps each paragraph's last two words
+ * together. The facts carry the numbers, so the sections say them once at most.
  */
 export interface GameRules {
   summary: string;
+  /** The illustration beside the name and summary. */
+  hero: RulesHero;
+  /** Exactly four tiles, in reading order (left to right, then the second row). */
+  facts: RuleFact[];
   /** How one round (or hand, at a card table) goes. */
   round: string;
   /** How you score. */
@@ -760,8 +792,15 @@ it, beside the picked game) opens `rules` in a popover on a desktop and the bott
 phone; the card follows whichever game the host picks (the host's own tiles switch it without
 closing it), so a game cannot ship without its rules. `rules.ts` is the one place a game's rules
 copy lives: the registry carries none. Write them from the server module, under about 140 words,
-with every number a template over the shared constants, and say what the host's End game does
-(`client/src/games/rules.test.ts` checks every game's sections and copy). The platform's shell ([`client/src/App.tsx`](../client/src/App.tsx))
+with every number a template over the shared constants, and say what the host's End game does.
+Give the card its four key facts (a label, a value of at most 12 characters so it keeps to one line
+on a 320px phone, and a note) and a `hero` the platform draws from plain data: start on
+`{ kind: 'glyph' }`, the game's glyph on its accent plate, and pick another kind from
+`platform/game.ts` (fanned playing cards, the canvas, a place card, speech bubbles) when one fits;
+`RulesHero.tsx` is where a new kind is drawn, in inline SVG and CSS only, so it renders on the server.
+The facts carry the numbers, so the sections say them once at most (`client/src/games/rules.test.ts`
+checks every game's hero, facts, sections and copy). The accent's text and wash cuts are the
+`--game-<id>-text` and `--game-<id>-soft` tokens in `tokens.css`, one pair per theme, AA on the panel. The platform's shell ([`client/src/App.tsx`](../client/src/App.tsx))
 renders `Lobby` while `phase === 'lobby'` (with the `ResultsPopup` over it once a game ended) and
 your `Screen` (keyed by room code) while `'playing'`, with the `WaitingOverlay` over it during a
 hold. Your top bar and options sheet carry End game and Leave room by themselves. The player list applies your
@@ -1402,8 +1441,8 @@ export const templateClient = defineGameClient<TemplateView, TemplateSettings>({
 });
 ```
 
-The rules the lobby's How to play shows, one short section each, the numbers templated over the
-shared constants:
+The rules the lobby's How to play shows: the hero, four key facts and one short section each, the
+numbers templated over the shared constants:
 
 ```ts
 /** Click Race's How to play: the template of a rules module, written from the server's rules. */
@@ -1413,6 +1452,15 @@ import { JOIN_MID_GAME_TEXT } from '../../platform/lib/rules';
 
 export const templateRules: GameRules = {
   summary: 'Tap the big button faster than everyone else.',
+  // The glyph on its plate: the hero a game starts with until it has an illustration of its own (platform/game.ts lists the kinds).
+  hero: { kind: 'glyph' },
+  // Exactly four tiles: a short label, a value of at most 12 characters, a note; every number from the shared constants.
+  facts: [
+    { label: 'Target', value: `${L.targetClicks.min} to ${L.targetClicks.max}`, note: 'Taps to win' },
+    { label: 'Clock', value: `${L.timeLimit.min} to ${L.timeLimit.max} s`, note: 'The race ends when it runs out' },
+    { label: 'First to target', value: 'Bonus', note: 'For reaching it before everyone else' },
+    { label: 'Everyone else', value: '1 per tap', note: 'Scored when the race ends' },
+  ],
   round: 'Everyone taps at once. The race ends when someone reaches the target or the clock runs out.',
   scoring: 'The first to the target wins a bonus. Everyone else scores a point per tap when the race ends.',
   end: 'After the one race. Most points wins.',
@@ -2005,10 +2053,10 @@ operating system preference is not consulted).
 | Type | `--font-sans` (Inter, body), `--font-display` (Space Grotesk 700, headings), `--font-mono` (IBM Plex Mono, only where a monospace is truly needed: the room code, in the code boxes and the front door's code chip, so 2/Z and 5/S never blur); self-hosted latin subsets in `client/public/fonts/` (`fonts.css`). Labels are normal words in the main fonts (no tracked uppercase, no monospace as decoration); numbers keep tabular figures; copy uses the curly apostrophe (’) |
 | Spacing | `--space-1` 4px, `--space-2` 8px, `--space-3` 12px, `--space-4` 16px, `--space-5` 24px, `--space-6` 32px, `--space-7` 48px, `--space-8` 64px, `--gutter` 16px |
 | Radii | `--radius-sm` 8px (inputs, buttons), `--radius-item` 10px (choice cards, code boxes, toasts), `--radius-md` 14px (panels), `--radius-lg` 20px (sheets, modals), `--radius-pill` |
-| Shadows | `--shadow-sm` and `--shadow-md` are `none` (flat surfaces sit on their border); `--shadow-lg` is a soft drop for floating layers only (sheets, toasts) |
+| Shadows | `--shadow-sm` and `--shadow-md` are `none` (flat surfaces sit on their border); `--shadow-lg` is a soft drop for floating layers only (sheets, toasts); `--shadow-piece` and `--shadow-pencil` lift the pieces of the How to play hero (a fanned card, the spy's card, the pencil over the canvas) |
 | Surfaces | `--color-bg` #141514, `--color-surface` #20221F, `--color-surface-2` #2B2E29 (raised), `--color-surface-3` #191C19 (inset wells: inputs, lists), `--color-border` #454A43, `--color-border-strong` #747D6F (control borders) |
 | Text | `--color-text` #F1F0E8, `--color-text-muted` #B9C0B3, `--color-text-faint` (small text, AA on the panels) |
-| Games | `--game-<id>` per game (the same hex as `GameMeta.accent`), `--game-ink` for the glyph on top and `--game-paper`, the off-white in a game's picture; `--tile-foot-bg/fg/border` are the lobby tile's footer strip (the panel's graphite on dark, solid ink on light) |
+| Games | `--game-<id>` per game (the same hex as `GameMeta.accent`), `--game-ink` for the glyph on top and `--game-paper`, the off-white in a game's picture; `--tile-foot-bg/fg/border` are the lobby tile's footer strip (the panel's graphite on dark, solid ink on light); `--game-<id>-text` and `--game-<id>-soft` are the accent as text (the How to play card's key facts) and as the wash under its hero, one pair per theme, AA on the panels |
 | Brand | `--color-primary` (lime #C7E976, a FILL that always carries `--color-primary-contrast` ink text), `--color-primary-hover`, `--color-primary-soft`, `--color-primary-text` (lime as text/border/stroke on dark, a dark olive on white); `--color-secondary*` (lilac #A699D5) with the same five |
 | Status | `--color-success`, `-soft`, `-text`; `--color-warning*`; `--color-danger*`; `--color-info-soft`; `--color-focus` (flat, restrained, AA on the panels) |
 | Chat | `--chat-correct-bg/fg`, `--chat-close-bg/fg`, `--chat-guessed-bg/fg` |
@@ -2052,7 +2100,7 @@ layout, which is a good reference for a non-scrolling phone game.
 | [`SiteHeader`](../client/src/platform/components/SiteHeader.tsx) | `menuActions?: MenuAction[]`, `hero?` | The logo (in the room, part of one header bar, `.lobby__top` in `lobby.css`: one surface like the game top bar, with the logo at the left, "Room code" and the lime tiles together in the middle and Copy and Share as compact buttons at the right end, everything 44px tall on one line; a phone splits the bar into the centred logo and the code card under it; the two phones as its icon, then the wordmark, whose "o" in ".io" is the settings gear) links to `/` (inside a room that leaves the room: any navigation away from `/:slug/:CODE` does); nothing else sits beside it (the connection has its own notice); the gear "o" is the settings button, whose popover lists `menuActions` under the preferences (the lobby's Copy invite link and Leave room); `hero` is the front door's logo, filling the column's width (from 1024px it grows past the column to two fifths of the screen, at most 600px, centred over it) |
 | [`Wordmark`](../client/src/platform/components/Wordmark.tsx) | `className?` | The outlined boredgames.io logo (Poppins Black + Regular paths) inline, accessible name "boredgames.io", "games" in `--color-primary-mark` |
 | [`PhoneBored`](../client/src/platform/components/Mascots.tsx) / `PhoneHappy` | `className?` | The two phone characters from `branding/mascots/boredgames-mascots.svg`, each cropped to itself, decorative (`aria-hidden`); the logo draws `BoredArt` and `HappyArt` together; celebrations only |
-| [`GameGlyph`](../client/src/platform/components/GameGlyph.tsx) | `game: GameMeta`, icon props | The game's 24px line glyph (How to play draws it at 22px on the game's accent) |
+| [`GameGlyph`](../client/src/platform/components/GameGlyph.tsx) | `game: GameMeta`, icon props | The game's 24px line glyph (the How to play hero draws it at 30px on the game's accent plate when the game has no illustration of its own, and at 34px as Scribble's pencil) |
 | [`GameArt`](../client/src/platform/components/GameArt.tsx) | `game: GameId`, children | The frame a game's lobby picture (`GameClientModule.Art`) is drawn in: a 64 x 46 canvas, `aria-hidden`, with the hard ink shadow drawn under whatever the game draws; `ART` (ink, lime, lilac, paper, as tokens), `OUTLINE` and `DETAIL` are the palette and strokes (section 5, step 4) |
 | [`GameTopBar`](../client/src/platform/components/GameTopBar.tsx) | `meta`, `room`, `isPhone`, `testId`, `className?`, `status?` (none for a card table, whose round is on its ribbon), `statusTestId?` ('round-indicator'), `statusData?`, `clock?`, `players: { label?, open, onOpen }`, `menu: { open, onOpen }`, `middle?`, `below?`, `compact?` | Every game's top bar as on the brand board (`gamebar.css`, `.gbar*`): a back arrow (`game-back`, it asks before leaving: `leave-sheet`, `game-leave-confirm`, `game-leave-yes`), the game's name large and the status ("Round 2/3": on the right on a desktop, in small type under the name on a phone, so the name, the round and the buttons each keep their own space), then the options button (a phone) or the host's End game (`end-game`, a tinted button with a danger border and the power icon that fills solid under the pointer; it asks first in `end-sheet`, with your `endGameNote`; "Ending soon" once asked for a later end) and the gear, whose menu also holds End game and Leave room as full-width buttons (a desktop). Below, the player chips (`PlayerChips`: avatar, name, a status badge from your `playerStatus`; the row is the `players-toggle` button and never scrolls, a "+K" chip takes what does not fit) and the timer ring at the end. Keep the status short (`RoundStatus` renders "Round 1/5"); it stays on one line. `TableShell` renders it for the card tables, `compact` at every size. `compact` packs it into one row (a card table, The Spy Game on a phone): the chips give way to a players button (`players-toggle`: the people icon and the count in a pill, a 44px target), and a `clock` sits small in the row; the name stays whole at every phone width |
 | `GameMenuSheet` | `open`, `onClose()`, `children?` | The phone options sheet behind the bar's menu button (`menu-sheet`): theme and sound, your rows, then the ways out as tall rows (`ExitActions` in `GameExit.tsx`): End game for the host in the danger colour ("Ends it for everyone"), Leave room ("Only you leave"); each opens its confirm step in the sheet ("End the game for everyone?" with what it does; "Leave the room?" with whether the game goes on) |

@@ -80,12 +80,34 @@ describe('the How to play card', () => {
     expect(html).toContain(pokerRules.summary.replace(/ (\S+)$/, ' $1'));
     expect(html.match(/data-testid="rules-section"/g)).toHaveLength(5);
     expect(html).toContain('How a hand goes');
-    expect(html).toContain('data-glyph="poker"');
-    // No backdrop: the room under it stays usable, and it hangs off the button.
+    // The hero: Poker's two hole cards are the site's own card faces with the badge over them, decorative as a whole.
+    const hero = tagWith(html, 'rules-hero');
+    expect(hero).toContain('data-kind="cards"');
+    expect(hero).toContain('aria-hidden="true"');
+    expect(html.match(/data-testid="rules-hero-card"/g)).toHaveLength(2);
+    expect(html).toContain('aria-label="ace of hearts"');
+    expect(html).toContain('aria-label="ace of diamonds"');
+    expect(html).toContain('class="rules-hero__badge">All in<');
+    expect(html).not.toContain('data-glyph=');
+    // Four key facts under it, each a label, a value and a note.
+    expect(html).toContain('>Key facts<');
+    expect(tagWith(html, 'rules-facts')).toContain('class="rules-facts"');
+    expect(html.match(/data-testid="rules-fact"/g)).toHaveLength(4);
+    expect(html).toContain('<span class="rules-fact__label">To act</span><span class="rules-fact__value">25 s</span>');
+    // The sections under coloured tab pills: the accent for the hand, then lime, warm, lilac and muted.
+    expect([...html.matchAll(/class="rules__tab rules__tab--(\w+)"/g)].map((m) => m[1])).toEqual(['accent', 'lime', 'warm', 'lilac', 'muted']);
+    expect(ruleOf(lobbyCss, '.rules__tab--accent')).toContain('color: var(--game-ink)');
+    expect(ruleOf(lobbyCss, '.rules-fact__value')).toContain('color: var(--game-accent-text)');
+    expect(ruleOf(lobbyCss, '.rules-fact__value')).toContain('white-space: nowrap');
+    expect(ruleOf(lobbyCss, '.rules-hero .playing-card')).toContain('--card-w: 44px');
+    // The card carries the game's accent and its cuts for the hero and the facts.
+    expect(tagWith(html, 'how-to-play-card')).toContain('--game-accent-text:var(--game-poker-text)');
+    // No backdrop: the room under it stays usable, and it hangs off the button; the close button sits over the hero, clear of the name.
     expect(html).not.toContain('backdrop');
     expect(ruleOf(lobbyCss, '.how-to-play__popover')).toContain('position: absolute');
     expect(ruleOf(lobbyCss, '.how-to-play__scroll')).toContain('overflow-y: auto');
     expect(ruleOf(lobbyCss, '.how-to-play__popover::before')).toContain('rotate(45deg)');
+    expect(ruleOf(lobbyCss, '.how-to-play__popover .rules__name')).toContain('padding-right: 24px');
   });
 
   it('is the bottom sheet on a phone or tablet, named after the game, with the same card inside', () => {
@@ -101,6 +123,11 @@ describe('the How to play card', () => {
     expect(html).toContain('>Click\u00a0Race<');
     expect(html).toContain('How a round goes');
     expect(html.match(/data-testid="rules-section"/g)).toHaveLength(5);
+    expect(html.match(/data-testid="rules-fact"/g)).toHaveLength(4);
+    // The template's hero is the fallback: its glyph on the accent plate, no badge.
+    expect(tagWith(html, 'rules-hero')).toContain('data-kind="glyph"');
+    expect(html).toContain('data-glyph="template"');
+    expect(html).not.toContain('rules-hero__badge');
     expect(html).not.toContain('how-to-play-popover');
   });
 

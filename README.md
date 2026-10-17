@@ -58,7 +58,8 @@ called Scribble), the owner's decisions win. The short version:
   never above or between controls.
 - **Game pictures and glyphs.** Each game has a small flat picture in the mascots' style
   (`GameClientModule.Art`, inline SVG in `client/src/games/<id>/art.tsx`) on its lobby tile, and
-  a 24px line icon (`GameMeta.glyph`) on its accent at the top of How to play. The app icon is the lime smile (`node scripts/brand-icons.mjs`
+  a 24px line icon (`GameMeta.glyph`) on its accent, which the How to play card draws on the plate
+  of a game with no illustration of its own and as Scribble's pencil. The app icon is the lime smile (`node scripts/brand-icons.mjs`
   renders the opaque apple-touch and maskable PNGs).
 - **Copy.** Short, plain and human. No taglines, no filler, and no em dashes in anything a player
   sees or hears.
@@ -350,7 +351,8 @@ client/src/platform/ React 19 + zustand. game.ts is the client contract (GameCli
                    room's module; screens/ are Home and Lobby; components/ is the design system
                    (SiteHeader, Wordmark, Mascots, GameGlyph/GameMark, Avatar, AvatarPicker, CodeInput,
                    PlayerList, Chat, SettingsPanel + SettingControls, BottomSheet, Toasts, Preferences
-                   (the settings gear: theme and sound), ConnectionNotice, Timer, PodiumOverlay, GamePicker, ReadyControls, ContentModeSetting,
+                   (the settings gear: theme and sound), ConnectionNotice, Timer, PodiumOverlay, GamePicker, HowToPlay and
+                   RulesHero (the How to play card: the game's illustration, key facts and rules), ReadyControls, ContentModeSetting,
                    Icons); lib/sound.ts and lib/audio/ the sound engine (banks, cooldowns, effects
                    made in code); brand/ the outlined wordmark paths; canvas/ the shared drawing canvas
                    (renderer, flood fill, drawing hook, batching queue, Toolbar and GameCanvas) any

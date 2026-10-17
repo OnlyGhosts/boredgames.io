@@ -541,47 +541,52 @@ button.game-tile:active {
     radial-gradient(farthest-side at bottom, var(--color-scroll-shadow) 0%, transparent) bottom / 100% 12px no-repeat scroll;
 }
 
-.how-to-play__popover .rules__head {
-  padding-right: 36px;
+/* The close button sits over the hero's top right corner: the name stops short of it. */
+.how-to-play__popover .rules__name {
+  padding-right: 24px;
 }
 
-/* ---------- The rules card: the game's glyph on its accent, its name and summary, then five short sections ---------- */
+/* ---------- The rules card: an illustrated hero with the name and summary, four key facts in tiles, then five sections under coloured tab pills ---------- */
+/* The game's accent, its text cut and its wash come in on the card as --game-accent, --game-accent-text and --game-accent-soft (RulesCard). */
 .rules {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: var(--space-4);
   text-wrap: pretty;
 }
 
-.rules__head {
+/* The hero: the illustration on a wash of the accent fading into the raised surface, the name and summary beside it. */
+.rules-hero {
   display: flex;
-  align-items: flex-start;
-  gap: 12px;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 14px 14px 12px;
+  border-radius: var(--radius-item);
+  background: linear-gradient(135deg, var(--game-accent-soft), var(--color-surface-2));
+  border: 1px solid var(--color-border);
 }
 
-.rules__glyph {
-  display: grid;
-  place-items: center;
+/* The illustration's box; every piece is placed inside it (RulesHero.tsx). */
+.rules-hero__art {
+  position: relative;
   flex: none;
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
-  background: var(--game-accent);
-  color: var(--game-ink);
+  width: 104px;
+  height: 78px;
 }
 
-.rules__intro {
+.rules-hero__intro {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
   min-width: 0;
 }
 
 .rules__name {
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: 1.125rem;
-  line-height: 1.2;
+  font-size: 1.25rem;
+  line-height: 1.15;
+  letter-spacing: -0.025em;
 }
 
 .rules__summary {
@@ -591,18 +596,243 @@ button.game-tile:active {
   line-height: 1.35;
 }
 
-.rules__section {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
+/* The badge at the illustration's corner: a key number on the lime, edged in the panel's surface so it reads over the art. */
+.rules-hero__badge {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  display: grid;
+  place-items: center;
+  min-width: 36px;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: var(--radius-pill);
+  background: var(--color-primary);
+  color: var(--color-primary-contrast);
+  border: 2px solid var(--color-surface);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.9375rem;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
 }
 
+/* Two of the site's playing cards (cards.css) at a mini size, fanned. */
+.rules-hero .playing-card {
+  --card-w: 44px;
+  --card-h: 62px;
+  position: absolute;
+  box-shadow: var(--shadow-piece);
+}
+
+.rules-hero__card--1 {
+  left: 6px;
+  top: 8px;
+  transform: rotate(-10deg);
+}
+
+.rules-hero__card--2 {
+  left: 34px;
+  top: 4px;
+  transform: rotate(8deg);
+}
+
+/* Scribble: a doodle on a mini canvas, white in both themes like the real one, the pencil over it. */
+.rules-hero__canvas {
+  position: absolute;
+  left: 4px;
+  top: 6px;
+  width: 84px;
+  height: 62px;
+  border-radius: 6px;
+  background: var(--canvas-bg);
+  border: 1px solid var(--color-border-strong);
+  overflow: hidden;
+  /* The doodle's ink: a dark cut of the accent, so it reads on the white canvas in both themes. */
+  color: #5e468c;
+  color: color-mix(in srgb, var(--game-accent) 55%, #000);
+}
+
+.rules-hero__pencil {
+  position: absolute;
+  left: 60px;
+  top: 30px;
+  color: var(--game-accent);
+  filter: drop-shadow(var(--shadow-pencil));
+}
+
+/* The Spy Game: the place card the agents see (a skyline in the accent's text cut) and the spy's "?" card on the accent. */
+.rules-hero__place {
+  position: absolute;
+  left: 4px;
+  top: 6px;
+  width: 56px;
+  height: 62px;
+  border-radius: 6px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
+  color: var(--game-accent-text);
+  transform: rotate(-6deg);
+  overflow: hidden;
+  box-shadow: var(--shadow-piece);
+}
+
+.rules-hero__spy {
+  position: absolute;
+  left: 50px;
+  top: 10px;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 58px;
+  border-radius: 6px;
+  background: var(--game-accent);
+  color: var(--game-ink);
+  border: 1px solid var(--color-border-strong);
+  transform: rotate(8deg);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.75rem;
+  line-height: 1;
+  box-shadow: var(--shadow-piece);
+}
+
+/* Quip Game: two answers as speech bubbles in the accent; the filled one took the votes. */
+.rules-hero__quips {
+  position: absolute;
+  inset: 0;
+  color: var(--game-accent);
+}
+
+/* A game without an illustration yet: its glyph on the accent plate. */
+.rules-hero__plate {
+  position: absolute;
+  left: 24px;
+  top: 11px;
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: var(--game-accent);
+  color: var(--game-ink);
+}
+
+/* Key facts: the small-caps heading, then a 2x2 grid of tiles, each a label, a big value in the accent's text cut and a short note. */
 .rules__heading {
+  margin: 0;
   font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--color-text-faint);
+}
+
+.rules-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.rules-fact {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  padding: 10px 12px 11px;
+  border-radius: var(--radius-item);
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+}
+
+.rules-fact__label {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-faint);
+}
+
+/* One line, always: a value is at most 12 characters (platform/game.ts). */
+.rules-fact__value {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.375rem;
+  line-height: 1.2;
+  letter-spacing: -0.025em;
+  color: var(--game-accent-text);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.rules-fact__note {
+  font-size: 0.75rem;
+  line-height: 1.35;
+  color: var(--color-text-muted);
+}
+
+/* Phones up to 371px wide: a tile has about 120 to 138px inside, less than "Stands on 17" takes at the full size (about 135px), so the value steps down (about 112px) and keeps to its line. */
+@media (max-width: 371px) {
+  .rules-fact {
+    padding: 9px 10px 10px;
+  }
+
+  .rules-fact__value {
+    font-size: 1.0625rem;
+  }
+}
+
+/* A section: its tab pill, then the prose. */
+.rules__section {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.rules__section--facts {
+  align-items: stretch;
+  gap: 3px;
+}
+
+/* The headings as coloured tab pills: the game's accent for the round, then lime, warm, lilac and a muted blue (lib/rules.ts). */
+.rules__tab {
+  display: inline-flex;
+  margin: 0;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1.4;
+}
+
+.rules__tab--accent {
+  background: var(--game-accent);
+  color: var(--game-ink);
+}
+
+.rules__tab--lime {
+  background: var(--color-primary-soft);
+  color: var(--color-primary-text);
+}
+
+.rules__tab--warm {
+  background: var(--color-warning-soft);
+  color: var(--color-warning-text);
+}
+
+.rules__tab--lilac {
+  background: var(--color-secondary-soft);
+  color: var(--color-secondary-text);
+}
+
+.rules__tab--muted {
+  background: var(--color-info-soft);
+  color: var(--color-text-muted);
 }
 
 .rules__text {

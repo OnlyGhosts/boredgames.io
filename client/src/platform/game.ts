@@ -37,15 +37,47 @@ export interface PlayerStatus {
   tone: 'ready' | 'done' | 'active' | 'out' | 'muted';
 }
 
+/** One tile of the How to play card's Key facts: a small label, a big value and a short note under it. */
+export interface RuleFact {
+  /** "Goal", "Dealer", "Draw it": a word or two, set in small caps. */
+  label: string;
+  /** The big accent-coloured value, a number or a short phrase ("21", "Stands on 17"); at most 12 characters, so it keeps to one line on a 320px phone. */
+  value: string;
+  /** A few words under the value ("Draws to 16"). Prose: curly apostrophes, the last two words kept together. */
+  note: string;
+}
+
 /**
- * The rules of a game as the lobby's How to play card shows them: a one-line summary, then five
- * short plain sections. Written from the server's rules in `client/src/games/<id>/rules.ts`, with
- * every number a template over the game's shared constants so the copy can never drift from the
- * code. Short plain words, curly apostrophes, no dashes; the card keeps each paragraph's last two
- * words together.
+ * The illustration at the top of the How to play card, drawn by the platform (RulesHero.tsx) from
+ * plain data in the game's accent, so a game ships no artwork: inline SVG and CSS only, rendered
+ * server-side too. `badge` is the lime pill at the illustration's corner (a key number, "21" or "80 s").
+ */
+export type RulesHero =
+  /** Two of the site's playing cards, fanned ("AS", "KH": rank then suit letter). */
+  | { kind: 'cards'; cards: [string, string]; badge: string }
+  /** Scribble: a mini white canvas with a doodle and the pencil over it. */
+  | { kind: 'canvas'; badge: string }
+  /** The Spy Game: a place card beside the spy's "?" card. */
+  | { kind: 'place'; badge: string }
+  /** Quip Game: two speech bubbles, one taking the votes. */
+  | { kind: 'quips'; badge: string }
+  /** The game's glyph on its accent plate: the fallback a new game starts with. */
+  | { kind: 'glyph' };
+
+/**
+ * The rules of a game as the lobby's How to play card shows them: an illustrated hero with a
+ * one-line summary, four key facts in tiles, then five short plain sections under coloured tab
+ * pills. Written from the server's rules in `client/src/games/<id>/rules.ts`, with every number a
+ * template over the game's shared constants so the copy can never drift from the code. Short
+ * plain words, curly apostrophes, no dashes; the card keeps each paragraph's last two words
+ * together. The facts carry the numbers, so the sections say them once at most.
  */
 export interface GameRules {
   summary: string;
+  /** The illustration beside the name and summary. */
+  hero: RulesHero;
+  /** Exactly four tiles, in reading order (left to right, then the second row). */
+  facts: RuleFact[];
   /** How one round (or hand, at a card table) goes. */
   round: string;
   /** How you score. */

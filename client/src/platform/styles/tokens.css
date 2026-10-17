@@ -37,10 +37,13 @@
   --gutter: 16px;
   --mobile-breakpoint: 760px;
 
-  /* Flat surfaces: panels sit on their border. Only overlays (sheets, modals, toasts) get a drop. */
+  /* Flat surfaces: panels sit on their border. Only overlays (sheets, modals, toasts) and the pieces of the How to play hero get a drop. */
   --shadow-sm: none;
   --shadow-md: none;
   --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.28);
+  /* The lift under a piece of the How to play hero (a fanned card, the spy's card) and under the pencil over Scribble's canvas. */
+  --shadow-piece: 0 2px 6px rgba(0, 0, 0, 0.18);
+  --shadow-pencil: 0 1px 1px rgba(0, 0, 0, 0.3);
   /* The shadow a scroll box shows at an edge with more to read. */
   --color-scroll-shadow: rgba(0, 0, 0, 0.55);
 
@@ -102,7 +105,7 @@
   --chat-guessed-bg: #302a40;
   --chat-guessed-fg: #d4c8f5;
 
-  /* Per-game accents: icon plates and decorations only, always with ink on top; labels stay neutral. */
+  /* Per-game accents: icon plates and decorations, always with ink on top; labels stay neutral. */
   --game-scribble: #a699d5;
   --game-spygame: #86cdba;
   --game-quipgame: #f1c777;
@@ -117,6 +120,23 @@
   --tile-foot-bg: #20221f;
   --tile-foot-fg: #f1f0e8;
   --tile-foot-border: #454a43;
+
+  /*
+   * Each accent as text (the How to play card's key facts) and as a soft wash (its hero): on dark
+   * the accent itself or a lighter cut, every text cut AA (4.5:1) on the panel and the raised surface.
+   */
+  --game-scribble-text: #beb2e8;
+  --game-scribble-soft: #302a40;
+  --game-spygame-text: #9fdccb;
+  --game-spygame-soft: #1f3a35;
+  --game-quipgame-text: #f4d181;
+  --game-quipgame-soft: #3a3020;
+  --game-blackjack-text: #a0e9b8;
+  --game-blackjack-soft: #203a2a;
+  --game-poker-text: #f0b6d9;
+  --game-poker-soft: #3d2636;
+  --game-template-text: #c7e976;
+  --game-template-soft: #2d381f;
 }
 
 /*
@@ -127,6 +147,8 @@
 :root[data-theme='light'] {
   color-scheme: light;
   --shadow-lg: 0 16px 48px rgba(20, 25, 18, 0.18);
+  --shadow-piece: 0 2px 6px rgba(20, 25, 18, 0.18);
+  --shadow-pencil: 0 1px 1px rgba(20, 25, 18, 0.3);
   --color-scroll-shadow: rgba(20, 25, 18, 0.22);
 
   --color-bg: #f5f6ef;
@@ -182,4 +204,18 @@
 
   --tile-foot-bg: #141514;
   --tile-foot-border: #141514;
+
+  /* The game accents cut dark for text (AA on white and on the pale lime), their washes pale. */
+  --game-scribble-text: #5e468c;
+  --game-scribble-soft: #ece7f7;
+  --game-spygame-text: #1d6456;
+  --game-spygame-soft: #dcf1ea;
+  --game-quipgame-text: #7c5510;
+  --game-quipgame-soft: #fdf0cc;
+  --game-blackjack-text: #246b3c;
+  --game-blackjack-soft: #dff0e3;
+  --game-poker-text: #8f3a70;
+  --game-poker-soft: #f9e4f0;
+  --game-template-text: #3d6b0f;
+  --game-template-soft: #e6f3c3;
 }
