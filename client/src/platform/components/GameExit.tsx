@@ -143,3 +143,12 @@ export function EndGameButton({ room, onOpen, open }: { room: RoomState; onOpen(
     </button>
   );
 }
+
+/** The desktop top bar's Leave, for everyone, beside the host's End game: opens the leave confirm step, a 44px target (the icon alone, a square, on a tablet's full bar). */
+export function LeaveButton({ onOpen, open }: { onOpen(): void; open: boolean }) {
+  return (
+    <button type="button" className="btn btn--secondary btn--sm gbar-leave" onClick={onOpen} aria-haspopup="dialog" aria-expanded={open} aria-label="Leave room" data-testid="leave-room">
+      <LogoutIcon size={15} /> <span>Leave</span>
+    </button>
+  );
+}

@@ -118,7 +118,7 @@ test('the host creates a Click Race party, three friends join, and the lobby sho
   expect(phoneSurfaces.top, 'nothing drawn round the logo').toBe('rgba(0, 0, 0, 0)');
   expect(phoneSurfaces.card, 'the code on its card').not.toBe('rgba(0, 0, 0, 0)');
   await noHorizontalOverflow(pia.page, PORTRAIT.width);
-  for (const id of ['game-tile', 'ready-toggle', 'sitout-toggle', 'edit-profile', 'copy-code', 'share-invite', 'settings-menu']) {
+  for (const id of ['game-tile', 'ready-toggle', 'sitout-toggle', 'edit-profile', 'copy-code', 'share-invite', 'leave-room', 'settings-menu']) {
     const box = await pia.page.getByTestId(id).first().boundingBox();
     expect(box?.height ?? 0, `${id} is a 44px target`).toBeGreaterThanOrEqual(MIN_TARGET);
     expect((box?.x ?? 0) + (box?.width ?? 0), `${id} fits the phone width`).toBeLessThanOrEqual(PORTRAIT.width + 0.5);
@@ -174,8 +174,8 @@ test('the host creates a Click Race party, three friends join, and the lobby sho
   expect(surfaces.barBorder).toBe('1px');
   expect(surfaces.section).toBe('rgba(0, 0, 0, 0)');
   expect(surfaces.sectionBorder).toBe('0px');
-  // The tiles, Copy, Share and the gear all centre on the bar's line; Copy, Share and the gear stay 44px targets.
-  for (const id of ['room-code', 'copy-code', 'share-invite', 'settings-menu']) {
+  // The tiles, Copy, Share, Leave and the gear all centre on the bar's line; the buttons and the gear stay 44px targets.
+  for (const id of ['room-code', 'copy-code', 'share-invite', 'leave-room', 'settings-menu']) {
     const box = await host.page.getByTestId(id).boundingBox();
     expect(Math.abs(centre(box) - centre(bar)), `${id} centred on the bar`).toBeLessThanOrEqual(1.5);
     if (id !== 'room-code') expect(box?.height ?? 0, `${id} is a 44px target`).toBeGreaterThanOrEqual(MIN_TARGET);
@@ -185,8 +185,29 @@ test('the host creates a Click Race party, three friends join, and the lobby sho
   const deskPopover = await host.page.getByTestId('settings-popover').boundingBox();
   expect(deskPopover?.y ?? 0, 'the popover starts below the bar').toBeGreaterThanOrEqual((bar?.y ?? 0) + (bar?.height ?? 0) + 4);
   await expectInsideViewport(host.page, 'settings-popover', host.page.viewportSize() ?? PORTRAIT);
+  // The gear is for the site's settings alone: the theme and the sound switch, no room buttons.
+  const popover = host.page.getByTestId('settings-popover');
+  await expect(popover.getByTestId('theme-dark')).toBeVisible();
+  await expect(popover.getByTestId('sound-toggle')).toBeVisible();
+  await expect(popover.locator('button')).toHaveCount(3);
+  await expect(popover.getByTestId('leave-room')).toHaveCount(0);
+  await expect(popover.getByTestId('copy-link')).toHaveCount(0);
   await host.page.keyboard.press('Escape');
   await expect(host.page.getByTestId('settings-popover')).toHaveCount(0);
+
+  // Leave is the bar's last button and asks first; Stay keeps the host in the room.
+  const leave = await host.page.getByTestId('leave-room').boundingBox();
+  const shareBtn = await host.page.getByTestId('share-invite').boundingBox();
+  expect(leave?.x ?? 0, 'Leave sits after Share').toBeGreaterThanOrEqual((shareBtn?.x ?? 0) + (shareBtn?.width ?? 0));
+  expect((leave?.x ?? 0) + (leave?.width ?? 0), 'at the bar’s right end').toBeLessThanOrEqual((bar?.x ?? 0) + (bar?.width ?? 0));
+  await host.page.getByTestId('leave-room').click();
+  const confirm = host.page.getByTestId('lobby-leave-confirm');
+  await expect(confirm).toContainText('Leave the room?');
+  await expect(confirm).toContainText('You’d need the code to come back in.');
+  await host.page.getByTestId('lobby-leave-no').click();
+  await expect(confirm).toHaveCount(0);
+  await expect(host.page.getByTestId('room-code')).toHaveText(code);
+  for (const p of players) await expect(p.page.getByTestId('player-item')).toHaveCount(4);
 });
 
 const ROOM_SIZES = [
@@ -198,16 +219,44 @@ const ROOM_SIZES = [
   { width: 1440, height: 900 },
 ];
 
-test('the room footer sits on the bottom of the screen at every size, its line across the page; kick buttons line up at the right', async () => {
+test('a phone pins Start and Ready to the bottom of the screen, a wider room puts them under the player list; kick buttons line up at the right', async () => {
   for (const size of ROOM_SIZES) {
     for (const p of [host, quinn]) {
       await p.page.setViewportSize(size);
       await p.page.evaluate(() => window.scrollTo(0, 0));
-      // The guest's page is short and the host's (with the settings) long: either way Start or Ready sits on the bottom edge.
-      const footer = await p.page.getByTestId('lobby-footer').boundingBox();
-      expect(Math.abs((footer?.y ?? 0) + (footer?.height ?? 0) - size.height), `${p.name} ${size.width}: the footer is on the bottom`).toBeLessThanOrEqual(1);
-      expect(footer?.x ?? -1, 'its line starts at the left edge').toBeLessThanOrEqual(0.5);
-      expect(footer?.width ?? 0, 'and spans the page').toBeGreaterThanOrEqual(size.width - 0.5);
+      const big = p === host ? 'start-game' : 'ready-toggle';
+      if (size.width < 768) {
+        // A phone: the guest's page is short and the host's long, and either way Start or Ready sits on the bottom edge, the line across the page.
+        await expect(p.page.getByTestId('lobby-actions')).toHaveCount(0);
+        const footer = await p.page.getByTestId('lobby-footer').boundingBox();
+        expect(Math.abs((footer?.y ?? 0) + (footer?.height ?? 0) - size.height), `${p.name} ${size.width}: the footer is on the bottom`).toBeLessThanOrEqual(1);
+        expect(footer?.x ?? -1, 'its line starts at the left edge').toBeLessThanOrEqual(0.5);
+        expect(footer?.width ?? 0, 'and spans the page').toBeGreaterThanOrEqual(size.width - 0.5);
+      } else {
+        // A tablet or desktop: no footer and no line; the block sits under the player list, as wide as it, Start or Ready first and the row under it.
+        await expect(p.page.getByTestId('lobby-footer')).toHaveCount(0);
+        const list = await p.page.getByTestId('player-list').boundingBox();
+        const block = await p.page.getByTestId('lobby-actions').boundingBox();
+        expect(block?.y ?? 0, `${p.name} ${size.width}: the block is under the list`).toBeGreaterThanOrEqual((list?.y ?? 0) + (list?.height ?? 0));
+        expect((block?.y ?? 0) - ((list?.y ?? 0) + (list?.height ?? 0)), 'close under it').toBeLessThanOrEqual(24);
+        expect(Math.abs((block?.x ?? 0) - (list?.x ?? 1)), 'lined up with the list').toBeLessThanOrEqual(0.5);
+        expect(Math.abs((block?.width ?? 0) - (list?.width ?? 1)), 'as wide as the list').toBeLessThanOrEqual(0.5);
+        const main = await p.page.getByTestId(big).boundingBox();
+        const sitOut = await p.page.getByTestId('sitout-toggle').boundingBox();
+        const look = await p.page.getByTestId('edit-profile').boundingBox();
+        expect(main?.height ?? 0, 'Start or Ready keeps its size').toBeGreaterThanOrEqual(60);
+        expect(Math.abs((main?.x ?? 0) - (block?.x ?? 1))).toBeLessThanOrEqual(0.5);
+        expect(sitOut?.y ?? 0, 'the row sits under it').toBeGreaterThanOrEqual((main?.y ?? 0) + (main?.height ?? 0));
+        expect(Math.abs((sitOut?.y ?? 0) - (look?.y ?? 1)), 'one row').toBeLessThanOrEqual(0.5);
+        expect(sitOut?.height ?? 0).toBeGreaterThanOrEqual(MIN_TARGET);
+        if (p === host) {
+          const settings = await p.page.getByTestId('settings-panel').boundingBox();
+          expect(settings?.x ?? 0, 'the settings column starts right of the block').toBeGreaterThanOrEqual((block?.x ?? 0) + (block?.width ?? 0));
+        }
+        // Nothing sticks to the bottom of the screen: the page scrolled to its end shows the block in the flow.
+        const stuck = await p.page.evaluate(() => [...document.querySelectorAll('.lobby *')].some((el) => getComputedStyle(el).position === 'sticky'));
+        expect(stuck, 'no sticky bar').toBe(false);
+      }
       await noHorizontalOverflow(p.page, size.width);
     }
     // Each row's kick button is its last item: a 44px target after the status, every one in the same column.
@@ -230,6 +279,47 @@ test('the room footer sits on the bottom of the screen at every size, its line a
     }
   }
   for (const p of [host, quinn]) await p.page.setViewportSize(DESKTOP);
+});
+
+test('a big party on a short desktop: the list scrolls inside, and Start and the row under it stay on the screen', async ({ browser }) => {
+  // Four more join for this test alone and leave at its end.
+  const extras = await Promise.all(['Sam', 'Tao', 'Uma', 'Vik'].map(async (name) => ({ name, context: await browser.newContext() })));
+  try {
+    for (const extra of extras) await joinByCode(await extra.context.newPage(), extra.name, code);
+    for (const p of [host, quinn]) await expect(p.page.getByTestId('player-item')).toHaveCount(8);
+    for (const size of [LANDSCAPE_TABLET, DESKTOP, { width: 1440, height: 900 }]) {
+      for (const p of [host, quinn]) {
+        await p.page.setViewportSize(size);
+        await p.page.evaluate(() => window.scrollTo(0, 0));
+        const list = p.page.getByTestId('player-list');
+        const listBox = await list.boundingBox();
+        expect(listBox?.height ?? 0, `${p.name} ${size.width}: at least three rows show`).toBeGreaterThanOrEqual(3 * 52);
+        // The host's eight rows do not fit the room left: the list scrolls inside, not the page.
+        if (p === host) expect(await list.evaluate((el) => el.scrollHeight > el.clientHeight + 1), `${p.name} ${size.width}: the list scrolls inside`).toBe(true);
+        expect(await p.page.evaluate(() => window.scrollY), 'the page is not scrolled').toBe(0);
+        for (const id of [p === host ? 'start-game' : 'ready-toggle', 'sitout-toggle', 'edit-profile']) await expectInsideViewport(p.page, id, size);
+      }
+    }
+    // The host's Start anyway step makes the block taller: the list gives way again, and both choices stay on the screen.
+    await host.page.setViewportSize(LANDSCAPE_TABLET);
+    await host.page.getByTestId('start-game').click();
+    await expect(host.page.getByTestId('start-confirm')).toBeVisible();
+    for (const id of ['start-anyway', 'start-wait']) await expectInsideViewport(host.page, id, LANDSCAPE_TABLET);
+    expect(await host.page.evaluate(() => window.scrollY), 'the page is not scrolled').toBe(0);
+    await host.page.getByTestId('start-wait').click();
+    await expect(host.page.getByTestId('start-confirm')).toHaveCount(0);
+  } finally {
+    for (const extra of extras) {
+      const page = extra.context.pages()[0];
+      if (page) {
+        await leaveLobby(page);
+        await expect(page.getByTestId('home-create')).toBeVisible();
+      }
+      await extra.context.close();
+    }
+    for (const p of [host, quinn]) await p.page.setViewportSize(DESKTOP);
+  }
+  for (const p of players) await expect(p.page.getByTestId('player-item')).toHaveCount(4);
 });
 
 test('Change my look is a centred box on a desktop and a drawer on a tablet or phone, its grids in full rows', async () => {
@@ -285,6 +375,11 @@ test('players ready up: the count follows, Start waits for enough ready players 
   // Starting now would sit the others out: the host is asked first and waits.
   await host.page.getByTestId('start-game').click();
   await expect(host.page.getByTestId('start-confirm')).toContainText(`${pia.name}, ${quinn.name} and ${rae.name}`);
+  // The step survives the controls moving between the column and a phone's footer (a tablet turned, a window resized).
+  await host.page.setViewportSize(PORTRAIT);
+  await expect(host.page.getByTestId('lobby-footer').getByTestId('start-confirm')).toContainText(`${pia.name}, ${quinn.name} and ${rae.name}`);
+  await host.page.setViewportSize(DESKTOP);
+  await expect(host.page.getByTestId('lobby-actions').getByTestId('start-confirm')).toBeVisible();
   await host.page.getByTestId('start-wait').click();
   await expect(host.page.getByTestId('start-confirm')).toHaveCount(0);
 
@@ -488,12 +583,12 @@ test('How to play shows the rules of the game picked, follows the host’s switc
   await host.page.keyboard.press('Escape');
   await expect(host.page.getByTestId('how-to-play-popover')).toHaveCount(0);
 
-  // On a 1024x768 desktop the host's button sits low: the card opens over it rather than hide Start under the footer.
+  // On a 1024x768 desktop the host's button sits low: the card opens over it rather than cover Start under the player list.
   await host.page.setViewportSize(LANDSCAPE_TABLET);
   await hostButton.click();
   const lowPanel = await host.page.getByTestId('how-to-play-popover').boundingBox();
-  const footer = await host.page.getByTestId('lobby-footer').boundingBox();
-  expect((lowPanel?.y ?? 0) + (lowPanel?.height ?? 0), 'the card ends above the footer').toBeLessThanOrEqual((footer?.y ?? 0) + 0.5);
+  const block = await host.page.getByTestId('lobby-actions').boundingBox();
+  expect((lowPanel?.y ?? 0) + (lowPanel?.height ?? 0), 'the card ends above Start').toBeLessThanOrEqual((block?.y ?? 0) + 0.5);
   await expectInsideViewport(host.page, 'how-to-play-popover', LANDSCAPE_TABLET);
   await expect(host.page.getByTestId('rules-section')).toHaveCount(5);
   // The hero and the facts fill the top of a short card: the sections are a scroll away, inside the card, never off the screen.

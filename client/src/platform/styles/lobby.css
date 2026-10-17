@@ -1,11 +1,11 @@
-/* ---------- The party lobby: room bar, game grid, players, the host's settings, a Start footer pinned to the bottom ---------- */
+/* ---------- The party lobby: room bar, game grid, players, the host's settings; Start under the players, or pinned to a phone's bottom ---------- */
 .lobby {
   min-height: 100dvh;
   display: flex;
   flex-direction: column;
 }
 
-/* Everything above the footer, in the page's column; it grows to fill a short page, so the footer sits at the bottom of the screen. */
+/* Everything above a phone's footer, in the page's column; it grows to fill a short page, so the footer sits at the bottom of the screen. */
 .lobby__body {
   flex: 1 0 auto;
   width: min(calc(1120px + 2 * var(--lobby-gutter, 16px)), 100%);
@@ -93,7 +93,7 @@
   box-shadow: inset 0 0 0 1.5px var(--color-primary-edge);
 }
 
-/* Copy and Share: the icon and a short label on a quiet well, 44px tall like everything else on the bar. */
+/* Copy, Share and Leave: the icon and a short label on a quiet well, 44px tall like everything else on the bar. */
 .room-card__btn {
   flex: none;
   display: inline-flex;
@@ -157,6 +157,16 @@
   overscroll-behavior: contain;
 }
 
+/*
+ * With Start and the row under it below the list (a tablet or a desktop, .lobby--columns), the
+ * list leaves them room on the screen, so a big party scrolls inside it and Start never drops
+ * below the fold: the screen less the rest of the page down to the block's bottom (--list-room,
+ * measured by useListRoom), never under three rows.
+ */
+.lobby--columns .lobby__players .player-list {
+  max-height: max(calc(3 * 53px), min(calc(100dvh - var(--list-room, 0px)), 560px));
+}
+
 .lobby__players .player {
   flex: none;
   min-height: 52px;
@@ -202,7 +212,7 @@
   margin-bottom: var(--space-4);
 }
 
-/* A guest has no settings column: one centred column, the logo and code row and the footer's buttons as wide as it. */
+/* A guest has no settings column: one centred column, the logo and code row and a phone's footer buttons as wide as it. */
 .lobby--guest {
   --guest-column: 560px;
 }
@@ -226,9 +236,38 @@
 }
 
 /*
- * ---------- The footer: Start for the host, Ready for everyone else ----------
- * Always at the bottom of the screen: the body above fills a short page, and on a long one the
- * footer sticks. It sits in the flow, so it never covers the last panel. Its line spans the page.
+ * ---------- Start for the host, Ready for everyone else, Sit this one out and Change my look ----------
+ * One block of controls, the same wherever it sits: under the player list on a tablet or desktop
+ * (.lobby__actions), or in the footer pinned to the bottom of a phone's screen (.lobby__footer).
+ */
+.lobby__controls {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: center;
+}
+
+.lobby__controls .ready-controls {
+  margin-top: 0;
+}
+
+.lobby__controls [data-testid='start-game'],
+.lobby__controls .ready-toggle {
+  min-height: 60px;
+  border-radius: 12px;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.375rem;
+}
+
+/* Under the player list, as wide as it, with the column's own gap above. */
+.lobby__actions {
+  width: 100%;
+}
+
+/*
+ * A phone's footer, always at the bottom of the screen: the body above fills a short page, and on a
+ * long one the footer sticks. It sits in the flow, so it never covers the last panel. Its line spans the page.
  */
 .lobby__footer {
   position: sticky;
@@ -244,23 +283,6 @@
 .lobby__footer-inner {
   width: min(560px, 100%);
   margin: 0 auto;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  text-align: center;
-}
-
-.lobby__footer .ready-controls {
-  margin-top: 0;
-}
-
-.lobby__footer [data-testid='start-game'],
-.lobby__footer .ready-toggle {
-  min-height: 60px;
-  border-radius: 12px;
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 1.375rem;
 }
 
 /* A short screen keeps more of the room in view: a slimmer Start or Ready. */
@@ -1069,7 +1091,7 @@ button.content-mode:not(:disabled):hover {
 
 /*
  * Phones: the bar splits. The logo bare and centred at the top of the room, the code card under it
- * (the tiles, Copy and Share as squares at its right end), and the gear's popover centred under the
+ * (the tiles, Copy, Share and Leave as squares at its right end), and the gear's popover centred under the
  * logo, inside the screen.
  */
 @media (max-width: 760px), (min-aspect-ratio: 3/2) and (max-height: 520px) {
@@ -1087,7 +1109,7 @@ button.content-mode:not(:disabled):hover {
   }
 
   .room-card {
-    gap: 10px;
+    gap: 8px;
     padding: 12px 12px 12px 16px;
     background: var(--color-surface);
     border: 1px solid var(--color-border);
@@ -1100,18 +1122,20 @@ button.content-mode:not(:disabled):hover {
     gap: 6px;
   }
 
+  /* The tiles leave room for the three squares at their right: a little smaller on a narrow phone. */
   .room-card__value {
     gap: clamp(4px, 1.2vw, 8px);
-    font-size: clamp(1.5rem, 7.6vw, 2.25rem);
+    font-size: clamp(1.25rem, 6.2vw, 2.25rem);
   }
 
-  /* The icon over its label, a square of at least 64px. */
+  /* The icon over its label: three squares, Copy, Share and Leave, each a 44px target and more. */
   .room-card__btn {
     flex-direction: column;
-    gap: 5px;
-    width: 64px;
-    height: 64px;
+    gap: 4px;
+    width: 56px;
+    height: 56px;
     padding: 0;
+    font-size: 0.8125rem;
   }
 
   .lobby .site-header {
@@ -1125,19 +1149,24 @@ button.content-mode:not(:disabled):hover {
   }
 }
 
-/* The narrowest phones: a slightly smaller logo, and narrower squares so the code keeps its size. */
+/* The narrowest phones: a slightly smaller logo, tighter gaps and narrower squares, so the code and all three buttons share the card. */
 @media (max-width: 360px) {
   .lobby .site-header {
     --wordmark-height: 26px;
   }
 
   .room-card {
-    padding-left: 14px;
+    padding: 12px 10px 12px 12px;
     gap: 6px;
   }
 
+  .room-card__value {
+    gap: 3px;
+  }
+
   .room-card__btn {
-    width: 58px;
+    width: 46px;
+    font-size: 0.75rem;
   }
 }
 

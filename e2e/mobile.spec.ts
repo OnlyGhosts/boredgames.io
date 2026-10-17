@@ -288,17 +288,26 @@ test('the phone lobby fits the viewport, with 44px buttons and a share button', 
   await expect.poll(async () => (await pageMetrics(phone.page)).scrollY, { message: 'lobby starts at the top' }).toBe(0);
   await expectNoHorizontalOverflow(phone.page, PORTRAIT.width);
   expect((await pageMetrics(phone.page)).isApp, 'the lobby page may scroll').toBe(false);
-  for (const id of ['copy-code', 'share-invite', 'settings-menu', 'ready-toggle', 'sitout-toggle', 'edit-profile']) {
+  for (const id of ['copy-code', 'share-invite', 'leave-room', 'settings-menu', 'ready-toggle', 'sitout-toggle', 'edit-profile']) {
     await expect(phone.page.getByTestId(id)).toBeVisible();
     await expectTallEnough(phone.page.getByTestId(id), id);
   }
-  // Copy invite link and Leave room are in the gear's menu.
+  // Copy, Share and Leave are three squares in a row at the right end of the code card.
+  const squares = await Promise.all(['copy-code', 'share-invite', 'leave-room'].map((id) => phone.page.getByTestId(id).boundingBox()));
+  const codeBox = await phone.page.getByTestId('room-code').boundingBox();
+  for (const box of squares) {
+    expect(box?.width ?? 0).toBeGreaterThanOrEqual(MIN_TARGET);
+    expect(Math.abs((box?.y ?? 0) - (squares[0]?.y ?? 1)), 'one row').toBeLessThanOrEqual(0.5);
+    expect(box?.x ?? 0, 'after the code').toBeGreaterThanOrEqual((codeBox?.x ?? 0) + (codeBox?.width ?? 0));
+  }
+  // The gear holds only the theme and the sound switch.
   await phone.page.getByTestId('settings-menu').click();
-  for (const id of ['copy-link', 'leave-room']) {
-    await expect(phone.page.getByTestId(id)).toBeVisible();
-    await expectTallEnough(phone.page.getByTestId(id), id);
-  }
+  const popover = phone.page.getByTestId('settings-popover');
+  await expect(popover.getByTestId('theme-dark')).toBeVisible();
+  await expect(popover.getByTestId('sound-toggle')).toBeVisible();
+  for (const id of ['copy-link', 'leave-room']) await expect(popover.getByTestId(id)).toHaveCount(0);
   await phone.page.keyboard.press('Escape');
+  await expect(popover).toHaveCount(0);
   // No chat in the room, and no settings for a guest.
   await expect(phone.page.getByTestId('chat-input')).toHaveCount(0);
   await expect(phone.page.getByTestId('settings-panel')).toHaveCount(0);

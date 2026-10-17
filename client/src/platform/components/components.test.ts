@@ -30,6 +30,8 @@ const { AvatarPicker } = await import('./AvatarPicker');
 const { GamePicker } = await import('./GamePicker');
 const { RulesCard } = await import('./HowToPlay');
 const { noOrphan } = await import('../lib/format');
+const { COLUMNS_QUERY, PHONE_QUERY } = await import('../lib/media');
+const { roomBesideList } = await import('../lib/useListRoom');
 const { Lobby } = await import('../screens/Lobby');
 const { GAME_LIST } = await import('@shared/platform/games');
 const { AVATAR_COLORS, AVATAR_FACES } = await import('@shared/platform/avatar');
@@ -943,10 +945,28 @@ describe('lobby', () => {
     expect(markup).toContain('<span>Share</span>');
     expect(markup).not.toContain('code-card');
     expect(markup).not.toContain('Invite your friends');
-    // Copying the invite link and leaving live in the gear's menu; the header shows only the wordmark and the gear.
+    // Leave is the bar's last button, in the same style, and asks first; no Copy invite link anywhere (the bar has Copy and Share).
     expect(markup).not.toContain('data-testid="copy-link"');
-    expect(markup).not.toContain('data-testid="leave-room"');
+    expect(tagWith(markup, 'leave-room')).toContain('room-card__btn');
+    expect(tagWith(markup, 'leave-room')).toContain('aria-haspopup="dialog"');
+    expect(markup).toContain('<span>Leave</span>');
+    const roomBar = markup.slice(bar, markup.indexOf('</section>', bar));
+    const order = ['room-code', 'copy-code', 'share-invite', 'leave-room'].map((id) => roomBar.indexOf(`data-testid="${id}"`));
+    expect(order.every((i) => i > -1)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    // The confirm step is closed until Leave is pressed; the gear holds the device's preferences and nothing else.
+    expect(markup).not.toContain('data-testid="lobby-leave-confirm"');
     expect(tagWith(markup, 'settings-menu')).toBeTruthy();
+    expect(markup).not.toContain('settings-menu__action');
+    expect(stylesheet('components.css')).not.toContain('.settings-menu__action');
+  });
+
+  it('asks before leaving the room, with the lobby’s own note, Leave room and Stay', () => {
+    const html = renderToString(createElement(LeaveConfirm, { room: room(), meId: 'host', onCancel: () => undefined, testId: 'lobby-leave' }));
+    expect(html).toContain('Leave the room?');
+    expect(html).toContain('You’d need the code to come back in.');
+    expect(textOf(html, 'lobby-leave-yes')).toBe('Leave room');
+    expect(textOf(html, 'lobby-leave-no')).toBe('Stay');
   });
 
   it('is one header bar on a wider screen (a surface with the logo, the code and its buttons on one 44px line), split on a phone into the centred logo and the code card', () => {
@@ -983,13 +1003,16 @@ describe('lobby', () => {
     expect(phone).toMatch(/\.lobby \.settings-menu--logo \.settings-menu__panel \{[^}]*top: calc\(100% \+ 12px\)/);
   });
 
-  it('pins Start, Ready and the row under them to the bottom of the screen, short page or long, its line across the whole page', () => {
+  it('on a phone pins Start, Ready and the row under them to the bottom of the screen, short page or long, its line across the whole page', () => {
     const markup = renderToString(createElement(Lobby, { room: room(), game: null }));
     // The footer sits outside the page's centred column, so its border spans the full width.
     const body = markup.indexOf('class="lobby__body"');
     const footer = markup.indexOf('data-testid="lobby-footer"');
     expect(body).toBeGreaterThan(-1);
     expect(markup.slice(body, footer)).toContain('data-testid="player-list"');
+    expect(markup).not.toContain('data-testid="lobby-actions"');
+    expect(tagWith(markup, 'lobby-footer')).not.toContain('lobby__controls');
+    expect(markup.slice(footer)).toMatch(/^[^>]*>\s*<div class="lobby__controls lobby__footer-inner">/);
     const css = stylesheet('lobby.css');
     expect(ruleOf(css, '.lobby')).toMatch(/min-height: 100dvh;[^}]*flex-direction: column/);
     expect(ruleOf(css, '.lobby')).not.toContain('width:');
@@ -998,6 +1021,67 @@ describe('lobby', () => {
     expect(bar).toMatch(/position: sticky;[^}]*bottom: 0/);
     expect(bar).toContain('border-top: 1px solid var(--color-border)');
     expect(bar).not.toMatch(/margin|width/);
+  });
+
+  /** Renders the lobby with the given media queries matching (the room's columns, the phone layout). */
+  function renderAt(matching: string[], state = room()): string {
+    const g = globalThis as { matchMedia: (q: string) => { matches: boolean } };
+    const real = g.matchMedia;
+    g.matchMedia = (media: string) => ({ media, matches: matching.includes(media), addEventListener: () => undefined, removeEventListener: () => undefined });
+    try {
+      return renderToString(createElement(Lobby, { room: state, game: null }));
+    } finally {
+      g.matchMedia = real;
+    }
+  }
+
+  it('in the two-column room puts Start, Ready and the row under them under the player list, with no sticky footer and no line', () => {
+    for (const id of ['host', 'bob']) {
+      usePlatformStore.getState().handleServerMessage(welcome(id, room()));
+      const markup = renderAt([COLUMNS_QUERY]);
+      expect(markup, id).not.toContain('data-testid="lobby-footer"');
+      expect(tagWith(markup, 'lobby'), id).toContain('lobby--columns');
+      // The block is the left column's last child, right after the players section, before the host's settings column.
+      const column = markup.slice(markup.indexOf('class="lobby__col"'), markup.indexOf('data-testid="lobby-actions"'));
+      expect(column, id).toContain('data-testid="player-list"');
+      expect(column, id).not.toContain('data-testid="settings-panel"');
+      expect(tagWith(markup, 'lobby-actions')).toContain('class="lobby__controls lobby__actions"');
+      const block = markup.slice(markup.indexOf('data-testid="lobby-actions"'));
+      expect(block.indexOf(id === 'host' ? 'data-testid="start-game"' : 'data-testid="ready-toggle"')).toBeLessThan(block.indexOf('ready-controls__more'));
+      expect(tagWith(block, 'sitout-toggle')).toContain('btn btn--secondary');
+      expect(tagWith(block, 'edit-profile')).toContain('btn btn--secondary');
+      if (id === 'host') expect(block.indexOf('data-testid="lobby-actions"')).toBeLessThan(block.indexOf('data-testid="settings-panel"'));
+      else expect(block).toContain('data-testid="waiting-for-host"');
+    }
+    // A phone turned sideways is wide enough for the columns but keeps its footer.
+    usePlatformStore.getState().handleServerMessage(welcome('host', room()));
+    const landscape = renderAt([COLUMNS_QUERY, PHONE_QUERY]);
+    expect(landscape).toContain('data-testid="lobby-footer"');
+    expect(landscape).not.toContain('data-testid="lobby-actions"');
+    expect(tagWith(landscape, 'lobby')).not.toContain('lobby--columns');
+    // The same button sizes and spacing wherever the block sits; the footer's line and padding stay the footer's own.
+    const css = stylesheet('lobby.css');
+    expect(ruleOf(css, '.lobby__controls')).toMatch(/flex-direction: column;[^}]*gap: 6px/);
+    expect(ruleOf(css, ".lobby__controls [data-testid='start-game']")).toMatch(/min-height: 60px;[^}]*font-size: 1.375rem/);
+    expect(ruleOf(css, '.lobby__actions')).toContain('width: 100%');
+    expect(ruleOf(css, '.lobby__actions')).not.toMatch(/border|position/);
+    expect(COLUMNS_QUERY).toBe('(min-width: 768px)');
+    expect(css).toContain('@media (min-width: 768px) {');
+    // Under the list the block must stay on the screen: the list is capped to the room left for it (a big party scrolls inside), never under three rows; a phone keeps its own cap.
+    expect(ruleOf(css, '.lobby__players .player-list')).toContain('max-height: min(60dvh, 560px)');
+    // The room beside the list is measured (the picker above it changes height with the games), not guessed.
+    expect(ruleOf(css, '.lobby--columns .lobby__players .player-list')).toContain('max-height: max(calc(3 * 53px), min(calc(100dvh - var(--list-room, 0px)), 560px))');
+    expect(css).not.toMatch(/--list-room: \d/);
+  });
+
+  it('measures the room the page takes beside the list, the same whatever the list’s height', () => {
+    // The block ends at 802 with a 424px list and the page scrolled 0; 24px of padding under it.
+    expect(roomBesideList(802, 0, 424, 24)).toBe(402);
+    // The list capped to 256px moves the block up by as much: the same room.
+    expect(roomBesideList(634, 0, 256, 24)).toBe(402);
+    // Scrolled by 100, the block reads 100 higher on the screen: still the same.
+    expect(roomBesideList(534, 100, 256, 24)).toBe(402);
+    expect(roomBesideList(633.2, 0, 256, 24)).toBe(402);
   });
 
   it('says nothing about being alone: the code card already asks to be shared', () => {
@@ -1316,7 +1400,7 @@ describe('the ways out of a game', () => {
     expect(guest).toContain('data-testid="leave-room"');
   });
 
-  it('puts End game in the desktop top bar for the host, and both in the gear’s menu', () => {
+  it('puts End game and Leave in the desktop top bar for the host, Leave alone for a guest, and nothing but the preferences in the gear', () => {
     usePlatformStore.getState().handleServerMessage(welcome('host', playing()));
     const bar = (state: RoomState) =>
       renderToString(
@@ -1333,9 +1417,26 @@ describe('the ways out of a game', () => {
     const html = bar(playing());
     expect(textOf(html, 'end-game')).toBe('End game');
     expect(tagWith(html, 'end-game')).toContain('gbar-end');
+    expect(textOf(html, 'leave-room')).toBe('Leave');
+    expect(tagWith(html, 'leave-room')).toContain('btn btn--secondary btn--sm gbar-leave');
+    expect(tagWith(html, 'leave-room')).toContain('aria-haspopup="dialog"');
+    const order = ['end-game', 'leave-room', 'settings-menu'].map((id) => html.indexOf(`data-testid="${id}"`));
+    expect(order.every((i) => i > -1)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    expect(html).not.toContain('menu-end-game');
+    expect(html).not.toContain('menu-leave-room');
     expect(textOf(bar(playing({ endRequested: true })), 'end-game-requested')).toBe('Ending soon');
     usePlatformStore.getState().handleServerMessage(welcome('bob', playing()));
-    expect(bar(playing())).not.toContain('data-testid="end-game"');
+    const guest = bar(playing());
+    expect(guest).not.toContain('data-testid="end-game"');
+    expect(textOf(guest, 'leave-room')).toBe('Leave');
+    // The same shape as End game, both 44px targets; on a tablet's full bar the icon alone, a 44px square.
+    const css = stylesheet('components.css');
+    expect(ruleOf(css, '.gbar-end,\n.gbar-leave')).toContain('min-height: 44px');
+    expect(ruleOf(css, '.gbar-end--pending')).toContain('min-height: 44px');
+    const tablet = mediaBlock(css, '(max-width: 1023px)');
+    expect(tablet).toMatch(/\.gbar-leave \{[^}]*width: 44px;[^}]*height: 44px/);
+    expect(tablet).toMatch(/\.gbar-leave span \{[^}]*display: none/);
   });
 });
 

@@ -324,12 +324,22 @@ test('a second browser joins the real room by code; an unknown code is refused w
   await expect(page).toHaveURL(new RegExp(`/scribble/${scribbleCode}$`));
   await expect(host.page.getByTestId('player-item')).toHaveCount(2);
   await expect(page.getByTestId('game-picker-note')).toHaveText(`${host.name} picks the game`);
-  // Copying the invite link is in the gear's menu, next to Leave room.
+  // The gear holds the site's settings alone; Leave sits on the room bar after Copy and Share, and asks first.
   await page.getByTestId('settings-menu').click();
-  await expect(page.getByTestId('copy-link')).toBeVisible();
-  await expect(page.getByTestId('leave-room')).toBeVisible();
+  const popover = page.getByTestId('settings-popover');
+  await expect(popover.getByTestId('theme-dark')).toBeVisible();
+  await expect(popover.getByTestId('sound-toggle')).toBeVisible();
+  await expect(popover.getByTestId('copy-link')).toHaveCount(0);
+  await expect(popover.getByTestId('leave-room')).toHaveCount(0);
   await page.keyboard.press('Escape');
-  await expect(page.getByTestId('settings-popover')).toHaveCount(0);
+  await expect(popover).toHaveCount(0);
+  await expect(page.getByTestId('room-bar').getByTestId('leave-room')).toBeVisible();
+  await page.getByTestId('leave-room').click();
+  await expect(page.getByTestId('lobby-leave-confirm')).toContainText('Leave the room?');
+  await page.getByTestId('lobby-leave-no').click();
+  await expect(page.getByTestId('lobby-leave-confirm')).toHaveCount(0);
+  await expect(page.getByTestId('room-code')).toHaveText(scribbleCode);
+  await expect(host.page.getByTestId('player-item')).toHaveCount(2);
 });
 
 test('Back and the wordmark link leave the room and land on the front door', async () => {

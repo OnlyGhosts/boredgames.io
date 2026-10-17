@@ -80,9 +80,9 @@ export function HowToPlayDialog({ meta, rules, open, mode, onClose, anchorRef, k
 /** The popover's width, as in the stylesheet: decides which side of the button it hangs from. */
 const POPOVER_WIDTH = 380;
 const EDGE = 16;
-/** Less room than this under the button (to the footer), and the card looks for a roomier place. */
+/** Less room than this under the button (to Start), and the card looks for a roomier place. */
 const FLIP_UNDER = 280;
-/** The least the card gets before it runs over the footer rather than squeeze under or over the button. */
+/** The least the card gets before it runs over Start rather than squeeze under or over the button. */
 const MIN_HEIGHT = 200;
 
 /**
@@ -131,8 +131,8 @@ function Popover({ meta, rules, label, onClose, anchorRef, keepOpenIn, id }: Pop
       const anchor = anchorRef?.current?.getBoundingClientRect();
       if (!anchor) return;
       const right = anchor.left + POPOVER_WIDTH > window.innerWidth - EDGE && anchor.right - POPOVER_WIDTH >= EDGE;
-      // The card stops short of the lobby's sticky footer, so Start and Ready stay in reach while it is open.
-      const footer = document.querySelector('.lobby__footer')?.getBoundingClientRect().top ?? window.innerHeight;
+      // The card stops short of Start and Ready (under the player list, or a phone's sticky footer), so they stay in reach while it is open.
+      const footer = document.querySelector('.lobby__actions, .lobby__footer')?.getBoundingClientRect().top ?? window.innerHeight;
       const toFooter = Math.min(footer, window.innerHeight) - anchor.bottom - EDGE * 2;
       const toBottom = window.innerHeight - anchor.bottom - EDGE * 2;
       const over = anchor.top - EDGE * 2;

@@ -1,12 +1,10 @@
 import type { CSSProperties } from 'react';
 import { WORDMARK_GEAR_POSITION } from '../brand/wordmark';
 import { navigate } from '../router';
-import { SettingsMenu, type MenuAction } from './Preferences';
+import { SettingsMenu } from './Preferences';
 import { Wordmark } from './Wordmark';
 
 interface Props {
-  /** Rows under the preferences in the gear's popover (the lobby's Leave room). */
-  menuActions?: MenuAction[];
   /** The front door's header: the logo fills the header's width. */
   hero?: boolean;
 }
@@ -19,7 +17,7 @@ const GEAR_VARS = { '--gear-x': WORDMARK_GEAR_POSITION.left, '--gear-y': WORDMAR
  * a room the logo link leaves it: routeSync leaves whenever the address bar stops naming the room.
  * The connection has its own notice (ConnectionNotice), never squeezed in beside the logo.
  */
-export function SiteHeader({ menuActions, hero = false }: Props) {
+export function SiteHeader({ hero = false }: Props) {
   return (
     <header className={`site-header${hero ? ' site-header--hero' : ''}`} data-testid="site-header">
       <div className="site-header__brand">
@@ -35,7 +33,7 @@ export function SiteHeader({ menuActions, hero = false }: Props) {
           >
             <Wordmark />
           </a>
-          <SettingsMenu actions={menuActions} variant="logo" />
+          <SettingsMenu variant="logo" />
         </div>
       </div>
     </header>

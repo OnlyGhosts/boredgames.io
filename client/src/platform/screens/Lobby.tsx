@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Avatar as AvatarData } from '@shared/platform/avatar';
 import { NAME_MAX_LENGTH } from '@shared/platform/constants';
 import { gameById } from '@shared/platform/games';
@@ -7,16 +7,19 @@ import { SITE_NAME } from '@shared/platform/site';
 import { AvatarPicker } from '../components/AvatarPicker';
 import { BottomSheet } from '../components/BottomSheet';
 import { GamePicker } from '../components/GamePicker';
-import { CopyIcon, EditIcon, LinkIcon, LogoutIcon, PlayIcon, ShareIcon } from '../components/Icons';
+import { LeaveConfirm } from '../components/GameExit';
+import { CopyIcon, EditIcon, LogoutIcon, PlayIcon, ShareIcon } from '../components/Icons';
 import { PlayerList } from '../components/PlayerList';
 import { ReadyControls } from '../components/ReadyControls';
 import { SettingsPanel } from '../components/SettingsPanel';
 import { SiteHeader } from '../components/SiteHeader';
 import type { AnyGameClientModule } from '../game';
 import { copyText } from '../lib/clipboard';
+import { COLUMNS_QUERY, PHONE_QUERY, useMediaQuery } from '../lib/media';
 import { canStart, listNames, notReadyPlayers, readyLine, readyPlayers } from '../lib/party';
+import { useListRoom } from '../lib/useListRoom';
 import { useLive } from '../lib/useLive';
-import { leaveRoom, startGame, updateProfile } from '../net/actions';
+import { startGame, updateProfile } from '../net/actions';
 import { inviteLink } from '../router';
 import { selectIsHost, selectMe } from '../store/selectors';
 import { usePlatformStore } from '../store/usePlatformStore';
@@ -32,6 +35,18 @@ export function Lobby({ room, game }: Props) {
   const playerId = useLive(usePlatformStore, (s) => s.playerId);
   const addToast = usePlatformStore((s) => s.addToast);
   const [editing, setEditing] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  // The host's "Start anyway" step: kept here, so it outlives the controls moving between the
+  // column and a phone's footer (a tablet turned, a window resized), which remounts them.
+  const [confirming, setConfirming] = useState(false);
+  // The two-column room (a tablet or a desktop, never a phone turned sideways): Start and the row
+  // under it sit under the player list, which leaves them room on the screen (a big party scrolls
+  // inside it); a phone pins them to the bottom of the screen instead.
+  const twoColumns = useMediaQuery(COLUMNS_QUERY);
+  const phone = useMediaQuery(PHONE_QUERY);
+  const columns = twoColumns && !phone;
+  const bodyRef = useRef<HTMLDivElement | null>(null);
+  useListRoom(bodyRef, '[data-testid="player-list"]', '.lobby__actions', columns);
   const meta = gameById(room.gameId);
 
   // The home page was likely scrolled to its join form (or the game was): start the lobby at the code.
@@ -66,17 +81,25 @@ export function Lobby({ room, game }: Props) {
     await copy(link, 'Invite link');
   };
 
+  const controls = (
+    <>
+      {isHost && <StartControls room={room} confirming={confirming} onConfirming={setConfirming} />}
+      {me && <ReadyControls me={me} extra={changeLook} />}
+      {!isHost && (
+        <p className="lobby__waiting" data-testid="waiting-for-host">
+          Waiting for {host?.name ?? 'the host'} to start {meta.name}
+          <span className="ellipsis" aria-hidden="true" />
+        </p>
+      )}
+    </>
+  );
+
   return (
-    <div className={`lobby${isHost ? '' : ' lobby--guest'}`} data-testid="lobby">
-      <div className="lobby__body">
+    <div className={`lobby${isHost ? '' : ' lobby--guest'}${columns ? ' lobby--columns' : ''}`} data-testid="lobby">
+      <div className="lobby__body" ref={bodyRef}>
         {/* The room's header: one bar holding the logo, the code and its buttons on a wider screen; a phone stacks the logo over the code card. */}
         <div className="lobby__top">
-          <SiteHeader
-            menuActions={[
-              { label: 'Copy invite link', icon: <LinkIcon size={18} />, onSelect: () => void copy(link, 'Invite link'), testId: 'copy-link' },
-              { label: 'Leave room', icon: <LogoutIcon size={18} />, onSelect: leaveRoom, testId: 'leave-room' },
-            ]}
-          />
+          <SiteHeader />
 
           <section className="room-card" aria-label="Room code" data-testid="room-bar">
             <div className="room-card__code">
@@ -96,6 +119,10 @@ export function Lobby({ room, game }: Props) {
               <ShareIcon size={20} />
               <span>Share</span>
             </button>
+            <button type="button" className="room-card__btn" onClick={() => setLeaving(true)} aria-haspopup="dialog" aria-expanded={leaving} aria-label="Leave room" data-testid="leave-room">
+              <LogoutIcon size={20} />
+              <span>Leave</span>
+            </button>
           </section>
         </div>
 
@@ -113,6 +140,12 @@ export function Lobby({ room, game }: Props) {
               </span>
               <PlayerList room={room} meId={playerId} isHost={isHost} mode="lobby" game={game} />
             </section>
+
+            {columns && (
+              <div className="lobby__controls lobby__actions" data-testid="lobby-actions">
+                {controls}
+              </div>
+            )}
           </div>
 
           {isHost && (
@@ -130,18 +163,15 @@ export function Lobby({ room, game }: Props) {
         </div>
       </div>
 
-      <div className="lobby__footer" data-testid="lobby-footer">
-        <div className="lobby__footer-inner">
-          {isHost && <StartControls room={room} />}
-          {me && <ReadyControls me={me} extra={changeLook} />}
-          {!isHost && (
-            <p className="lobby__waiting" data-testid="waiting-for-host">
-              Waiting for {host?.name ?? 'the host'} to start {meta.name}
-              <span className="ellipsis" aria-hidden="true" />
-            </p>
-          )}
+      {!columns && (
+        <div className="lobby__footer" data-testid="lobby-footer">
+          <div className="lobby__controls lobby__footer-inner">{controls}</div>
         </div>
-      </div>
+      )}
+
+      <BottomSheet open={leaving} title="Leave room" onClose={() => setLeaving(false)} testId="lobby-leave-sheet" className="sheet--exit">
+        <LeaveConfirm room={room} meId={playerId} onCancel={() => setLeaving(false)} testId="lobby-leave" />
+      </BottomSheet>
 
       {me && (
         <BottomSheet open={editing} title="Change my look" onClose={() => setEditing(false)} testId="profile-sheet" className="sheet--narrow sheet--dialog">
@@ -152,26 +182,32 @@ export function Lobby({ room, game }: Props) {
   );
 }
 
+interface StartProps {
+  room: RoomState;
+  /** The "Start anyway" step is showing. */
+  confirming: boolean;
+  onConfirming(on: boolean): void;
+}
+
 /**
  * The host's Start: enabled once enough players are ready, with a hint naming who still is not.
  * Starting while some could still ready up asks first, since they would sit the game out.
  */
-function StartControls({ room }: { room: RoomState }) {
+function StartControls({ room, confirming, onConfirming }: StartProps) {
   const meta = gameById(room.gameId);
-  const [confirming, setConfirming] = useState(false);
   const ready = readyPlayers(room).length;
   const notReady = notReadyPlayers(room);
   const startable = canStart(room, meta);
   useEffect(() => {
-    if (notReady.length === 0) setConfirming(false);
-  }, [notReady.length]);
+    if (notReady.length === 0) onConfirming(false);
+  }, [notReady.length, onConfirming]);
 
   const onStart = () => {
     if (notReady.length > 0 && !confirming) {
-      setConfirming(true);
+      onConfirming(true);
       return;
     }
-    setConfirming(false);
+    onConfirming(false);
     startGame();
   };
 
@@ -186,7 +222,7 @@ function StartControls({ room }: { room: RoomState }) {
             <button type="button" className="btn btn--primary" onClick={onStart} data-testid="start-anyway">
               <PlayIcon size={16} /> Start anyway
             </button>
-            <button type="button" className="btn btn--ghost" onClick={() => setConfirming(false)} data-testid="start-wait">
+            <button type="button" className="btn btn--ghost" onClick={() => onConfirming(false)} data-testid="start-wait">
               Wait for them
             </button>
           </div>

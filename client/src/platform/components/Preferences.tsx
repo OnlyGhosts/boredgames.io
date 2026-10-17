@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { DEFAULT_THEME, type Theme } from '../lib/storage';
 import { usePlatformStore } from '../store/usePlatformStore';
 import { GearIcon } from './Icons';
@@ -51,22 +51,12 @@ export function PreferenceRows() {
   );
 }
 
-/** A row under the preferences in the gear's popover (the lobby's Copy invite link and Leave room). */
-export interface MenuAction {
-  label: string;
-  icon: ReactNode;
-  onSelect(): void;
-  testId: string;
-  /** 'danger' for a serious action (the host's End game). */
-  tone?: 'danger';
-}
-
 /**
- * The gear in a header: a small popover with the preferences and the screen's own actions. Escape
- * or a tap outside closes it and gives the focus back to the gear; picking an action closes it.
+ * The gear in a header: a small popover with the device's preferences and nothing else (a room's
+ * and a game's own buttons live on their bars). Escape or a tap outside closes it and gives the
+ * focus back to the gear.
  */
 interface SettingsMenuProps {
-  actions?: MenuAction[];
   /**
    * Where the trigger lives. 'icon' (default) is a gear button of its own. 'logo' is a clear
    * button laid over the logo's gear "o" (the logo draws the gear; its box, the positioned
@@ -75,7 +65,7 @@ interface SettingsMenuProps {
   variant?: 'icon' | 'logo';
 }
 
-export function SettingsMenu({ actions = [], variant = 'icon' }: SettingsMenuProps) {
+export function SettingsMenu({ variant = 'icon' }: SettingsMenuProps) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const buttonRef = useRef<HTMLButtonElement | null>(null);
@@ -117,25 +107,6 @@ export function SettingsMenu({ actions = [], variant = 'icon' }: SettingsMenuPro
       {open && (
         <div className="settings-menu__panel" id={panelId} role="dialog" aria-label="Settings" data-testid="settings-popover">
           <PreferenceRows />
-          {actions.length > 0 && (
-            <div className="settings-menu__actions">
-              {actions.map((a) => (
-                <button
-                  key={a.testId}
-                  type="button"
-                  className={`settings-menu__action${a.tone === 'danger' ? ' settings-menu__action--danger' : ''}`}
-                  onClick={() => {
-                    setOpen(false);
-                    a.onSelect();
-                  }}
-                  data-testid={a.testId}
-                >
-                  {a.icon}
-                  {a.label}
-                </button>
-              ))}
-            </div>
-          )}
         </div>
       )}
     </div>

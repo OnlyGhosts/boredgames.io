@@ -8,6 +8,9 @@ import { useEffect, useState } from 'react';
  */
 export const PHONE_QUERY = '(max-width: 760px), (min-aspect-ratio: 3/2) and (max-height: 520px)';
 
+/** The room's two columns (the lobby stylesheet's 768px breakpoint): players at the left, the host's settings at the right. */
+export const COLUMNS_QUERY = '(min-width: 768px)';
+
 /** A desktop-sized screen: where a sheet becomes a centred box and How to play a popover (the stylesheets' 1024px breakpoint). */
 export const DESKTOP_QUERY = '(min-width: 1024px)';
 

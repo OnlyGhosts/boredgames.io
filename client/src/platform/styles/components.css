@@ -1583,19 +1583,38 @@ button.exit-action--end:hover {
 }
 
 /*
- * The desktop top bar's End game, for the host: a serious action beside the gear, a tinted button
- * with a danger border that fills solid under the pointer.
+ * The desktop top bar's ways out, beside the gear: End game for the host, a serious action on a
+ * tinted button with a danger border that fills solid under the pointer; Leave for everyone, the
+ * same shape on the quiet outline. Both 44px targets, as tall as the bar's row.
  */
-.gbar-end {
+.gbar-end,
+.gbar-leave {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  min-height: 40px;
+  min-height: 44px;
   padding: 0 14px 0 12px;
+  font-weight: 700;
+}
+
+.gbar-end {
   border: 1.5px solid var(--color-danger);
   background: var(--color-danger-soft);
   color: var(--color-danger-text);
-  font-weight: 700;
+}
+
+/* A tablet's bar is full (the name, a game's word, the round, End game, the gear): Leave keeps its icon alone, a 44px square. */
+@media (max-width: 1023px) {
+  .gbar-leave {
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    gap: 0;
+  }
+
+  .gbar-leave span {
+    display: none;
+  }
 }
 
 .gbar-end.btn:hover:not(:disabled) {
@@ -1611,7 +1630,7 @@ button.exit-action--end:hover {
 }
 
 .gbar-end--pending {
-  min-height: 40px;
+  min-height: 44px;
   padding: 0 12px;
   border-style: dashed;
   border-radius: var(--radius-sm);
@@ -2371,61 +2390,3 @@ button.exit-action--end:hover {
   }
 }
 
-/*
- * The gear popover's own actions (Copy invite link, End game, Leave room): full-width outlined
- * buttons under the preferences, End game in the danger colours.
- */
-.settings-menu__actions {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-3) 0 var(--space-4);
-  border-top: 1px solid var(--color-border);
-}
-
-.settings-menu__action {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  min-height: 44px;
-  padding: 0 var(--space-3);
-  border: 1.5px solid var(--color-border-strong);
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--color-text);
-  font-weight: 600;
-  font-size: 0.9375rem;
-  transition:
-    background-color 100ms ease-out,
-    border-color 100ms ease-out,
-    color 100ms ease-out,
-    transform 70ms ease-out;
-}
-
-.settings-menu__action:hover {
-  background: var(--color-surface-2);
-}
-
-.settings-menu__action:active {
-  transform: translateY(1px);
-  border-color: var(--color-text-muted);
-}
-
-.settings-menu__action--danger {
-  border-color: var(--color-danger);
-  background: var(--color-danger-soft);
-  color: var(--color-danger-text);
-  font-weight: 700;
-}
-
-.settings-menu__action--danger:hover {
-  background: var(--color-danger);
-  color: var(--color-bg);
-}
-
-.settings-menu__action--danger:active {
-  background: var(--color-danger-text);
-  border-color: var(--color-danger-text);
-  color: var(--color-bg);
-}

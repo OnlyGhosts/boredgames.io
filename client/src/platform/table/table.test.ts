@@ -124,6 +124,19 @@ describe('the animation queue', () => {
   });
 });
 
+describe('a dealt card', () => {
+  it('starts on the deck at the deck’s size and upright, so its flight never leaves the table', async () => {
+    const { deckStart } = await import('./TableCard');
+    // A 132px card dealt to the middle from a 72px deck in the table's top right corner.
+    const card = { left: 600, top: 120, width: 132, height: 198 };
+    const deck = { left: 1254, top: 114, width: 72, height: 108 };
+    expect(deckStart(card, deck)).toBe(`translate(${1290 - 666}px, ${168 - 219}px) scale(${72 / 132})`);
+    expect(deckStart(card, deck)).not.toContain('rotate');
+    // A card smaller than the deck (a phone's mini cards) is never blown up.
+    expect(deckStart({ left: 0, top: 0, width: 30, height: 45 }, deck)).toMatch(/scale\(1\)$/);
+  });
+});
+
 describe('the players grid', () => {
   it('steps the tiles down in tiers as the table grows: full to 4 others, compact to 9, small to 23, dense beyond', () => {
     const tiers = [1, 4, 5, 9, 10, 23, 24, 49].map((n) => G.tileTier(n));

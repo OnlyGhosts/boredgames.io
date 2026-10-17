@@ -33,6 +33,20 @@ function offsetTo(el: HTMLElement, attr: string): { dx: number; dy: number } | n
   return { dx: b.left + b.width / 2 - (a.left + a.width / 2), dy: b.top + b.height / 2 - (a.top + a.height / 2) };
 }
 
+type Rect = Pick<DOMRect, 'left' | 'top' | 'width' | 'height'>;
+
+/**
+ * Where a dealt card starts: on the deck, the deck's size, upright. The flight then stays between
+ * two boxes inside the table (the deck and the card's slot), so a big card leaving a deck in the
+ * table's corner never pokes past its edge and makes the table scroll.
+ */
+export function deckStart(card: Rect, deck: Rect): string {
+  const dx = deck.left + deck.width / 2 - (card.left + card.width / 2);
+  const dy = deck.top + deck.height / 2 - (card.top + card.height / 2);
+  const scale = card.width > 0 ? Math.min(1, deck.width / card.width) : 1;
+  return `translate(${dx}px, ${dy}px) scale(${scale})`;
+}
+
 function canAnimate(el: HTMLElement | null): el is HTMLElement {
   return el !== null && typeof el.animate === 'function' && !prefersReducedMotion();
 }
@@ -52,8 +66,8 @@ export function TableCard({ card, size, motion, leaving, flipping = false, highl
       el.animate([{ transform: 'translateX(-28px)', opacity: 0.4 }, { transform: 'none', opacity: 1 }], { duration: MOVE_MS, easing: EASE });
       return;
     }
-    const from = offsetTo(el, DECK_ANCHOR);
-    const start = from ? `translate(${from.dx}px, ${from.dy}px) rotate(-12deg) scale(0.8)` : 'translateY(-24px)';
+    const deck = el.ownerDocument.querySelector(`[${DECK_ANCHOR}]`);
+    const start = deck ? deckStart(el.getBoundingClientRect(), deck.getBoundingClientRect()) : 'translateY(-24px)';
     el.animate([{ transform: start, opacity: 0.6 }, { transform: 'none', opacity: 1 }], { duration: DEAL_MS, easing: EASE });
     // Mount-only: a card's arrival plays once.
   }, []);

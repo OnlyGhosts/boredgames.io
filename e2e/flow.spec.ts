@@ -71,8 +71,22 @@ for (const [index, gameId] of LIVE.entries()) {
     const onPhone = index % 2 === 1;
     if (onPhone) await host.page.setViewportSize(PORTRAIT);
     await startGame(gameId, players);
-    // The guests have no End game anywhere.
+    // The guests have no End game anywhere; a desktop guest's bar has Leave.
     await expect(quinn.page.getByTestId('end-game')).toHaveCount(0);
+    await expect(quinn.page.getByTestId('leave-room')).toBeVisible();
+    if (index === 0) {
+      // The bar's ways out are 44px targets. Leave opens the back arrow's confirm step, and only the button pressed reads as open.
+      for (const [page, id] of [[host.page, 'end-game'], [quinn.page, 'leave-room']] as const) {
+        expect((await page.getByTestId(id).boundingBox())?.height ?? 0, `${id} is a 44px target`).toBeGreaterThanOrEqual(44);
+      }
+      await quinn.page.getByTestId('leave-room').click();
+      await expect(quinn.page.getByTestId('game-leave-confirm')).toContainText('Leave the room?');
+      await expect(quinn.page.getByTestId('leave-room')).toHaveAttribute('aria-expanded', 'true');
+      await expect(quinn.page.getByTestId('game-back')).toHaveAttribute('aria-expanded', 'false');
+      await quinn.page.getByTestId('game-leave-no').click();
+      await expect(quinn.page.getByTestId('game-leave-confirm')).toHaveCount(0);
+      await expect(quinn.page.getByTestId('leave-room')).toHaveAttribute('aria-expanded', 'false');
+    }
     await pia.page.getByTestId('game-menu').click();
     await expect(pia.page.getByTestId('leave-room')).toBeVisible();
     await expect(pia.page.getByTestId('end-game')).toHaveCount(0);
