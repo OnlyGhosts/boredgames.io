@@ -149,9 +149,49 @@
 }
 
 .bj-empty__stake .tbl-stake {
-  height: var(--tbl-pill-h);
-  padding: 0 0.6em;
+  --stake-h: var(--tbl-pill-h);
+  padding: 0 0.6em 0 0.4em;
   font-size: calc(var(--tbl-pill-h) * 0.5);
+}
+
+/*
+ * Split hands side by side on a phone's stage (under 460px; HandRow marks the row): my stake by
+ * each total keeps to the width the word Bet gave it, so the hands still share the row (two on a
+ * 320px phone, three on a 414px one; HandRow folds a hand into a chip once its stake and total
+ * outgrow its share): packed tighter, two chips at most, the plus saying the rest, and a four-digit
+ * figure short ("1.2k"), as Poker's stage reads it on a phone. A hand on its own has the room, and
+ * keeps three chips and its figure in full ("1,250").
+ */
+@container (max-width: 459px) {
+  .bj-hands--side .tbl-hand__head:has(> .tbl-hand__stake) {
+    gap: 2px;
+  }
+
+  .bj-hands--side .tbl-hand__stake {
+    gap: 0.15em;
+    padding: 0 0.25em;
+  }
+
+  .bj-hands--side .tbl-hand__stake .tbl-stake__more {
+    margin-left: -0.25em;
+    font-size: 0.92em;
+  }
+
+  .bj-hands--side .tbl-hand__stake .tbl-stake__chip:nth-child(n + 3) {
+    display: none;
+  }
+
+  .bj-hands--side .tbl-hand__stake .tbl-stake__chips[data-count='3'] + .tbl-stake__more--spare {
+    display: inline;
+  }
+
+  .bj-hands--side .tbl-hand__stake .tbl-figure__full {
+    display: none;
+  }
+
+  .bj-hands--side .tbl-hand__stake .tbl-figure__short {
+    display: inline;
+  }
 }
 
 /* An empty hand (before my first deal): just the two places my cards will land. */
@@ -285,10 +325,12 @@
   gap: var(--space-3);
 }
 
+/* The stack, the stake and what the seat is doing; on a narrow phone the words wrap under the pill rather than run off the sheet. */
 .bj-seat-detail__line {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-2) var(--space-3);
   margin: 0;
   font-weight: 700;
 }

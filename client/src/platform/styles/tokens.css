@@ -151,6 +151,9 @@
   --game-poker-soft: #3d2636;
   --game-template-text: #c7e976;
   --game-template-soft: #2d381f;
+
+  /* The brand's off-white (the light page), the same in both themes: a card table's off-white chip. */
+  --color-offwhite: #f5f6ef;
 }
 
 /*

@@ -102,17 +102,43 @@
   --card-h: calc(var(--tbl-w) * 1.5);
 }
 
-/* ---------- The stage: my two cards big in the middle ---------- */
+/*
+ * ---------- The stage: my two cards big in the middle ----------
+ * The words over their top right corner (the dealer button, my bet's chips and figure, where I
+ * stand, the hand's name) reach left of the cards, on a 320px or 360px phone further than the
+ * stage has room for ("D", three chips and "200", "Pair of queens"). So they sit in the hand's own
+ * box, which is then as wide as they are, and the hand keeps its cards centred, moving right only
+ * as far as the words need to stay on the stage.
+ */
 .pk-mine {
   display: flex;
   align-items: flex-end;
-  justify-content: center;
+  width: 100%;
   height: 100%;
   min-width: 0;
 }
 
 .pk-mine .tbl-hand {
   --tbl-w: var(--pk-card-w);
+  /* The cards' box: a two-card fan and the hand's 3px each side. */
+  --pk-fan-w: calc(var(--tbl-w) * (1 + var(--fan-step) * (var(--fan, 2) - 1)) + 6px);
+  align-items: flex-end;
+  padding-top: 0;
+  margin-left: auto;
+  margin-right: calc(50% - var(--pk-fan-w) / 2);
+}
+
+/* In the hand's box over the cards, where HandFan floats it: the pill's height, overlapping the cards' top edge by 0.3 of it. */
+.pk-mine .tbl-hand__head {
+  position: relative;
+  top: auto;
+  right: auto;
+  margin-bottom: calc(var(--pill-h) * -0.3);
+}
+
+/* The payout rises over the cards, wherever the words have moved them in the hand's box. */
+.pk-mine .tbl-payout {
+  left: calc(100% - var(--pk-fan-w) / 2);
 }
 
 /* The hand's name is longer than a total: a pill sized for words. */

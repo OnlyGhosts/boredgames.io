@@ -114,6 +114,8 @@ function MoreChip({ playerId, hands, total, testId }: { playerId: string; hands:
 interface Props {
   playerId: string;
   hands: TableHand[];
+  /** The table's starting stack: the chips a stake is drawn in. */
+  start: number;
   timeline: Timeline;
   now: number;
   leaving: boolean;
@@ -134,8 +136,10 @@ interface Props {
  * A seat's hands side by side, never scrolling: every hand full size while they fit, the cards
  * shrinking as hands are added; past that the hand in play stays full size and the others fold
  * into chips in a grid beside it, and past what the grid holds the furthest fold into a "+N".
+ * Two or more full hands mark the row `bj-hands--side`: on a phone their stakes pack tighter
+ * (blackjack.css), and a hand on its own keeps its stake in full.
  */
-export function HandRow({ playerId, hands, timeline, now, leaving, activeIndex, place, size, stakes = false, ownerName, testId, chipTestId }: Props) {
+export function HandRow({ playerId, hands, start, timeline, now, leaving, activeIndex, place, size, stakes = false, ownerName, testId, chipTestId }: Props) {
   const [ref, box] = useSize<HTMLDivElement>(hands.length);
   // A full hand is never narrower than the words over its corner (its stake and total, its outcome).
   const minHand = Math.max(MIN_FULL_HAND_PX[place], (box?.head ?? 0) + HAND_GAP_PX);
@@ -156,11 +160,11 @@ export function HandRow({ playerId, hands, timeline, now, leaving, activeIndex, 
   const named = activeIndex >= 0 ? activeIndex : slots.indexOf('full');
   const fullHand = (hand: TableHand, i: number) => (
     <div key={i} className="bj-slot">
-      <Hand playerId={playerId} index={i} hand={hand} timeline={timeline} now={now} leaving={leaving} size={size} active={i === activeIndex} narrow={full.length > 1} stake={stakes} ownerName={i === named ? ownerName : undefined} testId={testId} />
+      <Hand playerId={playerId} index={i} hand={hand} start={start} timeline={timeline} now={now} leaving={leaving} size={size} active={i === activeIndex} narrow={full.length > 1} stake={stakes} ownerName={i === named ? ownerName : undefined} testId={testId} />
     </div>
   );
   return (
-    <div ref={ref} className={`bj-hands bj-hands--${place}${chips > 0 ? ' bj-hands--chips' : ''}`} style={style} data-testid={`${testId}s-row`} data-full={full.length} data-chips={chips} data-more={folded.length}>
+    <div ref={ref} className={`bj-hands bj-hands--${place}${full.length > 1 ? ' bj-hands--side' : ''}${chips > 0 ? ' bj-hands--chips' : ''}`} style={style} data-testid={`${testId}s-row`} data-full={full.length} data-chips={chips} data-more={folded.length}>
       {hands.map((hand, i) => (slots[i] === 'full' ? fullHand(hand, i) : null))}
       {chips > 0 && (
         <ol className="bj-chips" aria-label="Other hands">

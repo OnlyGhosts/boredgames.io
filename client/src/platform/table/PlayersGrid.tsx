@@ -180,12 +180,12 @@ interface TileProps {
   mark: SeatMark;
   /** The settled outcome, kept on show until the next deal. */
   outcome?: SeatOutcome | null;
-  /** The stack, in words ("1,000 chips"; "1.2k chips" where a tile is too small for the full figure). */
+  /** The stack, in words ("1,000 chips"; "1.2k chips" where a tile is too small for the full figure; the figure alone beside the total on a compact tile under 100px). */
   chips?: number;
-  /** The stake in front of the seat, as its own labelled pill (StakePill). */
+  /** The stake in front of the seat, as its own pill of chips (StakePill, with tileChips for the tier). */
   bet?: ReactNode;
-  /** The total, shown wherever the cards are not. */
-  total?: { text: string; tone: Tone } | null;
+  /** The total, shown wherever the cards are not; `short` stands in for it where it shares the stack's line (table.css: Blackjack's two split hands, "21/15", read as the hand in play, "15"). */
+  total?: { text: string; tone: Tone; short?: string } | null;
   /** Folded, out, not dealt in: dimmed. */
   dimmed?: boolean;
   /** After the name (the dealer button). */
@@ -204,12 +204,22 @@ interface TileProps {
 }
 
 /**
- * How a tile writes its figures: in full on a full tile, in full where it fits on a compact one
- * (1,040 and 1,000 never both read "1k"), short on the small tiers.
+ * How a tile writes its figures: `fit` (both forms, table.css picks one) on a full or a compact
+ * tile, short on the small tiers. A stack reads in full, so "1,040 chips" never reads like "1,000
+ * chips", but for a five-digit one on a compact tile ("12k chips") and anything under 80px wide. A
+ * stake reads short ("1k") on a compact tile, whose lines are short, when its pill has two chips
+ * or a plus, and when it has four digits under 200px wide (every compact tile but the widest):
+ * there its chips tell 1,040 (an ink chip, an off-white one and a plus) from 1,000 (one ink chip).
+ * A full tile reads a four-digit stake short under 140px wide (three across a phone) and, 200px to
+ * 239px wide, in a pill of two chips or a plus; elsewhere in full.
  */
 export function tileFigures(tier: TileTier): StakeFormat {
-  if (tier === 'full') return 'full';
-  return tier === 'compact' ? 'fit' : 'short';
+  return tier === 'full' || tier === 'compact' ? 'fit' : 'short';
+}
+
+/** How many chips a tile's bet pill draws at most: three on a full tile, two on the smaller tiers, whose lines are short. */
+export function tileChips(tier: TileTier): number {
+  return tier === 'full' ? 3 : 2;
 }
 
 /** One player in the grid; how much it shows depends on the tier (table.css lays each tier out). */
@@ -246,7 +256,7 @@ export function PlayerTile({ playerId, name, avatar, connected, tier, turn, turn
       </span>
       {total && (
         <span className="tbl-tile__total">
-          <TotalPill tone={total.tone} testId="seat-total">
+          <TotalPill tone={total.tone} testId="seat-total" short={total.short}>
             {total.text}
           </TotalPill>
         </span>

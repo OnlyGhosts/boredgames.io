@@ -280,9 +280,23 @@ test('the host sets the stacks, the blinds and two hands, two phones join and th
     await expect(p.page.getByTestId('phase-kicker')).toHaveText('Pre-flop');
     await expect(p.page.getByTestId('poker-header')).not.toContainText('Hand');
     await expect(p.page.getByTestId('poker-header')).not.toContainText('Blinds');
-    // Every stack reads in words, every bet as its own pill: never two bare numbers side by side.
+    // Every stack reads in words, every bet as its own pill of chips labelled "Bet N": never two bare numbers side by side.
     for (const chips of await p.page.getByTestId('seat-chips').allTextContents()) expect(chips).toMatch(/^[\d,.k]+ chips?$/);
-    for (const bet of await p.page.locator('[data-testid="seat-bet"] .tbl-stake').allTextContents()) expect(bet).toMatch(/^Bet [\d,.k]+$/);
+    // A seat's pill shows once its blind's chips have landed (they fly in after the deal): wait for one on every seat that posted a blind ("SB 10", "BB 20") before reading them.
+    const blindSeats = p.page.getByTestId('seat').filter({ has: p.page.getByTestId('seat-line').filter({ hasText: /^(SB|BB) / }) });
+    await expect
+      .poll(async () => {
+        const blinds = await blindSeats.count();
+        return blinds > 0 && (await p.page.locator('[data-testid="seat-bet"] .tbl-stake').count()) === blinds && (await blindSeats.locator('[data-testid="seat-bet"] .tbl-stake').count()) === blinds;
+      }, { message: `${p.name}: a bet pill on every seat that posted a blind, and on no other` })
+      .toBe(true);
+    const pills = await p.page.locator('[data-testid="seat-bet"] .tbl-stake').evaluateAll((els) => els.map((el) => ({ label: el.getAttribute('aria-label'), chips: el.querySelectorAll('.tbl-chip').length, text: el.textContent })));
+    expect(pills.length).toBeGreaterThan(0);
+    for (const pill of pills) {
+      expect(pill.label).toMatch(/^Bet [\d,]+$/);
+      expect(pill.chips).toBeGreaterThanOrEqual(1);
+      expect(pill.text).toMatch(/^\+?[\d,.k]+$/);
+    }
     await expect(p.page.getByTestId('overlay-results')).toHaveCount(0);
   }
   // The dealer button sits on exactly one seat on every page.
@@ -338,7 +352,13 @@ test('hand one: a raise through the panel, a call and a fold, the board street b
   // The raise is said under the ribbon too, and its pill on the raiser's seat reads as a bet, apart from the stack.
   await expect(watcher.page.getByTestId('turn-sub')).toHaveText(`${raiser.name} raises to ${to}`);
   await expect(raiser.page.getByTestId('turn-sub')).toHaveText(`You raise to ${to}`);
-  await expect(watcher.page.locator(`[data-testid="seat"][data-name="${raiser.name}"] [data-testid="seat-bet"] .tbl-stake`)).toHaveText(`Bet ${to}`);
+  const raiserPill = watcher.page.locator(`[data-testid="seat"][data-name="${raiser.name}"] [data-testid="seat-bet"] .tbl-stake`);
+  await expect(raiserPill).toHaveAttribute('aria-label', `Bet ${to}`);
+  await expect(raiserPill).toHaveAttribute('data-bet', String(to));
+  // 70 at a 500 start: a lilac chip (125) is too big, so two lime (25) chips and four off-white (5) ones, six owed; a full tile draws three (two on a compact one) and a plus for the rest.
+  await expect(raiserPill).toHaveAttribute('data-chips', '6');
+  await expect(raiserPill).toHaveAttribute('data-bands', /^lime lime( white)?$/);
+  await expect(raiserPill.locator('.tbl-stake__more')).toHaveText('+');
   await chipsConserved();
 
   // The next player calls, the one after folds: a two-way pot goes to the flop.
@@ -577,4 +597,95 @@ for (const size of [2, 6, 12, 23]) {
 
 test('no page errors were raised in any browser', async () => {
   expect(players.flatMap((p) => p.errors)).toEqual([]);
+});
+
+/**
+ * A 100,000 table, heads-up on two phones: the dealer (first to act heads-up) raises to 12,000, which
+ * breaks into two lime chips and two off-white ones (three drawn and a plus). On the other phone the
+ * raiser's 218px tile keeps "88,000 chips", the pill, the dealer button and the name apart (three
+ * chips, a plus and "12,000" once pushed the stack under the name); by my own cards the dealer
+ * button, the raise and the hand's name stay on the stage at 320px and 360px, the dealt name and the
+ * longest a phone shows (they once ran 33px past its left edge), the words still over the cards.
+ */
+test('a 100,000 table: a raise to 12,000 reads on the raiser’s seat and by their cards at every phone size', async ({ browser }) => {
+  const phone = { viewport: PORTRAIT, isMobile: true, hasTouch: true, deviceScaleFactor: 2 };
+  const contexts = [await browser.newContext(phone), await browser.newContext(phone)];
+  const [a, b] = await Promise.all(contexts.map((c) => c.newPage()));
+  const errors: string[] = [];
+  for (const p of [a, b]) p.on('pageerror', (err) => errors.push(err.message));
+  try {
+    const code = await createParty(a, 'Hana', 'poker');
+    await joinByCode(b, 'Pia', code);
+    const start = a.getByTestId('settings-startingChips');
+    await start.fill('100000');
+    await start.press('Enter');
+    await expect(start).toHaveValue('100000');
+    await readyAll([b]);
+    await expectReadyCount(a, 2);
+    await a.getByTestId('start-game').click();
+    for (const p of [a, b]) await expect(p.getByTestId('poker-screen')).toHaveAttribute('data-phase', 'acting');
+    const myTurn = (p: Page) => p.locator('[data-testid="my-area"][data-my-turn="true"]').count();
+    await expect.poll(async () => (await myTurn(a)) + (await myTurn(b)), { message: 'someone to act' }).toBe(1);
+    const raiser = (await myTurn(a)) > 0 ? a : b;
+    const watcher = raiser === a ? b : a;
+    await expect(raiser.getByTestId('my-area')).toHaveAttribute('data-dealer', 'true');
+    await expect(raiser.getByTestId('action-fold')).toBeEnabled();
+    await raiser.getByTestId('raise-input').fill('12000');
+    await raiser.getByTestId('raise-input').press('Enter');
+
+    const seat = watcher.locator(`[data-testid="seat"][data-name="${raiser === a ? 'Hana' : 'Pia'}"]`);
+    await expect(seat).toHaveAttribute('data-bet', '12000');
+    const pill = seat.locator('[data-testid="seat-bet"] .tbl-stake');
+    await expect(pill).toHaveAttribute('aria-label', 'Bet 12,000');
+    await expect(pill).toHaveAttribute('data-bands', 'lime lime white');
+    await expect(pill.locator('.tbl-stake__more')).toHaveText('+');
+    await expect(seat.getByTestId('seat-dealer')).toBeVisible();
+    await expect(seat.getByTestId('seat-chips')).toHaveAttribute('data-chips', '88000');
+    const scrolls = (p: Page) =>
+      p.evaluate(() =>
+        ['html', '[data-testid="poker-main"]', '[data-testid="pk-table"]', '[data-testid="seats"]', '[data-testid="hand-stage"]'].filter((sel) => {
+          const el = document.querySelector(sel);
+          return el !== null && (el.scrollWidth > el.clientWidth || el.scrollHeight > el.clientHeight);
+        }),
+      );
+    for (const size of [{ width: 360, height: 740 }, PORTRAIT, { width: 414, height: 896 }]) {
+      const label = `the raiser’s seat at ${size.width}x${size.height}`;
+      await watcher.setViewportSize(size);
+      await expect(watcher.getByTestId('seats')).toHaveAttribute('data-tier', 'full');
+      await expect.poll(() => scrolls(watcher), { message: `${label}: nothing scrolls` }).toEqual([]);
+      await tilesReadable(watcher, label);
+    }
+
+    await expect(raiser.locator('[data-testid="my-bet"] .tbl-stake')).toHaveAttribute('data-bet', '12000');
+    await expect(raiser.getByTestId('my-dealer')).toBeVisible();
+    // The words over my cards (the dealer button, the raise, the hand's name): wholly on the stage, their right end over the cards' right edge.
+    const head = () =>
+      raiser.evaluate(() => {
+        const stage = document.querySelector('[data-testid="hand-stage"]')?.getBoundingClientRect();
+        const words = document.querySelector('[data-testid="my-cards"] .tbl-hand__head')?.getBoundingClientRect();
+        const fan = document.querySelector('[data-testid="my-cards"] .tbl-fan')?.getBoundingClientRect();
+        if (!stage || !words || !fan) return 'missing';
+        if (words.left < stage.left - 0.5 || words.right > stage.right + 0.5) return `the words at ${Math.round(words.left)} to ${Math.round(words.right)}, the stage ${Math.round(stage.left)} to ${Math.round(stage.right)}`;
+        return Math.abs(words.right - fan.right) <= 1.5 ? 'on the stage, over the cards' : `the words end at ${Math.round(words.right)}, the cards at ${Math.round(fan.right)}`;
+      });
+    const name = raiser.getByTestId('hand-hint');
+    const dealt = (await name.textContent()) ?? '';
+    expect(dealt).toMatch(/^(Pair of .+|.+ high)$/);
+    for (const size of [SMALL, { width: 360, height: 740 }]) {
+      await raiser.setViewportSize(size);
+      for (const words of [dealt, 'Pair of queens', 'Three of a kind', dealt]) {
+        // The name's own text node, so the page keeps it until the hand changes.
+        await name.evaluate((el, text) => {
+          const node = Array.from(el.childNodes).find((n) => n.nodeType === Node.TEXT_NODE);
+          if (node) node.nodeValue = text;
+        }, words);
+        const label = `my raise by my cards at ${size.width}x${size.height}, "${words}"`;
+        await expect.poll(head, { message: label }).toBe('on the stage, over the cards');
+        await expect.poll(() => scrolls(raiser), { message: `${label}: nothing scrolls` }).toEqual([]);
+      }
+    }
+    expect(errors).toEqual([]);
+  } finally {
+    for (const c of contexts) await c.close();
+  }
 });

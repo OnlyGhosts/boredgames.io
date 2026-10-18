@@ -518,15 +518,163 @@ describe('the stack and the stake', () => {
     expect(S.stakeText(25_000, 'Bet', 'short')).toBe('Bet 25k');
   });
 
-  it('renders the stack as a bold figure and a word, the stake as its own pill: never two bare numbers side by side', () => {
+  it('sets the chip denominations from the starting stack, never from the bet: 1%, 5%, 25% and the whole stack', () => {
+    const values = (start: number) => S.denominationsFor(start).map((d) => d.value);
+    expect(S.denominationsFor(1000)).toEqual([
+      { band: 'white', value: 10 },
+      { band: 'lime', value: 50 },
+      { band: 'lilac', value: 250 },
+      { band: 'ink', value: 1000 },
+    ]);
+    expect(values(10_000)).toEqual([100, 500, 2500, 10_000]);
+    expect(values(100)).toEqual([1, 5, 25, 100]);
+    // Whole chips at an odd start, never under one.
+    expect(values(150)).toEqual([2, 8, 38, 150]);
+    expect(values(1)).toEqual([1, 1, 1, 1]);
+  });
+
+  it('breaks a bet into chips greedily from the largest, caps the drawing and marks what is owed with a plus', () => {
+    const chips = (bet: number, start: number, max?: number) => S.betChips(bet, start, max);
+    // At a 1,000 start: 10 is one off-white chip, 50 one lime, 200 four lime (three drawn and a plus), 1,000 one ink.
+    expect(chips(10, 1000)).toEqual({ bands: ['white'], count: 1, more: false });
+    expect(chips(50, 1000)).toEqual({ bands: ['lime'], count: 1, more: false });
+    expect(chips(200, 1000)).toEqual({ bands: ['lime', 'lime', 'lime'], count: 4, more: true });
+    expect(chips(200, 1000, 2)).toEqual({ bands: ['lime', 'lime'], count: 4, more: true });
+    expect(chips(1000, 1000)).toEqual({ bands: ['ink'], count: 1, more: false });
+    // Ten times the start (won back and pushed in): ink chips, capped, with a plus.
+    expect(chips(10_000, 1000)).toEqual({ bands: ['ink', 'ink', 'ink'], count: 10, more: true });
+    // Mixed change, biggest first: an ink chip and four off-white, two drawn.
+    expect(chips(1040, 1000, 2)).toEqual({ bands: ['ink', 'white'], count: 5, more: true });
+    expect(chips(300, 1000)).toEqual({ bands: ['lilac', 'lime'], count: 2, more: false });
+    // At a 10,000 start the chips are ten times bigger: 10 and 50 are each one off-white chip, 200 two, 1,000 two lime, 10,000 one ink.
+    expect(chips(10, 10_000)).toEqual({ bands: ['white'], count: 1, more: false });
+    expect(chips(50, 10_000)).toEqual({ bands: ['white'], count: 1, more: false });
+    expect(chips(200, 10_000)).toEqual({ bands: ['white', 'white'], count: 2, more: false });
+    expect(chips(1000, 10_000)).toEqual({ bands: ['lime', 'lime'], count: 2, more: false });
+    expect(chips(10_000, 10_000)).toEqual({ bands: ['ink'], count: 1, more: false });
+    // At a 100 start: 1, 5, 25 and 100.
+    expect(chips(1, 100)).toEqual({ bands: ['white'], count: 1, more: false });
+    expect(chips(5, 100)).toEqual({ bands: ['lime'], count: 1, more: false });
+    expect(chips(25, 100)).toEqual({ bands: ['lilac'], count: 1, more: false });
+    expect(chips(100, 100)).toEqual({ bands: ['ink'], count: 1, more: false });
+    // The change under one chip is one off-white chip; a bet of nothing is still one chip, never an empty pill.
+    expect(chips(5, 1000)).toEqual({ bands: ['white'], count: 1, more: false });
+    expect(chips(55, 1000)).toEqual({ bands: ['lime', 'white'], count: 2, more: false });
+    expect(chips(0, 1000)).toEqual({ bands: ['white'], count: 1, more: false });
+    // A cap under one still draws one chip.
+    expect(chips(300, 1000, 0)).toEqual({ bands: ['lilac'], count: 2, more: true });
+  });
+
+  it('renders the stack as a bold figure and a word, the stake as its own pill of chips: never two bare numbers side by side', () => {
     expect(html(createElement(StackCount, { value: 1000, testId: 'stack' }))).toBe('<span class="tbl-stackcount" data-testid="stack" data-chips="1000"><span class="tbl-stackcount__value">1,000</span> <span class="tbl-stackcount__word">chips</span></span>');
     expect(html(createElement(StackCount, { value: 1 }))).toContain('>chip<');
-    expect(html(createElement(StakePill, { value: 10, testId: 'bet' }))).toBe('<span class="tbl-stake tbl-stake--bet" data-testid="bet" data-bet="10"><span class="tbl-stake__word">Bet</span> <span class="tbl-stake__value">10</span></span>');
-    expect(html(createElement(StakePill, { value: 120, word: 'Pot', kind: 'pot' }))).toContain('tbl-stake tbl-stake--pot');
+    // A five-digit stack is marked long, so a narrow tile can read it short.
+    expect(html(createElement(StackCount, { value: 12_500, format: 'fit' }))).toBe('<span class="tbl-stackcount" data-chips="12500" data-long=""><span class="tbl-stackcount__value tbl-figure"><span class="tbl-figure__full">12,500</span><span class="tbl-figure__short">13k</span></span> <span class="tbl-stackcount__word">chips</span></span>');
+    expect(html(createElement(StackCount, { value: 9_000 }))).not.toContain('data-long');
+    // A bet: the chips in place of the word, the figure beside them, "Bet 10" as its label.
+    const bet = html(createElement(StakePill, { value: 10, start: 1000, testId: 'bet' }));
+    expect(bet).toMatch(/^<span class="tbl-stake tbl-stake--bet" role="img" aria-label="Bet 10" data-testid="bet" data-bet="10" data-chips="1" data-bands="white"><span class="tbl-stake__chips" aria-hidden="true" data-count="1"><svg class="tbl-stake__chip" viewBox="0 0 25\.5 25\.5">/);
+    expect(bet).toMatch(/<g class="tbl-chip tbl-chip--white" data-band="white"><circle class="tbl-chip__shadow"[^>]*><\/circle><circle class="tbl-chip__disc"[^>]*><\/circle><circle class="tbl-chip__spots"[^>]*><\/circle><circle class="tbl-chip__ring"[^>]*><\/circle><\/g><\/svg><\/span><span class="tbl-stake__value">10<\/span><\/span>$/);
+    expect(bet).not.toContain('tbl-stake__word');
+    expect(bet).not.toContain('tbl-stake__more');
+    // Two chips with a plus: the pill is wider than the word was; a chip each, so a narrow tile can keep the first alone.
+    const wide = html(createElement(StakePill, { value: 200, start: 1000, chips: 2, format: 'fit' }));
+    expect(wide).toMatch(/^<span class="tbl-stake tbl-stake--bet tbl-stake--wide" role="img" aria-label="Bet 200" data-bet="200" data-chips="4" data-bands="lime lime"><span class="tbl-stake__chips" aria-hidden="true" data-count="2"><svg class="tbl-stake__chip"[^>]*><g class="tbl-chip tbl-chip--lime"/);
+    expect(wide.match(/<svg class="tbl-stake__chip"/g)).toHaveLength(2);
+    expect(wide).toMatch(/<\/svg><\/span><span class="tbl-stake__more" aria-hidden="true">\+<\/span><span class="tbl-stake__value">200<\/span><\/span>$/);
+    // Every chip drawn (a lilac and a lime for 300): a spare plus, hidden unless a narrow tile hides the second chip.
+    expect(html(createElement(StakePill, { value: 300, start: 1000 }))).toMatch(/data-chips="2" data-bands="lilac lime">[\s\S]*<\/span><span class="tbl-stake__more tbl-stake__more--spare" aria-hidden="true">\+<\/span><span class="tbl-stake__value">300<\/span>/);
+    // One ink chip for the whole stack, three chips at most by default, and the short figure where asked.
+    expect(html(createElement(StakePill, { value: 1000, start: 1000 }))).toContain('data-chips="1" data-bands="ink"');
+    expect(html(createElement(StakePill, { value: 10_000, start: 1000, format: 'short' }))).toMatch(/data-chips="10" data-bands="ink ink ink" data-long="">[\s\S]*<span class="tbl-stake__value">10k<\/span>/);
+    // A four-digit stake is marked long, so a narrow compact tile can read it short; a three-digit one is not.
+    expect(html(createElement(StakePill, { value: 1000, start: 1000, format: 'fit' }))).toMatch(/data-chips="1" data-bands="ink" data-long=""><span class="tbl-stake__chips"[\s\S]*<span class="tbl-figure__full">1,000<\/span><span class="tbl-figure__short">1k<\/span>/);
+    expect(html(createElement(StakePill, { value: 999, start: 1000 }))).not.toContain('data-long');
+    // The pot keeps its word.
+    expect(html(createElement(StakePill, { value: 120, kind: 'pot' }))).toBe('<span class="tbl-stake tbl-stake--pot" data-bet="120"><span class="tbl-stake__word">Pot</span> <span class="tbl-stake__value">120</span></span>');
     // The stake is the gold pill, the stack plain words: told apart by shape and colour, not just position.
     const css = readFileSync(join(import.meta.dirname, '../styles/table.css'), 'utf8');
     expect(css).toMatch(/\.tbl-stake \{[^}]*border: 1\.5px solid var\(--color-warning\);[^}]*background: var\(--color-warning-soft\);/);
     expect(css).toMatch(/\.tbl-stackcount__value \{[^}]*font-weight: 800;/);
+  });
+
+  it('draws the chips the pill\u2019s height less 5px in the brand\u2019s flat colours, the ink chip with a lime edge, spots only where they read', () => {
+    const css = readFileSync(join(import.meta.dirname, '../styles/table.css'), 'utf8');
+    // The pill keeps its height (--stake-h, which every rule that resizes a pill sets) and only widens; the chips are 5px shorter, each two thirds over the one before.
+    expect(css).toMatch(/\.tbl-stake \{\s*\/\*[^*]*\*\/\s*--stake-h: 1\.85em;[^}]*height: var\(--stake-h\);/);
+    expect(css).toMatch(/\.tbl-stake__chip \{\s*display: block;\s*flex: none;\s*height: calc\(var\(--stake-h\) - 5px\);\s*width: auto;/);
+    expect(css).toMatch(/\.tbl-stake__chip \+ \.tbl-stake__chip \{\s*margin-left: calc\(\(var\(--stake-h\) - 5px\) \* -2 \/ 3\);/);
+    // A compact tile under 100px (ten players on a 390px phone, five to nine on a 320px one) keeps the first chip alone, shows the spare plus and packs the pill tighter, so a chip, the plus and "1.3k" keep inside a 64px tile on its own line.
+    expect(css).toMatch(/\.tbl-stake__more--spare \{\s*display: none;/);
+    const tiny = css.slice(css.indexOf('@container tile (max-width: 99px)'), css.indexOf('@container tile (max-height: 46px) and (max-width: 79px)'));
+    expect(tiny).toMatch(/\.tbl-tile--compact \.tbl-stake__chip \+ \.tbl-stake__chip \{\s*display: none;/);
+    expect(tiny).toMatch(/\.tbl-tile--compact \.tbl-stake__more--spare \{\s*display: inline;/);
+    expect(tiny).toMatch(/\.tbl-tile--compact \.tbl-stake \{\s*gap: 0\.15em;\s*padding: 0 0\.25em 0 0\.2em;/);
+    // There the stack's word gives way to the hand's total on its line ("800" and "18"), never on a Poker tile, whose total badge is hidden there.
+    expect(tiny).toMatch(/\.tbl-tile--compact:not\(\.tbl-tile--short-badge\):has\(> \.tbl-tile__total\) \.tbl-stackcount__word \{\s*display: none;/);
+    // A slimmer total there, so a six-figure stack ("100k") keeps whole beside it in the turn ring of a 66px tile.
+    expect(tiny).toMatch(/\.tbl-tile--compact \.tbl-tile__total \.tbl-pill \{\s*min-width: 18px;\s*padding: 0 2px;/);
+    expect(css).toMatch(/\.tbl-hand__head \.tbl-hand__stake \{\s*--stake-h: var\(--pill-h\);/);
+    // No rule sets a stake pill's height behind the variable's back.
+    for (const file of ['../styles/table.css', '../../games/blackjack/blackjack.css', '../../games/poker/poker.css']) {
+      const text = readFileSync(join(import.meta.dirname, file), 'utf8');
+      for (const rule of text.match(/[^{}]*\.tbl-stake[^{}]*\{[^}]*\}/g) ?? []) expect(rule, `${file}: ${rule}`).not.toMatch(/\n\s*height:(?![^;]*--stake-h)/);
+    }
+    // Brand tokens, the same in both themes; the ink chip's edge and spots are lime, the off-white chip's edge heavier.
+    expect(css).toMatch(/\.tbl-chip \{\s*--chip-ink: var\(--color-primary-contrast\);\s*--chip-lime: var\(--color-primary\);\s*--chip-lilac: var\(--color-secondary\);\s*--chip-white: var\(--color-offwhite\);/);
+    expect(css).toMatch(/\.tbl-chip--ink \{\s*--chip-fill: var\(--chip-ink\);\s*--chip-edge: var\(--chip-lime\);\s*--chip-spot: var\(--chip-lime\);/);
+    expect(css).toMatch(/\.tbl-chip--white \{\s*--chip-edge-w: 2\.4;/);
+    const tokens = readFileSync(join(import.meta.dirname, '../styles/tokens.css'), 'utf8');
+    expect(tokens).toMatch(/--color-offwhite: #f5f6ef;/);
+    expect(tokens.match(/--color-offwhite/g)).toHaveLength(1);
+    // Six edge spots (a dashed ring) only on the stage and a wide full tile: under 16px they are noise.
+    expect(css).toMatch(/\.tbl-chip__spots \{[^}]*stroke-dasharray: 4\.4 4\.4;/);
+    expect(css).toMatch(/\.tbl-tile \.tbl-chip__spots \{\s*display: none;/);
+    // On a tile the ink chip's lime edge is as heavy as the off-white chip's, so it reads at 1x on a dark panel.
+    expect(css).toMatch(/\.tbl-tile \.tbl-chip--ink \{\s*--chip-edge-w: 2\.4;/);
+    expect(css).toMatch(/@container tile \(min-width: 200px\) \{\s*\.tbl-tile--full \.tbl-chip__spots \{\s*display: inline;/);
+    // A plus in the display face, as big as the figure and as bold, when more chips are owed than drawn.
+    expect(css).toMatch(/\.tbl-stake__more \{[^}]*font-family: var\(--font-display\);\s*font-size: 1em;\s*font-weight: 800;[^}]*color: var\(--color-warning-text\);/);
+    // A compact tile, at every width, shortens the figure beside two chips and a five-digit stack, so the stack and the bet keep to one line.
+    // The narrow compact layout (the stack and the pill across the tile's whole width, under the name) reaches 199px: beside the avatar, "9,010 chips" and two chips with a plus and "990" overran a desktop tile up to 184px wide.
+    const narrowStart = css.search(/@container tile \(max-width: 199px\) \{\s*\.tbl-tile--compact \{/);
+    expect(narrowStart).toBeGreaterThan(0);
+    expect(css.slice(narrowStart)).toMatch(/^@container tile \(max-width: 199px\) \{\s*\.tbl-tile--compact \{[^}]*grid-template-areas: 'face name total' 'meta meta meta';/);
+    expect(css).not.toMatch(/@container tile \(max-width: 155px\)/);
+    const compact = css.slice(css.indexOf('.tbl-tile--compact {'), narrowStart);
+    expect(compact).toMatch(/\n\.tbl-tile--compact \.tbl-tile__bet \.tbl-stake--wide \.tbl-figure__full,\s*\.tbl-tile--compact \.tbl-tile__chips\[data-long\] \.tbl-figure__full \{\s*display: none;/);
+    expect(compact).toMatch(/\n\.tbl-tile--compact \.tbl-tile__bet \.tbl-stake--wide \.tbl-figure__short,\s*\.tbl-tile--compact \.tbl-tile__chips\[data-long\] \.tbl-figure__short \{\s*display: inline;/);
+    // The stacked layout (a short narrow tile) now reaches 149px, so a 390px phone's three-across tiles and a desktop's 128px to 145px compact tiles use it.
+    // The bet pill has its line to itself and the total sits by the stack: side by side, the pill ran under the total on a 66px phone tile and lost its figure.
+    const stacked = css.slice(css.indexOf('@container tile (max-width: 149px) and (max-height: 70px) {'), css.indexOf('@container tile (max-height: 46px) {'));
+    expect(stacked).toMatch(/^@container tile \(max-width: 149px\) and \(max-height: 70px\) \{\s*\.tbl-tile--compact \{[^}]*grid-template-areas: 'face name name' 'chips chips total' 'bet bet bet';/);
+    expect(css).not.toContain("'bet bet total'");
+    // The total no taller than the stack's line, so the three lines take no more height than before; the stacked layout forces no short figure of its own (the compact rules above shorten a wide or four-digit pill).
+    expect(stacked).toMatch(/\.tbl-tile--compact \.tbl-tile__total \.tbl-pill \{\s*height: 13px;/);
+    // With no total on its line (the bets going down) the stack takes the whole line, total's column and all: "150k chips" lost 4px to the
+    // empty column on a 66px tile and ended in an ellipsis.
+    expect(stacked).toMatch(/\.tbl-tile--compact:not\(:has\(> \.tbl-tile__total\)\) \.tbl-tile__chips \{\s*grid-column: 1 \/ -1;\s*\}/);
+    expect(stacked).not.toContain('.tbl-tile__bet .tbl-figure__full');
+    expect(css).not.toMatch(/@container tile \(max-width: 139px\) and \(max-height: 70px\)/);
+    expect(css).not.toMatch(/@container tile \(max-width: 112px\) and \(max-height: 70px\)/);
+    expect(css).not.toMatch(/@container tile \(max-width: 124px\) and \(max-height: 70px\)/);
+    // Under 200px a four-digit stake reads short too, so the stack and the pill keep to one line inside the turn ring.
+    const narrow = css.slice(narrowStart, css.indexOf('@container tile (max-width: 112px)', narrowStart));
+    expect(narrow).toMatch(/\.tbl-tile--compact \.tbl-tile__bet \.tbl-stake\[data-long\] \.tbl-figure__full \{\s*display: none;/);
+    expect(narrow).toMatch(/\.tbl-tile--compact \.tbl-tile__bet \.tbl-stake\[data-long\] \.tbl-figure__short \{\s*display: inline;/);
+    // A narrow full tile shares the pill's row with the seat line: two chips and a short four-digit figure under 140px, one chip under 113px, the spare plus only when a drawn chip is hidden.
+    const narrowFull = css.slice(css.indexOf('@container tile (max-width: 139px) {'), css.indexOf('/* Compact (5 to 9)'));
+    expect(narrowFull).toMatch(/\.tbl-tile--full \.tbl-stake \{\s*gap: 0\.2em;\s*padding: 0 0\.3em 0 0\.25em;/);
+    expect(narrowFull).toMatch(/\.tbl-tile--full \.tbl-stake__chip:nth-child\(n \+ 3\) \{\s*display: none;/);
+    expect(narrowFull).toMatch(/\.tbl-tile--full \.tbl-stake__chips\[data-count='3'\] \+ \.tbl-stake__more--spare \{\s*display: inline;/);
+    expect(narrowFull).toMatch(/\.tbl-tile--full \.tbl-tile__bet \.tbl-stake\[data-long\] \.tbl-figure__short \{\s*display: inline;/);
+    expect(narrowFull).toMatch(/@container tile \(max-width: 112px\) \{\s*\.tbl-tile--full \.tbl-stake__chip \+ \.tbl-stake__chip \{\s*display: none;\s*\}\s*\.tbl-tile--full \.tbl-stake__chips\[data-count='2'\] \+ \.tbl-stake__more--spare \{\s*display: inline;/);
+    // A full tile 200px to 239px wide keeps the stack and the pill on one line: a wide pill (two chips, or a plus) reads a four-digit figure short
+    // there, as three chips, a plus and "12,000" beside "88,000 chips" once dropped the pill to a line of its own and laid the name over the stack.
+    // It keeps its three chips (a spare plus in place of the third would be no narrower), and a pill of one chip keeps its figure in full.
+    const midFull = css.slice(css.indexOf('@container tile (min-width: 200px) and (max-width: 239px) {'));
+    const midBlock = midFull.slice(0, midFull.indexOf('\n}'));
+    expect(midBlock).toMatch(/^@container tile \(min-width: 200px\) and \(max-width: 239px\) \{\s*\.tbl-tile--full \.tbl-tile__bet \.tbl-stake--wide\[data-long\] \.tbl-figure__full \{\s*display: none;\s*\}\s*\.tbl-tile--full \.tbl-tile__bet \.tbl-stake--wide\[data-long\] \.tbl-figure__short \{\s*display: inline;\s*\}\s*$/);
   });
 });
 

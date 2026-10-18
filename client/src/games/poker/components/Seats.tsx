@@ -1,6 +1,6 @@
 import type { PokerRoomState, PokerView } from '@shared/games/poker/protocol';
 import { PayoutFloat } from '../../../platform/table/Outcome';
-import { PlayerTile, PlayersGrid, SeatSheet, tileFigures, type SeatLine, type SeatMark } from '../../../platform/table/PlayersGrid';
+import { PlayerTile, PlayersGrid, SeatSheet, tileChips, tileFigures, type SeatLine, type SeatMark } from '../../../platform/table/PlayersGrid';
 import { StackCount, StakePill } from '../../../platform/table/Stakes';
 import { TableCard } from '../../../platform/table/TableCard';
 import { playerOf } from '../hooks';
@@ -77,7 +77,7 @@ export function seatMark(line: SeatLine): SeatMark {
 }
 
 /** A seat's sheet: its stack, its bet, what it did and its cards (backs until a showdown). */
-function SeatDetail({ view, id, meId, table, timeline, now, leaving }: { view: PokerView; id: string; meId: string; table: PokerTable | null; timeline: Timeline; now: number; leaving: boolean }) {
+function SeatDetail({ view, id, meId, start, table, timeline, now, leaving }: { view: PokerView; id: string; meId: string; start: number; table: PokerTable | null; timeline: Timeline; now: number; leaving: boolean }) {
   const seat = view.players[id];
   const line = seatLine(view, table, id, timeline, now);
   const cards = holeOnScreen(table, timeline, id, meId, now);
@@ -85,7 +85,7 @@ function SeatDetail({ view, id, meId, table, timeline, now, leaving }: { view: P
     <div className="pk-seat-detail" data-testid="seat-detail" data-player-id={id}>
       <p className="pk-seat-detail__line">
         <StackCount value={seat?.chips ?? 0} />
-        {(seat?.bet ?? 0) > 0 && <StakePill value={seat?.bet ?? 0} />}
+        {(seat?.bet ?? 0) > 0 && <StakePill value={seat?.bet ?? 0} start={start} />}
         {line.text && <span className="pk-seat-detail__state">{line.text}</span>}
       </p>
       {cards.length > 0 && (
@@ -101,9 +101,9 @@ function SeatDetail({ view, id, meId, table, timeline, now, leaving }: { view: P
 
 /**
  * The other players as compact seats round the table from my left, never scrolling: the stack in
- * words ("990 chips"), the bet this street as its own pill ("Bet 10"), the dealer button, their
- * backs and their last move; folded and busted seats dimmed, all in tagged, the seat to act lit
- * with the lime ring, a winner outlined in lime. A tile too small for the words keeps the stack
+ * words ("990 chips"), the bet this street as its own pill of chips (read as "Bet 10"), the
+ * dealer button, their backs and their last move; folded and busted seats dimmed, all in tagged,
+ * the seat to act lit with the lime ring, a winner outlined in lime. A tile too small for the words keeps the stack
  * as its badge (the bet is left to the seat's sheet there). The seat whose cards are on my stage
  * (I am not dealt in) leaves them to the stage.
  */
@@ -142,7 +142,7 @@ export function Seats({ room, view, ids, meId, staged, table, timeline, live, no
                 chips={stack}
                 bet={
                   <span className="pk-bet" data-table-anchor={betAnchor(id)} data-testid="seat-bet" data-bet={bet}>
-                    {bet > 0 && <StakePill value={bet} format={tileFigures(tier)} />}
+                    {bet > 0 && <StakePill value={bet} start={room.settings.startingChips} chips={tileChips(tier)} format={tileFigures(tier)} />}
                   </span>
                 }
                 total={{ text: shortChips(stack), tone: won > 0 ? 'win' : 'neutral' }}
@@ -162,7 +162,7 @@ export function Seats({ room, view, ids, meId, staged, table, timeline, live, no
         }
       </PlayersGrid>
       <SeatSheet title={openPlayer ? openPlayer.name : null} onClose={() => openSeat(null)}>
-        {openPlayer && <SeatDetail view={view} id={openPlayer.id} meId={meId} table={table} timeline={timeline} now={now} leaving={leaving} />}
+        {openPlayer && <SeatDetail view={view} id={openPlayer.id} meId={meId} start={room.settings.startingChips} table={table} timeline={timeline} now={now} leaving={leaving} />}
       </SeatSheet>
     </>
   );

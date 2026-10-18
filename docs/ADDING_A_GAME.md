@@ -285,7 +285,7 @@ row and the stage have a fixed height (`--tbl-head-h`, `--tbl-stage-h`) and thei
 size that the game works out from the room its table has (`cq` units of the `tbl` container on
 `.tbl__table`, registered with `@property` as lengths so they are worked out once on the table),
 never from the phase or the number of players. My own hand is on the stage whenever I am dealt
-in, in every phase and on every turn, my stake by its total ("Bet 10"); the player on turn plays in
+in, in every phase and on every turn, my stake by its total (a pill of chips, read as "Bet 10"); the player on turn plays in
 their own seat (lit, and nowhere else). Not dealt in (watching, sitting out, out of chips), the
 stage shows the hand in play with its owner's name by its total, and that seat leaves its cards to
 the stage (`stageOwner` in each game's `lib/focus.ts`). [`lib/hands.ts`](../client/src/games/blackjack/lib/hands.ts)
@@ -294,13 +294,21 @@ full hand at least as wide as the words over its corner (measured as the row lay
 never narrower than a two-digit total, past what fits into one "+N" that opens the seat's sheet
 with every hand. Poker's stage holds my two cards whenever I hold some (the hand in play when I am
 not dealt in), with what they make in the pill and, left of it, the dealer button, my bet and where
-I stand ("All in", "Folded"), or how the hand ended ("Win +300"). The shared pieces: `HandFan` / `OutcomeFlag` (a hand as a stepped fan, each card a
+I stand ("All in", "Folded"), or how the hand ended ("Win +300"); those words sit in the hand's own
+box, so on a narrow phone the cards move right just as far as the words need to stay on the stage. The shared pieces: `HandFan` / `OutcomeFlag` (a hand as a stepped fan, each card a
 little right of and below the one before, the total in a pill over its top right corner; one
 height however many cards; an outcome outlines every card and colours the pill, its word beside the
 pill; `flag` carries whatever sits left of the pill: the outcome, the stake, the owner's name),
-`StackCount` / `StakePill` in `Stakes.tsx` with `stakes.ts` (a stack always reads "1,000
-chips", a stake always its own labelled pill, "Bet 10" or "Pot 120", so the two are never
-confused), `Deck` (with `corner`: wholly on the felt in its top right corner, inside the felt's
+`StackCount` / `StakePill` in `Stakes.tsx` with `stakes.ts` (a stack reads "1,000 chips", or
+just "1,000" beside the hand's total on a compact tile under 100px wide; a stake is always its own gold pill, so the two are never confused: a bet draws the chips
+it breaks into with the figure beside them and is read out as "Bet 10", the pot keeps its word,
+"Pot 120". The chips are denominations set from the table's starting stack, never from the bet:
+off-white 1%, lime 5%, lilac 25%, ink with a lime edge the whole stack, so at 1,000 they are 10,
+50, 250 and 1,000; the bet is broken greedily from the largest down, anything under one off-white
+chip is one off-white chip, at most three are drawn (two on a compact tile and by split hands side
+by side on a phone's stage, fewer on the narrowest tiles) biggest first with a small plus when more
+are owed, and a bet pill takes `start` from the room's settings; where a pill would crowd its line
+the figure beside the chips reads short, "12k", and the chips tell 1,040 from 1,000), `Deck` (with `corner`: wholly on the felt in its top right corner, inside the felt's
 padding, the count said rather than shown) and `DiscardCorner` (the anchor cards fly to, just past
 the top left corner), `TurnLine`, `TableStage`, `PlayersGrid` / `PlayerTile` / `SeatSheet` (every other player as a tile in seat order
 in a grid that fits its space: [`grid.ts`](../client/src/platform/table/grid.ts) picks the tier
@@ -308,8 +316,10 @@ in a grid that fits its space: [`grid.ts`](../client/src/platform/table/grid.ts)
 rows keep the tile's least height (`tierFor`: a desktop keeps the cards in miniature in the seats
 for seven others across, a phone steps down to compact for four), fits the columns to the room
 left, never narrower than the tier's `minWidth` so names and totals stay whole (a narrow full tile
-gives its name, stack, bet and cards a row each; a narrow small tile wears its total as a badge on
-its corner), keeps a full tile to its top rows before the deal (`bare`), and a desktop sets them on
+gives its name, stack, bet and cards a row each; a compact tile under 150px wide and 70px tall
+puts its stack and total on one line (the stack alone across it while there is no total), the hand
+in play's total alone for split hands, and its bet pill on a line of its own; a
+narrow small tile wears its total as a badge on its corner), keeps a full tile to its top rows before the deal (`bare`), and a desktop sets them on
 a gentle arc that flattens as the tiles get smaller and a size up on a big screen
 (`--tbl-tile-font`); a tile shows the stack and the
 stake with `StackCount` and `StakePill` wherever it has the room, and with `shortBadge` its total

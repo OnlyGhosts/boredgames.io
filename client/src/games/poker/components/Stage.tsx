@@ -31,7 +31,7 @@ interface Props {
   isPhone: boolean;
 }
 
-/** Past this many chips a stake reads short ("Bet 12k"), so it keeps beside the total (on a phone from 1,000). */
+/** Past this many chips a stake's figure reads short ("12k"), so it keeps beside the total (on a phone from 1,000). */
 const SHORT_STAKE = 10_000;
 
 /** My place in the hand, in a word, where it is the news: out, not dealt in, folded, all in. */
@@ -56,10 +56,12 @@ function cardsOf(cards: CardOnScreen[], table: PokerTable | null, timeline: Time
 /**
  * The stage at the bottom of the table, the same place and size all game long: my two hole cards
  * big and centred in a stepped fan, what they make in the pill over their top right corner and,
- * left of it, the dealer button, my bet ("Bet 20", where the chips land) and where I stand ("All
- * in", "Folded"). Lit on my turn; once the showdown shows, outlined in the outcome's colour with
- * the outcome in words by the pill ("Win +300"). Not dealt in, I watch the hand in play here
- * (backs until a showdown), its owner's name by the pill; their seat leaves its cards out.
+ * left of it, the dealer button, my bet (its chips and the figure, read as "Bet 20", where the
+ * chips land) and where I stand ("All in", "Folded"); on a narrow phone the cards move right only
+ * as far as those words need to stay on the stage (poker.css). Lit on my turn; once the showdown
+ * shows, outlined in the outcome's colour with the outcome in words by the pill ("Win +300"). Not
+ * dealt in, I watch the hand in play here (backs until a showdown), its owner's name by the pill;
+ * their seat leaves its cards out.
  */
 export function Stage({ room, view, meId, owner, focus, table, timeline, live, now, leaving, isPhone }: Props) {
   const mine = owner !== null && owner === meId;
@@ -101,7 +103,7 @@ export function Stage({ room, view, meId, owner, focus, table, timeline, live, n
       )}
       {/* Where this seat's chips land; the pill only while a bet is out. */}
       <span className="pk-bet" data-table-anchor={betAnchor(owner)} data-testid={mine ? 'my-bet' : 'stage-bet'} data-bet={bet}>
-        {bet > 0 && mine && <StakePill value={bet} format={bet >= SHORT_STAKE || (isPhone && bet >= 1000) ? 'short' : 'full'} className="tbl-hand__stake" />}
+        {bet > 0 && mine && <StakePill value={bet} start={room.settings.startingChips} format={bet >= SHORT_STAKE || (isPhone && bet >= 1000) ? 'short' : 'full'} className="tbl-hand__stake" />}
       </span>
     </>
   );

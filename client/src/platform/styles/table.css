@@ -555,10 +555,10 @@
   font-size: calc(var(--pill-h) * 0.48);
 }
 
-/* My stake by the total ("Bet 10"): the pill's height, so the two read as one line. */
+/* My stake by the total (the chips and "10"): the pill's height, so the two read as one line. */
 .tbl-hand__head .tbl-hand__stake {
-  height: var(--pill-h);
-  padding: 0 0.6em;
+  --stake-h: var(--pill-h);
+  padding: 0 0.6em 0 0.4em;
   font-size: calc(var(--pill-h) * 0.5);
 }
 
@@ -607,7 +607,7 @@
   height: calc(var(--tbl-w) * 1.62);
 }
 
-/* ---------- The stack and the stake (Stakes): "1,000 chips" and a "Bet 10" pill, never confused ---------- */
+/* ---------- The stack and the stake (Stakes): "1,000 chips" and a gold pill of chips ("Bet 10"), never confused ---------- */
 .tbl-stackcount {
   display: inline-flex;
   align-items: baseline;
@@ -645,10 +645,12 @@
 }
 
 .tbl-stake {
+  /* The pill's height, as a variable so its chips can be drawn 5px shorter (below); every rule that resizes the pill sets it. */
+  --stake-h: 1.85em;
   display: inline-flex;
   align-items: center;
   gap: 0.25em;
-  height: 1.85em;
+  height: var(--stake-h);
   padding: 0 0.42em;
   border-radius: var(--radius-pill);
   border: 1.5px solid var(--color-warning);
@@ -675,6 +677,139 @@
   border-color: var(--color-border-strong);
   background: var(--color-surface-3);
   color: var(--color-text-muted);
+}
+
+/*
+ * A bet's chips in place of the word (Stakes.tsx draws them, stakes.ts breaks the bet into them):
+ * each the pill's height less 5px, a third of a chip right of the one before, the last on top; a
+ * small plus after them when more are owed than drawn. The pill keeps its height and only widens.
+ */
+.tbl-stake--bet {
+  gap: 0.3em;
+  padding-left: 0.3em;
+}
+
+.tbl-stake__chips {
+  display: flex;
+  align-items: center;
+  flex: none;
+}
+
+.tbl-stake__chip {
+  display: block;
+  flex: none;
+  height: calc(var(--stake-h) - 5px);
+  width: auto;
+  overflow: visible;
+}
+
+.tbl-stake__chip + .tbl-stake__chip {
+  margin-left: calc((var(--stake-h) - 5px) * -2 / 3);
+}
+
+/* The spare plus stands in for chips a narrow tile hides (below); with every chip drawn it is not needed. */
+.tbl-stake__more--spare {
+  display: none;
+}
+
+.tbl-stake__more {
+  align-self: flex-start;
+  margin-top: 0.04em;
+  margin-left: -0.15em;
+  font-family: var(--font-display);
+  font-size: 1em;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--color-warning-text);
+}
+
+/*
+ * The chip family (the Poker tile's): a hard ink shadow, the disc with an ink outline, six edge
+ * spots, a centre ring, in the brand's flat colours, the same in both themes (a chip is a thing,
+ * not a surface). On a dark panel the ink outline vanishes and the chips read by fill, which is
+ * why the ink chip takes a lime edge; the off-white chip takes a heavier edge so it reads on a
+ * light tile.
+ */
+.tbl-chip {
+  --chip-ink: var(--color-primary-contrast);
+  --chip-lime: var(--color-primary);
+  --chip-lilac: var(--color-secondary);
+  --chip-white: var(--color-offwhite);
+  --chip-fill: var(--chip-white);
+  --chip-edge: var(--chip-ink);
+  --chip-spot: var(--chip-lilac);
+  --chip-edge-w: 1.6;
+}
+
+.tbl-chip--lime {
+  --chip-fill: var(--chip-lime);
+  --chip-spot: var(--chip-ink);
+}
+
+.tbl-chip--lilac {
+  --chip-fill: var(--chip-lilac);
+  --chip-spot: var(--chip-white);
+}
+
+.tbl-chip--ink {
+  --chip-fill: var(--chip-ink);
+  --chip-edge: var(--chip-lime);
+  --chip-spot: var(--chip-lime);
+}
+
+.tbl-chip--white {
+  --chip-edge-w: 2.4;
+}
+
+.tbl-chip__shadow {
+  fill: var(--chip-ink);
+}
+
+.tbl-chip__disc {
+  fill: var(--chip-fill);
+  stroke: var(--chip-edge);
+  stroke-width: var(--chip-edge-w);
+}
+
+.tbl-chip__spots {
+  fill: none;
+  stroke: var(--chip-spot);
+  stroke-width: 2.6;
+  stroke-dasharray: 4.4 4.4;
+  stroke-dashoffset: 2.2;
+}
+
+.tbl-chip__ring {
+  fill: none;
+  stroke: var(--chip-edge);
+  stroke-width: 1.3;
+}
+
+/*
+ * Under 16px the edge spots are noise: a seat tile's chips are plain discs with a heavier ring.
+ * Only a wide full tile (below) and the stage draw the spots. The ink chip's lime edge is as heavy
+ * as the off-white chip's there, so at 1x on a dark tile it still reads as a chip, not a hole.
+ */
+.tbl-tile .tbl-chip__spots {
+  display: none;
+}
+
+.tbl-tile .tbl-chip--ink {
+  --chip-edge-w: 2.4;
+}
+
+.tbl-tile .tbl-chip__ring {
+  stroke-width: var(--chip-edge-w);
+}
+
+@container tile (min-width: 200px) {
+  .tbl-tile--full .tbl-chip__spots {
+    display: inline;
+  }
+
+  .tbl-tile--full .tbl-chip__ring {
+    stroke-width: 1.3;
+  }
 }
 
 /* ---------- Chips in the air (ChipFlights) ---------- */
@@ -1042,6 +1177,11 @@
   font-size: 0.72em;
 }
 
+/* A total with a short form (TotalPill: Blackjack's two split hands, "21/15", and the hand in play, "15"): in full, the short form only where the total shares the stack's line (below). */
+.tbl-pill__short {
+  display: none;
+}
+
 .tbl-tile__cards {
   --tbl-w: var(--tbl-mini-w, 24px);
   grid-area: cards;
@@ -1167,6 +1307,69 @@
   }
 }
 
+/*
+ * A narrow full tile (three across a phone): the bet pill shares its row with the seat line
+ * ("Waiting"), so it draws two chips, not three, and reads a four-digit stake short ("1k"); under
+ * 113px (four players on a 320px or 360px phone) one chip. A chip hidden here is said with the
+ * spare plus, which Stakes.tsx renders whenever two or more are drawn.
+ */
+@container tile (max-width: 139px) {
+  /* Packed a little tighter (the pill is 8px wider than the word Bet was), so the line keeps its room: "Waiting" beside two chips and "200" on a 115px tile. */
+  .tbl-tile--full .tbl-stake {
+    gap: 0.2em;
+    padding: 0 0.3em 0 0.25em;
+  }
+
+  .tbl-tile--full .tbl-stake__more {
+    margin-left: -0.2em;
+  }
+
+  .tbl-tile--full .tbl-stake__chip:nth-child(n + 3) {
+    display: none;
+  }
+
+  .tbl-tile--full .tbl-stake__chips[data-count='3'] + .tbl-stake__more--spare {
+    display: inline;
+  }
+
+  .tbl-tile--full .tbl-tile__bet .tbl-stake[data-long] .tbl-figure__full {
+    display: none;
+  }
+
+  .tbl-tile--full .tbl-tile__bet .tbl-stake[data-long] .tbl-figure__short {
+    display: inline;
+  }
+}
+
+@container tile (max-width: 112px) {
+  .tbl-tile--full .tbl-stake__chip + .tbl-stake__chip {
+    display: none;
+  }
+
+  .tbl-tile--full .tbl-stake__chips[data-count='2'] + .tbl-stake__more--spare {
+    display: inline;
+  }
+}
+
+/*
+ * A full tile 200px to 239px wide (two players on a phone, four on a 1024px desktop, five on a
+ * wider one): the stack and the bet pill share the line under the name, and three chips, a plus and
+ * "12,000" beside "88,000 chips" (or "9,000" beside "150,000 chips") overran it. The pill dropped to
+ * a line of its own, the seat line to a third, and the tile's fixed height laid the name over the
+ * stack. Here a wide pill (two chips or more, or a plus) reads a four-digit figure short ("12k"):
+ * then even three chips, a plus and "100k" keep to one line with a six-digit stack, as "Bet 12,000"
+ * did. A pill of one chip is no wider than the word Bet was, and keeps its figure in full.
+ */
+@container tile (min-width: 200px) and (max-width: 239px) {
+  .tbl-tile--full .tbl-tile__bet .tbl-stake--wide[data-long] .tbl-figure__full {
+    display: none;
+  }
+
+  .tbl-tile--full .tbl-tile__bet .tbl-stake--wide[data-long] .tbl-figure__short {
+    display: inline;
+  }
+}
+
 /* Compact (5 to 9): avatar with its status icon, name and total; the stack and the bet pill under them. The ring says whose turn it is. */
 .tbl-tile--compact {
   --face: 26px;
@@ -1184,8 +1387,30 @@
   display: none;
 }
 
-/* A narrow compact tile (a phone, six across a desktop): the stack and the bet pill take the tile's whole width under the name, on one line. */
-@container tile (max-width: 155px) {
+/*
+ * A compact tile's one line holds the stack and the bet. A pill of two chips (or a plus) is wider
+ * than the word Bet was, so its figure reads short ("1k"), and a five-digit stack ("12,500 chips")
+ * reads short too: "9,000 chips" and a 1,000 bet keep to the line at every compact width.
+ */
+.tbl-tile--compact .tbl-tile__bet .tbl-stake--wide .tbl-figure__full,
+.tbl-tile--compact .tbl-tile__chips[data-long] .tbl-figure__full {
+  display: none;
+}
+
+.tbl-tile--compact .tbl-tile__bet .tbl-stake--wide .tbl-figure__short,
+.tbl-tile--compact .tbl-tile__chips[data-long] .tbl-figure__short {
+  display: inline;
+}
+
+/*
+ * A narrow compact tile (a phone, and a desktop's under 200px): the stack and the bet pill take the
+ * tile's whole width under the name, on one line. A pill of chips is wider than the word Bet was:
+ * beside the avatar, "9,010 chips" and two chips with a plus and "990" overran a desktop tile up to
+ * 184px wide (the fixed height clipped the wrapped pill); across the whole width they keep to the
+ * line from 150px, inside the ring of the seat on turn too (a short tile under that stacks them:
+ * below).
+ */
+@container tile (max-width: 199px) {
   .tbl-tile--compact {
     --face: 22px;
     column-gap: 4px;
@@ -1213,6 +1438,19 @@
     row-gap: 3px;
     column-gap: 3px;
   }
+
+  /*
+   * A four-digit stake ("1,000") reads short here ("1k"), as a wide pill's does, so one ink chip and
+   * two lime ones say 1,000 the same way, and the line holds a four-digit stack ("9,000 chips") and
+   * the pill even inside the thick ring of the seat on turn, which takes 4px of the tile's width.
+   */
+  .tbl-tile--compact .tbl-tile__bet .tbl-stake[data-long] .tbl-figure__full {
+    display: none;
+  }
+
+  .tbl-tile--compact .tbl-tile__bet .tbl-stake[data-long] .tbl-figure__short {
+    display: inline;
+  }
 }
 
 /* Narrower still (a 360px phone): a touch smaller, so the stack and the bet keep to one line. */
@@ -1223,15 +1461,19 @@
 }
 
 /*
- * Narrow and short (six players on a 320px phone, five on a 360px one): the stack over the bet
- * pill, packed tight, the total beside the bet so the name keeps the whole first line, and the
- * status icon on the face's top left, clear of the stack under it.
+ * Narrow and short (every compact tile under 150px: three across a 390px phone, five on a 360px
+ * one, ten players on a 1024px desktop): the name beside the face, the stack with the total at its
+ * right, then the bet pill on a line of its own, packed tight, and the status icon on the face's
+ * top left, clear of the stack under it. Up to 149px, because a stack and a pill of chips no
+ * longer share a line under that ("9,800 chips" with two chips, a plus and "200" overran a 145px
+ * one); and the pill never shares its line with the total, which it ran under on a 66px tile
+ * (ten players on a 390px phone) when the two sat side by side.
  */
-@container tile (max-width: 112px) and (max-height: 70px) {
+@container tile (max-width: 149px) and (max-height: 70px) {
   .tbl-tile--compact {
     row-gap: 1px;
     padding: 3px 4px;
-    grid-template-areas: 'face name name' 'chips chips chips' 'bet bet total';
+    grid-template-areas: 'face name name' 'chips chips total' 'bet bet bet';
   }
 
   /* A face a touch smaller, so it stays clear of the stack under it (outranks the narrow rule below). */
@@ -1245,7 +1487,13 @@
 
   .tbl-tile--compact .tbl-tile__chips {
     grid-area: chips;
+    min-width: 0;
     white-space: nowrap;
+  }
+
+  /* No total beside it (the bets going down, between hands): the stack takes the whole line, so "150k chips" keeps whole on a 66px tile. */
+  .tbl-tile--compact:not(:has(> .tbl-tile__total)) .tbl-tile__chips {
+    grid-column: 1 / -1;
   }
 
   .tbl-tile--compact .tbl-tile__bet {
@@ -1253,17 +1501,21 @@
     min-width: 0;
   }
 
-  /* The bet shares its line with the total: its short form ("Bet 1k") keeps them side by side. */
-  .tbl-tile--compact .tbl-tile__bet .tbl-figure__full {
+  /* The total no taller than the stack's line beside it, so the three lines take no more height than before it moved there. */
+  .tbl-tile--compact .tbl-tile__total .tbl-pill {
+    height: 13px;
+    min-width: 20px;
+    padding: 0 3px;
+    font-size: 0.66em;
+  }
+
+  /* Beside the stack two split hands' "21/15" would crowd it: the hand in play alone ("15"). */
+  .tbl-tile--compact .tbl-tile__total .tbl-pill__full {
     display: none;
   }
 
-  .tbl-tile--compact .tbl-tile__bet .tbl-figure__short {
+  .tbl-tile--compact .tbl-tile__total .tbl-pill__short {
     display: inline;
-  }
-
-  .tbl-tile--compact .tbl-tile__total .tbl-pill {
-    height: 17px;
   }
 
   .tbl-tile--compact .tbl-tile__meta {
@@ -1273,7 +1525,7 @@
   }
 
   .tbl-tile--compact .tbl-stake {
-    height: 1.65em;
+    --stake-h: 1.65em;
   }
 
   .tbl-tile--compact .tbl-tile__mark {
@@ -1319,9 +1571,23 @@
     justify-self: end;
   }
 
+  /* The total is back on the name's line, as on a wider tile: both split hands ("21/15"). */
+  .tbl-tile--compact .tbl-tile__total .tbl-pill__full {
+    display: inline;
+  }
+
+  .tbl-tile--compact .tbl-tile__total .tbl-pill__short {
+    display: none;
+  }
 }
 
-/* A narrow compact tile: the name and the total keep the room; the stake is on the seat's sheet. */
+/*
+ * A narrow compact tile (ten players on a 390px phone, five to nine on a 320px one: 64px to 99px).
+ * The stack's word gives way to the total on its line ("800" and "18"; the word is back whenever
+ * the seat has no total, between hands). The bet pill, on its own line, keeps its first chip and
+ * says the rest with the plus, packed tighter, so a chip, the plus and "1.3k" keep inside a 64px
+ * tile in the ring of the seat on turn.
+ */
 @container tile (max-width: 99px) {
   .tbl-tile--compact {
     --face: 22px;
@@ -1330,6 +1596,33 @@
 
   .tbl-tile--compact .tbl-tile__meta {
     font-size: 0.66em;
+  }
+
+  .tbl-tile--compact:not(.tbl-tile--short-badge):has(> .tbl-tile__total) .tbl-stackcount__word {
+    display: none;
+  }
+
+  /* A slimmer total, so a six-figure stack ("100k") keeps whole beside it in the ring of the seat on turn. */
+  .tbl-tile--compact .tbl-tile__total .tbl-pill {
+    min-width: 18px;
+    padding: 0 2px;
+  }
+
+  .tbl-tile--compact .tbl-stake {
+    gap: 0.15em;
+    padding: 0 0.25em 0 0.2em;
+  }
+
+  .tbl-tile--compact .tbl-stake__more {
+    margin-left: -0.05em;
+  }
+
+  .tbl-tile--compact .tbl-stake__chip + .tbl-stake__chip {
+    display: none;
+  }
+
+  .tbl-tile--compact .tbl-stake__more--spare {
+    display: inline;
   }
 
   .tbl-tile--compact .tbl-tile__tag {
@@ -1480,7 +1773,7 @@
 
   /* A slimmer bet pill, so it stays inside the tile under the thick ring of the seat on turn. */
   .tbl-tile--small .tbl-stake {
-    height: 1.6em;
+    --stake-h: 1.6em;
   }
 
   .tbl-tile--small .tbl-tile__line {

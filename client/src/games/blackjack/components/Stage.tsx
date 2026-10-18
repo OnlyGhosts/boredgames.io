@@ -34,12 +34,12 @@ function activeIndex(frame: Frame, view: BlackjackView, id: string): number {
 }
 
 /** Two empty places where my cards will land, my stake left of them once it is down: before my first deal, and once my next stake is down. */
-function EmptyHand({ stake }: { stake: number }) {
+function EmptyHand({ stake, start }: { stake: number; start: number }) {
   return (
     <div className="bj-hands bj-hands--mine" style={{ '--hands': 1, '--fan': 2 } as CSSProperties}>
       <div className="bj-slot">
         <div className="bj-empty">
-          {stake > 0 && <span className="bj-empty__stake">{stakeOf(stake, 'my-bet')}</span>}
+          {stake > 0 && <span className="bj-empty__stake">{stakeOf(stake, start, 'my-bet')}</span>}
           <HandFan className="bj-hand bj-hand--empty" tone="neutral" total={null} label={stake > 0 ? `No cards yet, bet ${stake}` : 'No cards yet'} testId="my-empty">
             {[0, 1].map((i) => (
               <PlayingCard key={i} card={null} size="md" slot testId="my-slot" />
@@ -65,6 +65,7 @@ export function Stage({ room, view, meId, owner, focus, frame, now }: Props) {
   // My next stake once it is down and my cards are not dealt yet.
   const nextStake = mine && view.phase === 'betting' ? (view.players[meId]?.bet ?? 0) : 0;
   const live = frame.table !== null && !frame.table.settled;
+  const start = room.settings.startingChips;
   const data = { 'data-kind': stageKind(focus), 'data-player-id': owner ?? undefined };
   if (mine) {
     return (
@@ -72,9 +73,9 @@ export function Stage({ room, view, meId, owner, focus, frame, now }: Props) {
         <div className="bj-mine" data-testid="my-area" data-count={myHands.length}>
           <div className="bj-mine__hands" data-testid="my-hands" data-count={myHands.length}>
             {myHands.length > 0 ? (
-              <HandRow playerId={meId} hands={myHands} timeline={timeline} now={now} leaving={leaving} activeIndex={activeIndex(frame, view, meId)} place="mine" size="md" stakes={live} testId="my-hand" chipTestId="my-chip" />
+              <HandRow playerId={meId} hands={myHands} start={start} timeline={timeline} now={now} leaving={leaving} activeIndex={activeIndex(frame, view, meId)} place="mine" size="md" stakes={live} testId="my-hand" chipTestId="my-chip" />
             ) : (
-              <EmptyHand stake={nextStake} />
+              <EmptyHand stake={nextStake} start={start} />
             )}
           </div>
         </div>
@@ -88,6 +89,7 @@ export function Stage({ room, view, meId, owner, focus, frame, now }: Props) {
         <HandRow
           playerId={owner}
           hands={frame.table?.hands[owner] ?? []}
+          start={start}
           timeline={timeline}
           now={now}
           leaving={leaving}

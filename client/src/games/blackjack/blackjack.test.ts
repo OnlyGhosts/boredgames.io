@@ -608,14 +608,44 @@ describe('the screen', () => {
     // My bet down: my row moves on to two empty slots with the stake where a hand's stake goes.
     expect(tagsWith(mine(html), 'card')).toHaveLength(0);
     expect(tagsWith(mine(html), 'my-slot')).toHaveLength(2);
-    // The stake is its own labelled pill right by my empty places: never on a card, never in a column of its own.
+    // The stake is its own pill of chips right by my empty places, read as "Bet 50": never on a card, never in a column of its own.
     const stake = tagWith(html, 'my-bet');
     expect(attr(stake, 'data-bet')).toBe('50');
+    expect(attr(stake, 'aria-label')).toBe('Bet 50');
     expect(attr(stake, 'class')).toBe('tbl-stake tbl-stake--bet tbl-hand__stake');
-    expect(mine(html)).toMatch(/<div class="bj-empty"><span class="bj-empty__stake"><span class="tbl-stake tbl-stake--bet tbl-hand__stake" data-testid="my-bet"/);
-    expect(html).toMatch(/data-testid="my-bet"[^>]*><span class="tbl-stake__word">Bet<\/span> <span class="tbl-stake__value">50<\/span>/);
+    expect(mine(html)).toMatch(/<div class="bj-empty"><span class="bj-empty__stake"><span class="tbl-stake tbl-stake--bet tbl-hand__stake" role="img" aria-label="Bet 50" data-testid="my-bet"/);
+    // 50 at a 1,000 start is one lime chip, the figure beside it.
+    expect(html).toMatch(/data-testid="my-bet" data-bet="50" data-chips="1" data-bands="lime"><span class="tbl-stake__chips"[^>]*>[\s\S]*?<\/span><span class="tbl-stake__value">50<\/span>/);
     // Bob's settled hand is still on his tile.
     expect(tagsWith(html, 'seat-hand').length).toBeGreaterThan(0);
+  });
+
+  it('keeps my stake by each total near the width the word Bet gave it on a phone, so split hands stay side by side', async () => {
+    const { stakeOf } = await import('./components/Hand');
+    const out = (value: number, start: number) => renderToString(stakeOf(value, start, 'hand-bet'));
+    // A four-digit stake writes both figures, for split hands on a phone's stage to read it short ("1.2k") and a hand on its own in full; from 10,000 it is short everywhere.
+    expect(out(1200, 10_000)).toMatch(/aria-label="Bet 1,200"[^>]*data-chips="4" data-bands="lime lime white"[\s\S]*<span class="tbl-stake__value tbl-figure"><span class="tbl-figure__full">1,200<\/span><span class="tbl-figure__short">1.2k<\/span><\/span>/);
+    expect(out(12_000, 10_000)).toMatch(/<span class="tbl-stake__value">12k<\/span>/);
+    expect(out(200, 1000)).toMatch(/<span class="tbl-stake__value">200<\/span>/);
+    // Split hands side by side on a phone's stage (under 460px) pack the pill tighter, draw two chips at most with the plus for the rest, and read the short figure:
+    // two split hands at 320px once folded one into a chip when "1,200" with three chips outgrew a hand's share.
+    const css = readFileSync(fileURLToPath(new URL('./blackjack.css', import.meta.url)), 'utf8');
+    const phone = css.slice(css.indexOf('@container (max-width: 459px) {'));
+    expect(phone).toMatch(/^@container \(max-width: 459px\) \{\s*\.bj-hands--side \.tbl-hand__head:has\(> \.tbl-hand__stake\) \{\s*gap: 2px;\s*\}\s*\.bj-hands--side \.tbl-hand__stake \{\s*gap: 0\.15em;\s*padding: 0 0\.25em;/);
+    expect(phone).toMatch(/\.bj-hands--side \.tbl-hand__stake \.tbl-stake__chip:nth-child\(n \+ 3\) \{\s*display: none;/);
+    expect(phone).toMatch(/\.bj-hands--side \.tbl-hand__stake \.tbl-stake__chips\[data-count='3'\] \+ \.tbl-stake__more--spare \{\s*display: inline;/);
+    expect(phone).toMatch(/\.bj-hands--side \.tbl-hand__stake \.tbl-figure__full \{\s*display: none;\s*\}\s*\.bj-hands--side \.tbl-hand__stake \.tbl-figure__short \{\s*display: inline;/);
+    // Only a row of two or more full hands is marked: a hand on its own (or my empty places with my next stake) has the room, and keeps three chips and "1,250" in full.
+    expect(phone.slice(0, phone.indexOf('\n}'))).not.toMatch(/\.bj-hands(?!--side)[ .:]/);
+    const row = (hands: number) => {
+      const mineHands = Array.from({ length: hands }, (_, i) => hand([c('8'), c('9', 'H')], { status: i === 0 ? 'acting' : 'waiting', fromSplit: hands > 1, bet: 1250 }));
+      const v = acting({ players: { ...acting().players, host: { chips: 800, bet: 1250, hands: mineHands, inRound: true, sittingOut: false, bustedOut: false } } });
+      return tagWith(render(bjRoom(v), 'host'), 'my-hands-row');
+    };
+    expect(attr(row(1), 'class')).toBe('bj-hands bj-hands--mine');
+    expect(attr(row(2), 'class')).toBe('bj-hands bj-hands--mine bj-hands--side');
+    const empty = render(bjRoom(view({ players: { ...view().players, host: { chips: 750, bet: 1250, hands: [], inRound: true, sittingOut: false, bustedOut: false } } })), 'host');
+    expect(empty).toMatch(/<div class="bj-hands bj-hands--mine" style="[^"]*"><div class="bj-slot"><div class="bj-empty"><span class="bj-empty__stake">/);
   });
 
   it('acting, my turn: Hit and Stand lit, Split and Double as offered, Bet dimmed, the hole card face down with no rank', () => {
@@ -1155,7 +1185,7 @@ describe('many hands', () => {
     expect(H.fullHandsFit(296, H.MIN_FULL_HAND_PX.mine)).toBe(3);
     expect(H.fullHandsFit(358, H.MIN_FULL_HAND_PX.mine)).toBe(4);
     expect(H.fullHandsFit(760, H.MIN_FULL_HAND_PX.mine)).toBe(9);
-    // A row keeps each full hand as wide as the words over its corner ("Bet 1,000" and the total): fewer fit.
+    // A row keeps each full hand as wide as the words over its corner (the stake's chips and figure, and the total): fewer fit.
     expect(H.fullHandsFit(358, Math.max(H.MIN_FULL_HAND_PX.mine, 110 + H.HAND_GAP_PX))).toBe(2);
     expect(H.MIN_FULL_HAND_PX.mine).toBeGreaterThan(H.MIN_FULL_HAND_PX.stage);
     // Never less than one, however narrow.
@@ -1270,10 +1300,13 @@ describe('the players grid', () => {
     }
   });
 
-  it('tells the stack and the bet apart on every tile: "1,000 chips" in words, "Bet 10" in its own pill', () => {
+  it('tells the stack and the bet apart on every tile: "1,000 chips" in words, the bet as its own pill of chips read as "Bet 10"', () => {
     const full = render(bigTable(2, 1), 'p0');
-    expect(full).toMatch(/data-testid="seat-chips" data-chips="1000"><span class="tbl-stackcount__value">1,000<\/span> <span class="tbl-stackcount__word">chips<\/span>/);
-    expect(full).toMatch(/class="tbl-stake tbl-stake--bet" data-testid="seat-bet" data-bet="10"><span class="tbl-stake__word">Bet<\/span> <span class="tbl-stake__value">10<\/span>/);
+    // A full tile writes its figures in full too, with the short form beside them for a narrow one (three across a phone) to swap in.
+    expect(full).toMatch(/data-testid="seat-chips" data-chips="1000"><span class="tbl-stackcount__value tbl-figure"><span class="tbl-figure__full">1,000<\/span><span class="tbl-figure__short">1k<\/span><\/span> <span class="tbl-stackcount__word">chips<\/span>/);
+    // A full tile draws up to three chips: 10 at a 1,000 start is one off-white chip (a figure short of four digits has no short form to swap in).
+    expect(full).toMatch(/class="tbl-stake tbl-stake--bet" role="img" aria-label="Bet 10" data-testid="seat-bet" data-bet="10" data-chips="1" data-bands="white"><span class="tbl-stake__chips"[^>]*>[\s\S]*?<\/span><span class="tbl-stake__value">10<\/span>/);
+    expect(full).not.toContain('tbl-stake__word');
     // A compact tile writes the stack in full, with the short form only for a tile too narrow for it.
     const compact = render(bigTable(6, 1), 'p0');
     expect(compact).toMatch(/data-testid="seat-chips" data-chips="1000"><span class="tbl-stackcount__value tbl-figure"><span class="tbl-figure__full">1,000<\/span><span class="tbl-figure__short">1k<\/span><\/span> <span class="tbl-stackcount__word">chips<\/span>/);
@@ -1281,33 +1314,65 @@ describe('the players grid', () => {
     expect(full).toMatch(/data-testid="my-chips" data-chips="1000" aria-label="Balance 1000 chips"><span class="tbl-stackcount"[^>]*><span class="tbl-stackcount__value">1,000<\/span>/);
   });
 
-  it('never writes 1,040 chips as "1k" on a compact tile, so it cannot read like 1,000', () => {
+  it('never lets 1,040 read like 1,000 on a compact tile: the stack in full, the stake told apart by its chips where it reads "1k"', () => {
     const table = bigTable(6, 1);
     const game = table.game;
     if (!game) throw new Error('no game');
-    const view = { ...game, players: { ...game.players, p2: { ...game.players.p2, chips: 1040, bet: 1040, hands: [hand([c('9'), c('7')], { total: 16, bet: 1040 })] } } };
+    const at = (chips: number, bet: number) => ({ chips, bet, hands: [hand([c('9'), c('7')], { total: 16, bet })] });
+    const view = { ...game, players: { ...game.players, p2: { ...game.players.p2, ...at(1040, 1040) }, p3: { ...game.players.p3, ...at(1000, 1000) } } };
     const html = render({ ...table, game: view }, 'p0');
-    const tile = html.slice(html.indexOf('data-player-id="p2"'), html.indexOf('data-player-id="p3"'));
-    const chips = tagWith(tile, 'seat-chips');
-    expect(chips).toContain('data-chips="1040"');
-    const full = /<span class="tbl-figure__full">([^<]+)<\/span>/;
-    expect(full.exec(tile.slice(tile.indexOf('data-testid="seat-chips"')))?.[1]).toBe('1,040');
-    expect(full.exec(tile.slice(tile.indexOf('data-testid="seat-bet"')))?.[1]).toBe('1,040');
-    // A full tile has the room: one figure, in full.
-    expect(tileFigures('full')).toBe('full');
+    const tileOf = (id: string, next: string) => html.slice(html.indexOf(`data-player-id="${id}"`), html.indexOf(`data-player-id="${next}"`));
+    const odd = tileOf('p2', 'p3');
+    const even = tileOf('p3', 'p4');
+    // The stack writes both forms, and table.css shows the short one only for a five-digit stack or a tile under 80px: "1,040 chips" stays whole.
+    const full = /<span class="tbl-figure__full">([^<]+)<\/span><span class="tbl-figure__short">([^<]+)<\/span>/;
+    expect(full.exec(odd.slice(odd.indexOf('data-testid="seat-chips"')))?.slice(1)).toEqual(['1,040', '1k']);
+    expect(tagWith(odd, 'seat-chips')).not.toContain('data-long');
+    // The stake writes both forms too, and a compact tile reads it short ("1k": a pill of two chips or a plus, or a four-digit figure under 200px wide);
+    // there the chips say which: an ink chip and an off-white one with a plus for the three owed (two at most on a compact tile), against one ink chip.
+    expect(full.exec(odd.slice(odd.indexOf('data-testid="seat-bet"')))?.slice(1)).toEqual(['1,040', '1k']);
+    expect(tagWith(odd, 'seat-bet')).toMatch(/^<span class="tbl-stake tbl-stake--bet tbl-stake--wide" role="img" aria-label="Bet 1,040" data-testid="seat-bet" data-bet="1040" data-chips="5" data-bands="ink white" data-long="">/);
+    expect(odd).toContain('<span class="tbl-stake__more" aria-hidden="true">+</span>');
+    expect(tagWith(even, 'seat-bet')).toMatch(/^<span class="tbl-stake tbl-stake--bet" role="img" aria-label="Bet 1,000" data-testid="seat-bet" data-bet="1000" data-chips="1" data-bands="ink" data-long="">/);
+    expect(even).not.toContain('tbl-stake__more');
+    // Both tiers that have the room write `fit` figures; the small tiers write them short.
+    expect(tileFigures('full')).toBe('fit');
     expect(tileFigures('compact')).toBe('fit');
     expect(tileFigures('small')).toBe('short');
   });
 
-  it('a small tile shows one total for split hands (the hand in play), never "21/15" cut off', async () => {
+  it('a small or dense tile shows one total for split hands (the hand in play), and a compact one only where the total shares the stack\'s line', async () => {
     const { tileTotal } = await import('./components/Seats');
     const split = acting({ turn: { playerId: 'bob', handIndex: 1 }, players: { ...acting().players, bob: { chips: 980, bet: 10, hands: [hand([c('10'), c('9'), c('2')], { total: 21, status: 'stood', fromSplit: true }), hand([c('10'), c('5')], { total: 15, status: 'acting', fromSplit: true })], inRound: true, sittingOut: false, bustedOut: false } } });
     const hands = tableOf(split)?.hands.bob ?? [];
     const tl = T.snapTimeline(tableOf(split), NOW);
-    expect(tileTotal('bob', hands, tl, NOW, true, 1)?.text).toBe('21/15');
-    expect(tileTotal('bob', hands, tl, NOW, true, 1, true)?.text).toBe('15');
+    // Joined, the total carries the hand in play as its short form; one total alone has none.
+    expect(tileTotal('bob', hands, tl, NOW, true, 1)).toMatchObject({ text: '21/15', short: '15' });
+    expect(tileTotal('bob', hands, tl, NOW, true, 1, true)).toEqual({ text: '15', tone: 'active' });
     // Off turn: the best hand still standing.
+    expect(tileTotal('bob', hands, tl, NOW, false, 0)).toMatchObject({ text: '21/15', short: '21' });
     expect(tileTotal('bob', hands, tl, NOW, false, 0, true)?.text).toBe('21');
+    // On the tiles: a full tile (two others) and a compact one (five others) join both and write the hand in play beside them, for table.css
+    // to swap in where the total shares the stack's line (only a narrow, short compact tile: three across a phone); a small one (twelve) shows one.
+    for (const [n, tier, text, short] of [[3, 'full', '21/15', '15'], [6, 'compact', '21/15', '15'], [13, 'small', '15', null]] as const) {
+      const table = bigTable(n, 1);
+      const game = table.game;
+      if (!game) throw new Error('no game');
+      const p1 = { ...game.players.p1, hands: [hand([c('10'), c('9'), c('2')], { total: 21, bet: 10, status: 'stood', fromSplit: true }), hand([c('10'), c('5')], { total: 15, bet: 10, status: 'acting', fromSplit: true })] };
+      const html = render({ ...table, game: { ...game, turn: { playerId: 'p1', handIndex: 1 }, players: { ...game.players, p1 } } }, 'p0');
+      expect(attr(tagWith(html, 'seats'), 'data-tier'), `${n} seats`).toBe(tier);
+      const tile = html.slice(html.indexOf('data-player-id="p1"'), html.indexOf('data-player-id="p2"'));
+      expect(textOf(tile, 'seat-total'), `${n} seats`).toBe(text);
+      if (short) expect(tile, `${n} seats`).toContain(`<span class="tbl-pill__full">${text}</span><span class="tbl-pill__short">${short}</span>`);
+      else expect(tile, `${n} seats`).not.toContain('tbl-pill__short');
+    }
+    // The short form shows only in the stacked compact layout (under 150px wide and 70px tall); a compact tile 46px tall or less has its total on the name's line again.
+    const css = readFileSync(fileURLToPath(new URL('../../platform/styles/table.css', import.meta.url)), 'utf8');
+    expect(css).toMatch(/\n\.tbl-pill__short \{\s*display: none;\s*\}/);
+    const stacked = css.slice(css.indexOf('@container tile (max-width: 149px) and (max-height: 70px) {'));
+    expect(stacked.slice(0, stacked.indexOf('\n}'))).toMatch(/\.tbl-tile--compact \.tbl-tile__total \.tbl-pill__full \{\s*display: none;\s*\}\s*\.tbl-tile--compact \.tbl-tile__total \.tbl-pill__short \{\s*display: inline;/);
+    const shortTile = css.slice(css.indexOf('@container tile (max-height: 46px) {'));
+    expect(shortTile.slice(0, shortTile.indexOf('\n}'))).toMatch(/\.tbl-tile--compact \.tbl-tile__total \.tbl-pill__full \{\s*display: inline;\s*\}\s*\.tbl-tile--compact \.tbl-tile__total \.tbl-pill__short \{\s*display: none;/);
   });
 
   it('marks each seat: on turn, still to act, done, bust, a natural, and the outcome once settled', async () => {

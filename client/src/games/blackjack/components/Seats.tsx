@@ -1,6 +1,6 @@
 import type { BlackjackRoomState, BlackjackView } from '@shared/games/blackjack/protocol';
 import type { Tone } from '../../../platform/table/Outcome';
-import { PlayerTile, PlayersGrid, SeatSheet, tileFigures, type SeatLine, type SeatMark } from '../../../platform/table/PlayersGrid';
+import { PlayerTile, PlayersGrid, SeatSheet, tileChips, tileFigures, type SeatLine, type SeatMark } from '../../../platform/table/PlayersGrid';
 import { StackCount, StakePill } from '../../../platform/table/Stakes';
 import { playerOf } from '../hooks';
 import { seatOutcome } from '../lib/focus';
@@ -89,21 +89,25 @@ export function seatMark(line: SeatLine, hands: readonly TableHand[], settledSho
 
 /**
  * The total a tile shows and its colour: every hand's, two split hands joined ("21/15"); past two
- * hands, or on a small or dense tile, one: the hand in play (or the best one standing).
+ * hands, or on a small or dense tile, one: the hand in play (or the best one standing). Joined, it
+ * carries that one as its `short` form too, for a narrow compact tile whose total shares the
+ * stack's line ("800 chips" and "15", where "21/15" would not fit: table.css picks the form).
  */
-export function tileTotal(id: string, hands: TableHand[], timeline: Timeline, now: number, turn: boolean, handIndex: number, one = false): { text: string; tone: Tone } | null {
+export function tileTotal(id: string, hands: TableHand[], timeline: Timeline, now: number, turn: boolean, handIndex: number, one = false): { text: string; tone: Tone; short?: string } | null {
   const all = hands.map((h, i) => ({ hand: h, i, ...handOnScreen(id, i, h, timeline, now) })).filter((s) => s.total !== null);
   if (all.length === 0) return null;
   const standing = all.filter((s) => (s.total?.total ?? 0) <= 21).sort((a, b) => (b.total?.total ?? 0) - (a.total?.total ?? 0));
   const pick = all.find((s) => turn && s.i === handIndex) ?? standing[0] ?? all[0];
   const shown = one && all.length > 1 ? [pick] : all;
   // The best total only, never "4/14".
-  const text = shown.map((s) => totalText(s.total ?? { total: 0, soft: false }, false)).join('/');
+  const say = (some: typeof all) => some.map((s) => totalText(s.total ?? { total: 0, soft: false }, false)).join('/');
+  const text = say(shown);
+  const short = shown.length > 1 ? say([pick]) : undefined;
   const outcome = all.every((s) => s.outcome !== null) ? seatOutcome(hands) : null;
-  if (outcome) return { text, tone: outcome };
-  if (shown.every((s) => (s.total?.total ?? 0) > 21)) return { text, tone: 'bust' };
+  if (outcome) return { text, tone: outcome, short };
+  if (shown.every((s) => (s.total?.total ?? 0) > 21)) return { text, tone: 'bust', short };
   if (shown.length === 1 && shown[0].hand.status === 'blackjack' && shown[0].cards.length === 2) return { text, tone: 'blackjack' };
-  return { text, tone: turn && shown.some((s) => s.i === handIndex) ? 'active' : 'neutral' };
+  return { text, tone: turn && shown.some((s) => s.i === handIndex) ? 'active' : 'neutral', short };
 }
 
 /** A seat's sheet: its hands full size, its chips and what it is doing. */
@@ -117,13 +121,13 @@ function SeatDetail({ room, view, id, table, timeline, now, leaving, chips }: { 
     <div className="bj-seat-detail" data-testid="seat-detail" data-player-id={id}>
       <p className="bj-seat-detail__line">
         <StackCount value={chips} />
-        {stake > 0 && <StakePill value={stake} />}
+        {stake > 0 && <StakePill value={stake} start={room.settings.startingChips} />}
         {line.text && <span className="bj-seat-detail__state">{line.text}</span>}
       </p>
       {hands.length > 0 ? (
         <div className="bj-seat-detail__hands">
           {hands.map((hand, i) => (
-            <Hand key={i} playerId={id} index={i} hand={hand} timeline={timeline} now={now} leaving={leaving} size="md" active={i === turnHand} testId="detail-hand" />
+            <Hand key={i} playerId={id} index={i} hand={hand} start={room.settings.startingChips} timeline={timeline} now={now} leaving={leaving} size="md" active={i === turnHand} testId="detail-hand" />
           ))}
         </div>
       ) : (
@@ -174,14 +178,14 @@ export function Seats({ room, view, ids, meId, staged, table, timeline, now, lea
                   mark={seatMark(line, hands, settledShown)}
                   outcome={settledShown ? seatOutcome(hands) : null}
                   chips={chipsOf(id)}
-                  bet={stake > 0 ? <StakePill value={stake} format={tileFigures(tier)} testId="seat-bet" /> : undefined}
+                  bet={stake > 0 ? <StakePill value={stake} start={room.settings.startingChips} chips={tileChips(tier)} format={tileFigures(tier)} testId="seat-bet" /> : undefined}
                   total={tileTotal(id, hands, timeline, now, turn, view.turn?.handIndex ?? 0, oneTotal || hands.length > 2)}
                   dimmed={seat.bustedOut}
                   onOpen={() => openSeat(id)}
                   data={{ 'data-chips': seat.chips, 'data-bet': seat.bet }}
                   cards={
                     hands.length > 0 && id !== staged
-                      ? hands.map((hand, i) => <Hand key={i} playerId={id} index={i} hand={hand} timeline={timeline} now={now} leaving={leaving} size="sm" active={turn && view.turn?.handIndex === i} mini testId="seat-hand" />)
+                      ? hands.map((hand, i) => <Hand key={i} playerId={id} index={i} hand={hand} start={room.settings.startingChips} timeline={timeline} now={now} leaving={leaving} size="sm" active={turn && view.turn?.handIndex === i} mini testId="seat-hand" />)
                       : undefined
                   }
                 />

@@ -599,7 +599,8 @@ describe('the screen', () => {
     expect(attr(tagWith(html, 'hand-stage'), 'data-player-id')).toBe('host');
     expect(attr(tagWith(html, 'my-bet'), 'data-bet')).toBe('0');
     expect(html).toMatch(/data-testid="my-cards"[^>]*><div class="tbl-hand__head"><span class="pk-dealer"[^>]*data-testid="my-dealer"/);
-    expect(html).toMatch(/data-testid="seat-bet" data-bet="10"><span class="tbl-stake tbl-stake--bet" data-bet="10"><span class="tbl-stake__word">Bet<\/span> <span class="tbl-stake__value">10<\/span>/);
+    // A blind of 10 at a 1,000 start: one off-white chip and the figure, read as "Bet 10".
+    expect(html).toMatch(/data-testid="seat-bet" data-bet="10"><span class="tbl-stake tbl-stake--bet" role="img" aria-label="Bet 10" data-bet="10" data-chips="1" data-bands="white"><span class="tbl-stake__chips"[^>]*>[\s\S]*?<\/span><span class="tbl-stake__value">10<\/span>/);
     expect(html).toMatch(/data-testid="seat-chips" data-chips="990"><span class="tbl-stackcount__value">990<\/span> <span class="tbl-stackcount__word">chips<\/span>/);
     expect(html).toMatch(/class="tbl-stake tbl-stake--pot pk-pot__pill" data-testid="pot" data-bet="15" data-chips="15" data-shown="15" data-table-anchor="pot"><span class="tbl-stake__word">Pot<\/span> <span class="tbl-stake__value">15</);
   });
@@ -783,6 +784,19 @@ describe('the table keeps its places', () => {
     expect(html).not.toContain('tbl-stage--tight');
     expect(attr(tagWith(html, 'discard-tray'), 'class')).toBe('tbl-discard-corner');
     expect(attr(tagWith(html, 'deck'), 'data-remaining')).toBe(String(52 - 3 * 2));
+  });
+
+  it('keeps the words over my cards on the stage: they widen the hand, which moves right only as far as they need', () => {
+    const css = readFileSync(join(import.meta.dirname, 'poker.css'), 'utf8');
+    // The stage fills its width; the hand's box takes the words (the dealer button, my bet's chips, the hand's name) in its flow, the cards at its right.
+    expect(css).toMatch(/\.pk-mine \{\s*display: flex;\s*align-items: flex-end;\s*width: 100%;/);
+    const hand = css.match(/\.pk-mine \.tbl-hand \{([^}]*)\}/)?.[1] ?? '';
+    expect(hand).toMatch(/--pk-fan-w: calc\(var\(--tbl-w\) \* \(1 \+ var\(--fan-step\) \* \(var\(--fan, 2\) - 1\)\) \+ 6px\);/);
+    expect(hand).toMatch(/align-items: flex-end;\s*padding-top: 0;\s*margin-left: auto;\s*margin-right: calc\(50% - var\(--pk-fan-w\) \/ 2\);/);
+    // The words keep their place over the cards' top right corner: the pill's height, overlapping the cards by 0.3 of it, as HandFan floats them.
+    expect(css).toMatch(/\.pk-mine \.tbl-hand__head \{\s*position: relative;\s*top: auto;\s*right: auto;\s*margin-bottom: calc\(var\(--pill-h\) \* -0\.3\);/);
+    // The payout still rises over the cards.
+    expect(css).toMatch(/\.pk-mine \.tbl-payout \{\s*left: calc\(100% - var\(--pk-fan-w\) \/ 2\);/);
   });
 
   it('puts the pot beside the board on the shortest phones, the board clear of the deck, so the seats keep the height', () => {

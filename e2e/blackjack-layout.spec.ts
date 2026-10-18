@@ -491,4 +491,168 @@ test.describe('many hands (the harness)', () => {
       }
     });
   }
+
+  // Split hands side by side on a phone: my stake by each total (its chips and the figure) keeps to the width the word Bet gave it,
+  // so a split never folds a hand into a chip that the old "Bet 1,200" left full (two hands at 320px folded one when the pill grew).
+  for (const [size, hands, stakes] of [
+    [{ width: 320, height: 568 }, 2, ['stake=10&start=1000', 'stake=200&start=1000', 'stake=990&start=1000', 'stake=600&doubled=1&start=1000', 'stake=740&doubled=1&start=1000', 'stake=4990&start=1000', 'stake=1200&start=10000', 'stake=2900&start=10000']],
+    [{ width: 414, height: 896 }, 3, ['stake=200&start=1000', 'stake=990&start=1000', 'stake=200&doubled=1&start=10000']],
+  ] as const) {
+    test(`${size.width}x${size.height}: ${hands} split hands stay side by side whatever my stake`, async ({ browser }) => {
+      const ctx = await browser.newContext({ viewport: size });
+      const page = await ctx.newPage();
+      try {
+        for (const stake of stakes) {
+          const query = `phase=mine&others=3&hands=${hands}&${stake}`;
+          await open(page, query);
+          await expect.poll(() => page.getByTestId('my-hands-row').getAttribute('data-full'), { message: `${query}: every hand full size` }).toBe(String(hands));
+          await expect(page.getByTestId('hand-bet')).toHaveCount(hands);
+          await nothingScrolls(page, query);
+          await expect.poll(() => allInside(page, 'hand-stage', '.tbl-hand__head'), { message: `${query}: each stake and total on the stage` }).toMatchObject({ outside: 0, count: hands });
+        }
+      } finally {
+        await ctx.close();
+      }
+    });
+  }
+
+  // Narrow compact tiles (five to nine players on a 320px phone, ten on a 390px or 414px one, 64px to 99px wide): every seat's stack,
+  // total and bet pill read in full and apart. The pill once shared its line with the total, ran under it and lost its figure.
+  for (const [size, tables] of [
+    [{ width: 320, height: 568 }, [4, 5, 6, 7, 8]],
+    [{ width: 390, height: 844 }, [9]],
+    [{ width: 414, height: 896 }, [9]],
+  ] as const) {
+    test(`${size.width}x${size.height}: a narrow compact tile keeps its stack, total and bet pill apart`, async ({ browser }) => {
+      const ctx = await browser.newContext({ viewport: size });
+      const page = await ctx.newPage();
+      try {
+        for (const others of tables) {
+          for (const [bet, chips] of [[10, 990], [200, 800], [1300, 9800]]) {
+            const query = `phase=other&others=${others}&start=1000&bet=${bet}&chips=${chips}&otherHands=2`;
+            await open(page, query);
+            await expect(page.getByTestId('seats')).toHaveAttribute('data-tier', 'compact');
+            await expect(page.getByTestId('seat-total')).toHaveCount(others);
+            await stakesShown(page, query);
+            await tilesReadable(page, query);
+          }
+        }
+        // The bets going down, no total yet: a six-figure stack ("150k chips") has the whole line and keeps whole.
+        const query = `phase=betting&others=${tables[tables.length - 1]}&start=100000&bet=9000&chips=150000`;
+        await open(page, query);
+        await expect(page.getByTestId('seats')).toHaveAttribute('data-tier', 'compact');
+        await expect(page.getByTestId('seat-total')).toHaveCount(0);
+        await stakesShown(page, query);
+        await tilesReadable(page, query);
+      } finally {
+        await ctx.close();
+      }
+    });
+  }
+
+  /** What `selector` shows (its visible text: the short or the full figure, never both), for each match. */
+  const shownText = (page: Page, selector: string): Promise<string[]> => page.locator(selector).evaluateAll((els) => els.map((el) => (el as HTMLElement).innerText.replace(/\s+/g, ' ').trim()));
+
+  // Big stakes on full tiles 200px to 239px wide (two players on a phone, four on a 1024px desktop, five on a 1280px one): three chips,
+  // a plus and "12,000" once pushed the pill off the stack's line, and the tile's fixed height laid the name over the stack.
+  for (const [size, others] of [
+    [{ width: 360, height: 740 }, 1],
+    [{ width: 390, height: 844 }, 1],
+    [{ width: 1024, height: 768 }, 3],
+    [{ width: 1280, height: 800 }, 4],
+  ] as const) {
+    test(`${size.width}x${size.height}: a full tile keeps a big stake on the stack's line, clear of the name`, async ({ browser }) => {
+      const ctx = await browser.newContext({ viewport: size });
+      const page = await ctx.newPage();
+      try {
+        for (const phase of ['betting', 'other']) {
+          for (const money of ['start=100000&bet=12000&chips=88000', 'start=100000&bet=9000&chips=150000', 'start=100000&bet=49999&chips=150001', 'start=10000&bet=4900&chips=17600']) {
+            const query = `phase=${phase}&others=${others}&${money}`;
+            await open(page, query);
+            await expect(page.getByTestId('seats')).toHaveAttribute('data-tier', 'full');
+            await stakesShown(page, query);
+            await tilesReadable(page, query);
+            const apart = await page.evaluate(() =>
+              Array.from(document.querySelectorAll('[data-testid="seat"]')).flatMap((tile) => {
+                const stack = tile.querySelector('[data-testid="seat-chips"]')?.getBoundingClientRect();
+                const pill = tile.querySelector('.tbl-tile__bet .tbl-stake')?.getBoundingClientRect();
+                return stack && pill ? [Math.abs(stack.top + stack.height / 2 - (pill.top + pill.height / 2))] : [];
+              }),
+            );
+            expect(apart.length, `${query}: a pill to measure`).toBeGreaterThan(0);
+            for (const d of apart) expect(d, `${query}: the stack and the pill on one line`).toBeLessThan(3);
+          }
+        }
+      } finally {
+        await ctx.close();
+      }
+    });
+  }
+
+  // My stake by a hand on a phone: a hand on its own has the room for three chips and the figure in full ("1,250", never "1.3k"), as my next
+  // stake by my empty places has; only split hands side by side pack it to two chips and the short figure.
+  for (const size of [{ width: 320, height: 568 }, { width: 390, height: 844 }, { width: 430, height: 932 }]) {
+    test(`${size.width}x${size.height}: a hand on its own keeps its stake in full, split hands side by side read it short`, async ({ browser }) => {
+      const ctx = await browser.newContext({ viewport: size });
+      const page = await ctx.newPage();
+      try {
+        await open(page, 'phase=mine&others=3&hands=1&stake=1250&start=1000');
+        await expect.poll(() => shownText(page, '[data-testid="hand-bet"]')).toEqual(['1,250']);
+        await open(page, 'phase=betting&others=3&myBet=1250&start=1000');
+        await expect.poll(() => shownText(page, '[data-testid="my-bet"]')).toEqual(['1,250']);
+        await open(page, 'phase=mine&others=3&hands=1&stake=200&start=1000');
+        await expect.poll(() => page.locator('[data-testid="hand-bet"] .tbl-stake__chip:visible').count(), { message: 'three chips by a hand on its own' }).toBe(3);
+        await open(page, 'phase=mine&others=3&hands=2&stake=1250&start=1000');
+        await expect.poll(() => page.getByTestId('my-hands-row').getAttribute('data-full')).toBe('2');
+        await expect.poll(() => shownText(page, '[data-testid="hand-bet"]')).toEqual(['1.3k', '1.3k']);
+      } finally {
+        await ctx.close();
+      }
+    });
+  }
+
+  // A seat's sheet on a 320px phone: the stack, a pill of chips and the seat's line once overran the sheet ("Playin"); the line wraps under them.
+  test('320x568: a seat sheet keeps its stack, stake and line inside it', async ({ browser }) => {
+    const ctx = await browser.newContext({ viewport: { width: 320, height: 568 } });
+    const page = await ctx.newPage();
+    try {
+      for (const money of ['start=10000&bet=4000&chips=19000', 'start=100000&bet=4000&chips=88000']) {
+        await open(page, `phase=other&others=8&otherHands=3&${money}`);
+        await page.locator('[data-testid="seat"][data-name="Pia"] [data-testid="seat-open"]').click();
+        const line = page.getByTestId('seat-detail').locator('p').first();
+        await expect(line).toBeVisible();
+        const fit = await line.evaluate((el) => {
+          const box = el.getBoundingClientRect();
+          return { over: el.scrollWidth - el.clientWidth, outside: Array.from(el.children).filter((c) => c.getBoundingClientRect().right > box.right + 0.5).map((c) => c.textContent) };
+        });
+        expect(fit, `${money}: the sheet's line inside it`).toEqual({ over: 0, outside: [] });
+        await expect(line).toContainText('Playing');
+      }
+    } finally {
+      await ctx.close();
+    }
+  });
+
+  // Split hands' totals on a compact tile: joined ("18/17") on the name's line where it has the room (a desktop's compact tiles), the hand in
+  // play alone only where the total shares the stack's line (a phone's tiles, three across).
+  for (const [size, others, joined] of [
+    [{ width: 1440, height: 900 }, 8, true],
+    [{ width: 1024, height: 768 }, 7, true],
+    [{ width: 390, height: 844 }, 6, false],
+  ] as const) {
+    test(`${size.width}x${size.height}: a compact tile ${joined ? 'joins split hands\' totals' : 'shows the hand in play\'s total'}`, async ({ browser }) => {
+      const ctx = await browser.newContext({ viewport: size });
+      const page = await ctx.newPage();
+      try {
+        const query = `phase=other&others=${others}&otherHands=2`;
+        await open(page, query);
+        await expect(page.getByTestId('seats')).toHaveAttribute('data-tier', 'compact');
+        const [total] = await shownText(page, '[data-testid="seat"][data-turn="true"] [data-testid="seat-total"]');
+        expect(total, query).toMatch(joined ? /^\d+\/\d+$/ : /^\d+$/);
+        await tilesReadable(page, query);
+      } finally {
+        await ctx.close();
+      }
+    });
+  }
 });

@@ -42,6 +42,12 @@ export interface Scenario {
   bust: boolean;
   /** I watch the game (a spectator, not seated at the table): the stage shows the hand in play. */
   watch: boolean;
+  /** The table's starting stack (the bet pills' chip denominations go by it). */
+  start: number;
+  /** The other players' stake once the cards are out (the first other's bet while the bets are open is twice it). */
+  bet: number;
+  /** The other players' stacks. */
+  chips: number;
 }
 
 const NAMES = ['Pia', 'Quinn', 'Ada', 'Ben', 'Cleo', 'Dev', 'Eli', 'Fay', 'Gus', 'Ivy', 'Jas', 'Kit', 'Lou', 'Max', 'Nia', 'Oli', 'Pip', 'Rae', 'Sam', 'Tia', 'Uma', 'Vic', 'Wes', 'Xan'];
@@ -69,6 +75,9 @@ export function parseScenario(params: URLSearchParams): Scenario {
     doubled: params.get('doubled') === '1',
     bust: params.get('bust') === '1',
     watch: params.get('watch') === '1',
+    start: Math.max(1, int(params, 'start', DEFAULT_BLACKJACK_SETTINGS.startingChips)),
+    bet: Math.max(1, int(params, 'bet', 10)),
+    chips: Math.max(0, int(params, 'chips', 900)),
   };
 }
 
@@ -112,12 +121,12 @@ function people(s: Scenario): PlayerPublic[] {
   }));
 }
 
-function roomOf(players: PlayerPublic[], game: BlackjackView): BlackjackRoomState {
+function roomOf(players: PlayerPublic[], game: BlackjackView, start: number): BlackjackRoomState {
   return {
     code: 'ABCD',
     gameId: 'blackjack',
     hostId: ME,
-    settings: { ...defaultPlatformSettings(gameById('blackjack')), ...DEFAULT_BLACKJACK_SETTINGS },
+    settings: { ...defaultPlatformSettings(gameById('blackjack')), ...DEFAULT_BLACKJACK_SETTINGS, startingChips: start },
     players,
     phase: 'playing',
     results: null,
@@ -156,8 +165,8 @@ function seatedRooms(s: Scenario): BlackjackRoomState[] {
   const myCards = (status: (i: number) => HandStatus) =>
     Array.from({ length: s.hands }, (_, i) => hand(special && i === s.active ? special : cardsFor(i, i === s.active ? s.cards : 2), status(i), s.hands > 1, s.stake, s.doubled));
   const otherHands = (id: string, status: HandStatus, count = 1) =>
-    Array.from({ length: count }, (_, i) => hand(cardsFor(i + others.indexOf(id) + 3, 2), status, count > 1));
-  const seat = (hands: HandView[], bet: number, extra: Partial<BlackjackPlayerView> = {}): BlackjackPlayerView => ({ chips: 900, bet, hands, inRound: true, sittingOut: false, bustedOut: false, ...extra });
+    Array.from({ length: count }, (_, i) => hand(cardsFor(i + others.indexOf(id) + 3, 2), status, count > 1, s.bet));
+  const seat = (hands: HandView[], bet: number, extra: Partial<BlackjackPlayerView> = {}): BlackjackPlayerView => ({ chips: s.chips, bet, hands, inRound: true, sittingOut: false, bustedOut: false, ...extra });
   const base: BlackjackView = {
     phase: 'betting',
     round: 3,
@@ -176,7 +185,7 @@ function seatedRooms(s: Scenario): BlackjackRoomState[] {
   const betting = (): BlackjackView => ({
     ...base,
     waitingFor: [...(s.myBet > 0 ? [] : [ME]), ...others.slice(1)],
-    players: Object.fromEntries(ids.map((id) => [id, seat([], id === others[0] ? 20 : id === ME ? s.myBet : 0)])),
+    players: Object.fromEntries(ids.map((id) => [id, seat([], id === others[0] ? s.bet * 2 : id === ME ? s.myBet : 0)])),
     controls: { canSitOut: s.myBet === 0, canDealNow: true, canSkip: false },
   });
 
@@ -185,7 +194,7 @@ function seatedRooms(s: Scenario): BlackjackRoomState[] {
     for (const id of others) {
       const before = order.indexOf(id) < order.indexOf(turnId);
       const status: HandStatus = id === turnId ? 'acting' : before ? 'stood' : 'waiting';
-      players[id] = seat(otherHands(id, status, id === turnId ? s.otherHands : 1), 10);
+      players[id] = seat(otherHands(id, status, id === turnId ? s.otherHands : 1), s.bet);
     }
     players[ME] = seat(
       myCards((i) => (turnId !== ME ? 'waiting' : i < handIndex ? 'stood' : i === handIndex ? 'acting' : 'waiting')),
@@ -218,18 +227,19 @@ function seatedRooms(s: Scenario): BlackjackRoomState[] {
   };
 
   const firstOther = others[0] ?? ME;
+  const room = (game: BlackjackView) => roomOf(players, game, s.start);
   switch (s.phase) {
     case 'betting':
-      return [roomOf(players, betting())];
+      return [room(betting())];
     case 'deal':
-      return [roomOf(players, betting()), roomOf(players, acting(firstOther, 0))];
+      return [room(betting()), room(acting(firstOther, 0))];
     case 'other':
-      return [roomOf(players, acting(firstOther, 0))];
+      return [room(acting(firstOther, 0))];
     case 'mine':
-      return [roomOf(players, acting(ME, s.active))];
+      return [room(acting(ME, s.active))];
     case 'dealer':
-      return [roomOf(players, acting(ME, s.hands - 1)), roomOf(players, settled())];
+      return [room(acting(ME, s.hands - 1)), room(settled())];
     case 'results':
-      return [roomOf(players, settled())];
+      return [room(settled())];
   }
 }

@@ -14,13 +14,22 @@ export function outlineClass(tone: Tone): string {
 /**
  * A total pill over a hand (or a hand's name), in the hand's tone; a long one ("10/20") is marked
  * `data-long`. `lead` goes before the total inside the pill (an outcome's word where there is no
- * room beside it).
+ * room beside it). `short` is a shorter form written beside the total, for a place too tight for it
+ * to swap in (table.css: a seat's two split hands, "21/15", read as the hand in play, "15", where
+ * the total shares the stack's line).
  */
-export function TotalPill({ tone, children, testId, lead }: { tone: Tone; children: string; testId?: string; lead?: ReactNode }) {
+export function TotalPill({ tone, children, testId, lead, short }: { tone: Tone; children: string; testId?: string; lead?: ReactNode; short?: string }) {
   return (
     <span className={`tbl-pill tbl-pill--${tone}`} data-testid={testId} data-long={children.length > 3 || lead ? true : undefined}>
       {lead}
-      {children}
+      {short === undefined || short === children ? (
+        children
+      ) : (
+        <>
+          <span className="tbl-pill__full">{children}</span>
+          <span className="tbl-pill__short">{short}</span>
+        </>
+      )}
     </span>
   );
 }

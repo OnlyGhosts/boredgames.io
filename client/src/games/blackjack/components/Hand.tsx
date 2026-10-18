@@ -13,6 +13,8 @@ interface Props {
   playerId: string;
   index: number;
   hand: TableHand;
+  /** The table's starting stack: the chips a stake is drawn in. */
+  start: number;
   timeline: Timeline;
   now: number;
   leaving: boolean;
@@ -23,7 +25,7 @@ interface Props {
   mini?: boolean;
   /** One of several hands side by side: the outcome's word goes inside the pill, which stays over its own hand. */
   narrow?: boolean;
-  /** On the stage while it plays: its stake by its total ("Bet 10"). */
+  /** On the stage while it plays: its stake by its total (its chips and the figure, read as "Bet 10"). */
   stake?: boolean;
   /** Another player's hand on my stage: their name by its total. */
   ownerName?: string;
@@ -55,16 +57,16 @@ function endWord(outcome: NonNullable<TableHand['outcome']>, bust: boolean): str
   return outcome === 'loss' && bust ? 'Bust' : outcomeLabel(outcome);
 }
 
-/** Past this many chips a stake reads short ("Bet 12k"), so it keeps beside the total. */
+/** Past this many chips a stake's figure reads short ("12k"), so it keeps beside the total; split hands side by side on a phone's stage read it short from 1,000 (blackjack.css). */
 const SHORT_STAKE = 10_000;
 
-/** "Bet 10" by a hand's total. */
-export function stakeOf(value: number, testId?: string) {
-  return <StakePill value={value} format={value >= SHORT_STAKE ? 'short' : 'full'} className="tbl-hand__stake" testId={testId} />;
+/** The stake ("Bet 10": its chips and the figure) by a hand's total, at a table that started with `start` chips. */
+export function stakeOf(value: number, start: number, testId?: string) {
+  return <StakePill value={value} start={start} format={value >= SHORT_STAKE ? 'short' : 'fit'} className="tbl-hand__stake" testId={testId} />;
 }
 
 /** Left of a hand's total while it plays: its owner's name on my stage, its stake, or the doubled tag. */
-function leadOf(hand: TableHand, stake: boolean, ownerName: string | undefined) {
+function leadOf(hand: TableHand, start: number, stake: boolean, ownerName: string | undefined) {
   if (ownerName) {
     return (
       <span className="tbl-hand__owner" data-testid="stage-owner">
@@ -72,7 +74,7 @@ function leadOf(hand: TableHand, stake: boolean, ownerName: string | undefined) 
       </span>
     );
   }
-  if (stake) return stakeOf(hand.bet, 'hand-bet');
+  if (stake) return stakeOf(hand.bet, start, 'hand-bet');
   return hand.doubled ? <span className="tbl-tag">2x</span> : null;
 }
 
@@ -82,7 +84,7 @@ function leadOf(hand: TableHand, stake: boolean, ownerName: string | undefined) 
  * the pill ("Win +20"). While it plays its stake is there on the stage (a doubled one reads double),
  * or the owner's name when it is another player's hand on my stage; on a seat a doubled hand is tagged "2x".
  */
-export function Hand({ playerId, index, hand, timeline, now, leaving, size, active, mini = false, narrow = false, stake = false, ownerName, testId }: Props) {
+export function Hand({ playerId, index, hand, start, timeline, now, leaving, size, active, mini = false, narrow = false, stake = false, ownerName, testId }: Props) {
   const { cards, total, outcome } = handOnScreen(playerId, index, hand, timeline, now);
   const bust = total !== null && total.total > 21;
   const tone = handTone(outcome, bust, hand.status === 'blackjack' && cards.length === 2, active);
@@ -90,7 +92,7 @@ export function Hand({ playerId, index, hand, timeline, now, leaving, size, acti
   const word = outcome ? endWord(outcome, bust) : '';
   // Beside the pill on a hand of its own; inside it, before the total, when hands sit side by side.
   const inPill = narrow && outcome !== null && !mini;
-  const flag = mini || inPill ? null : outcome ? <OutcomeFlag tone={tone} word={word} extra={payout} testId="hand-outcome" /> : leadOf(hand, stake, ownerName);
+  const flag = mini || inPill ? null : outcome ? <OutcomeFlag tone={tone} word={word} extra={payout} testId="hand-outcome" /> : leadOf(hand, start, stake, ownerName);
   const lead = inPill ? <span className="tbl-pill__lead" data-testid="hand-outcome">{word}</span> : undefined;
   return (
     <HandFan
