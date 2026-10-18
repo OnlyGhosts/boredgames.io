@@ -23,13 +23,6 @@ export const BLACKJACK_SETTINGS_LIMITS = {
   startingChips: { min: 100, max: 100_000 },
 } as const;
 
-/**
- * How long the final table stays up, on top of the dealer's reveal, before the results. Between
- * rounds the bets open as soon as the reveal is over. Nothing else at the table runs on a clock:
- * the bets and the turns wait for the players.
- */
-export const BLACKJACK_RESULTS_MS = 5000;
-
 const limited = (key: keyof typeof BLACKJACK_SETTINGS_LIMITS) => z.number().int().min(BLACKJACK_SETTINGS_LIMITS[key].min).max(BLACKJACK_SETTINGS_LIMITS[key].max);
 
 /**
@@ -114,8 +107,8 @@ export type BlackjackServerMessage = never;
  * with chips has bet or sat out, or when the host deals. `acting` is one hand at a time, also
  * unclocked (a player who dropped has their hand stood once the platform tells the game, and the
  * host, or anyone for a player who is away, may skip an idle one), `held` waits for a player still
- * in the game to reconnect, `ending` keeps the final table on show for the reveal and
- * BLACKJACK_RESULTS_MS before the results.
+ * in the game to reconnect, `ending` keeps the final table on show for the reveal and a short beat
+ * after it (BLACKJACK_FINAL_HOLD_MS in deal.ts) before the results.
  */
 export type BlackjackPhase = 'betting' | 'acting' | 'results' | 'held' | 'ending' | 'gameOver';
 

@@ -29,7 +29,8 @@ function pendingPayout(table: TableModel | null, timeline: Timeline, now: number
  * banner with whose turn it is, every other player as a compact seat, the stage with the hands
  * that matter to me). Nothing runs on a clock: the bets and the turns wait for the players. The
  * cards move by the timeline the store plans from the snapshots; a settled table stays up through
- * the server's results pause and on through the next bets.
+ * the dealer's reveal and on through the next bets, and the final one a short beat more (saying
+ * "Game over") before the results.
  */
 export function BlackjackScreen({ room, meId, isHost }: GameScreenProps<BlackjackView, BlackjackSettings>) {
   const game = useActiveGame();

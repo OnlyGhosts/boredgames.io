@@ -1,9 +1,9 @@
 /**
  * What the Blackjack table is following, phase by phase (pure, for the screen and the tests): the
- * hand being played and who is next; the dealer while the reveal plays; my own outcome once the
- * round settles (through the results pause, until my next bet goes down); who has bet and who we
- * wait for while the bets go down. The line under the ribbon says it, and the stage at the bottom
- * of the table shows the hand in play.
+ * hand being played and who is next; the dealer while the reveal plays (the last hand's, once the
+ * game is over); my own outcome once the round settles (until my next bet goes down, or with the
+ * game over on the final table); who has bet and who we wait for while the bets go down. The line
+ * under the ribbon says it, and the stage at the bottom of the table shows the hand in play.
  */
 import type { BlackjackView, HandOutcome } from '@shared/games/blackjack/protocol';
 import { pendingBettors } from '../hooks';
@@ -12,9 +12,11 @@ import type { TableHand, TableModel } from './table';
 export type BjFocus =
   /** `next` is who plays after this seat; null when the dealer is next. */
   | { kind: 'turn'; playerId: string; handIndex: number; mine: boolean; next: string | null }
-  | { kind: 'dealer' }
+  /** `last`: the reveal of the game's last hand (the final table, before the results). */
+  | { kind: 'dealer'; last?: true }
   | { kind: 'bets'; placed: string[]; waiting: string[] }
-  | { kind: 'result'; playerId: string }
+  /** `over`: my outcome on the final table, the game over. */
+  | { kind: 'result'; playerId: string; over?: true }
   /** `next`: the results pause before the next round, for someone with no hand in it. */
   | { kind: 'idle'; reason: 'held' | 'over' | 'next' };
 
@@ -39,14 +41,15 @@ function nextToPlay(view: BlackjackView, playerId: string): string | null {
 
 export function focusOf({ view, table, dealerPlaying, outcomesShown, meId, betSent = false }: SubjectInput): BjFocus {
   if (view.phase === 'held') return { kind: 'idle', reason: 'held' };
-  if (dealerPlaying) return { kind: 'dealer' };
+  const over = view.phase === 'ending' || view.phase === 'gameOver';
+  if (dealerPlaying) return over ? { kind: 'dealer', last: true } : { kind: 'dealer' };
   if (view.phase === 'acting') {
     if (!view.turn) return { kind: 'dealer' };
     const { playerId, handIndex } = view.turn;
     return { kind: 'turn', playerId, handIndex, mine: playerId === meId, next: nextToPlay(view, playerId) };
   }
   const settledMine = meId !== null && Boolean(table?.settled) && outcomesShown && (table?.hands[meId]?.length ?? 0) > 0;
-  if (view.phase === 'ending' || view.phase === 'gameOver') return settledMine && meId !== null ? { kind: 'result', playerId: meId } : { kind: 'idle', reason: 'over' };
+  if (over) return settledMine && meId !== null ? { kind: 'result', playerId: meId, over: true } : { kind: 'idle', reason: 'over' };
   if (view.phase === 'results') return settledMine && meId !== null ? { kind: 'result', playerId: meId } : { kind: 'idle', reason: 'next' };
   // Betting: my outcome stays up until my next stake is on its way.
   if (settledMine && meId !== null && (view.players[meId]?.bet ?? 0) === 0 && !betSent) return { kind: 'result', playerId: meId };

@@ -1,6 +1,6 @@
 /** The round boundary: the results pause, the next round's betting, the end of the game, the host's End game and the holds. */
 import { RESUME_SETTLE_MS, holdEffects, resumeEffect } from '../waiting.js';
-import { BLACKJACK_RESULTS_MS } from '../../../shared/games/blackjack/protocol.js';
+import { BLACKJACK_FINAL_HOLD_MS } from '../../../shared/games/blackjack/deal.js';
 import { MIN_PLAYERS, activePlayers, adjustChips, connectedActive, dropLegacyShoe, noticeMessage, snapshot, systemMessage, type Gx } from './state.js';
 
 /** Seats a player with the starting stack (at the start: nobody joins the game later). */
@@ -38,13 +38,14 @@ export function fillRound(gx: Gx): void {
 /**
  * Straight after a settle the table stays on show for the dealer's reveal (`revealMs`). Then the
  * next round's bets open at once, the settled hands still on show until the deal; or, when the
- * game is over, the final table stays BLACKJACK_RESULTS_MS more before the results.
+ * game is over, the final table stays a short beat more (BLACKJACK_FINAL_HOLD_MS: the last
+ * outcomes read, the payouts land) before the results.
  */
 export function afterSettle(gx: Gx, revealMs: number): void {
   const { data, ctx } = gx;
   // Nobody left to see it: back to the lobby at once.
   if (ctx.players.length < MIN_PLAYERS) return beginRound(gx);
-  data.phase = gameIsOver(gx) ? { kind: 'ending', endsAt: ctx.now + revealMs + BLACKJACK_RESULTS_MS } : { kind: 'results', endsAt: ctx.now + revealMs };
+  data.phase = gameIsOver(gx) ? { kind: 'ending', endsAt: ctx.now + revealMs + BLACKJACK_FINAL_HOLD_MS } : { kind: 'results', endsAt: ctx.now + revealMs };
   snapshot(gx);
 }
 

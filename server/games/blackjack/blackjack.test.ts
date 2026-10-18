@@ -1,7 +1,7 @@
 /** Blackjack's rules through the pure engine: betting (no clock: sitting out, Deal now), the deal from the endless deck and the peek, the moves one hand at a time (no clock: away hands stand, the host's Skip), splits with no cap, the dealer, payouts, chips as the score, rounds, the end, holds and seats. Every deck is scripted through ctx.rng. */
 import { describe, expect, it } from 'vitest';
 import { DECK, handTotal } from '../../../shared/games/blackjack/cards.js';
-import { BLACKJACK_RESULTS_MS, DEFAULT_BLACKJACK_SETTINGS, blackjackClientMessageSchema, type BlackjackClientMessage, type BlackjackView, type Card, type CardRank } from '../../../shared/games/blackjack/protocol.js';
+import { DEFAULT_BLACKJACK_SETTINGS, blackjackClientMessageSchema, type BlackjackClientMessage, type BlackjackView, type Card, type CardRank } from '../../../shared/games/blackjack/protocol.js';
 import { PLATFORM_CLIENT_MESSAGE_TYPES, type RoomState } from '../../../shared/platform/protocol.js';
 import { gameById } from '../../../shared/platform/games.js';
 import { defaultPlatformSettings } from '../../../shared/platform/settings.js';
@@ -9,13 +9,13 @@ import type { Effect } from '../../platform/engine/effects.js';
 import { nextDeadline } from '../../platform/engine/time.js';
 import { viewFor } from '../../platform/engine/view.js';
 import { AVATAR, START, chatTexts, endGame, noticeTexts, errorsOf, sim, standings, startGame, type Sim } from '../../platform/engine/testHarness.js';
-import { BLACKJACK_DEAL, BLACKJACK_REVEAL, MIN_DEAL_GAP_MS, dealAllowanceMs, revealAllowanceMs } from '../../../shared/games/blackjack/deal.js';
+import { BLACKJACK_DEAL, BLACKJACK_FINAL_HOLD_MS, BLACKJACK_REVEAL, MIN_DEAL_GAP_MS, dealAllowanceMs, revealAllowanceMs } from '../../../shared/games/blackjack/deal.js';
 import { AWAY_NOTICE_MS } from '../../../shared/platform/constants.js';
 import { RESUME_SETTLE_MS } from '../waiting.js';
 import { blackjackModule, type BlackjackData } from './module.js';
 
-// The fixture: one deck, any bet from 1000 chips; no clock but the 5 s final pause; the rounds never run out.
-const RESULTS_MS = BLACKJACK_RESULTS_MS;
+// The fixture: one deck, any bet from 1000 chips; no clock but the dealer’s reveal and the final table’s short beat; the rounds never run out.
+const FINAL_HOLD_MS = BLACKJACK_FINAL_HOLD_MS;
 /** Five minutes: far longer than any clock the table used to have, and inside a dropped seat's grace. */
 const LONG_MS = 5 * 60_000;
 const NO_ACTIONS = { canHit: false, canStand: false, canDouble: false, canSplit: false };
@@ -118,7 +118,7 @@ const tick = (s: Sim, ms: number): Effect[] => {
   s.now += ms;
   return checked(s, s.tick());
 };
-/** The settled table's pause runs out (the dealer's reveal, then BLACKJACK_RESULTS_MS): the next round's bets open. */
+/** The settled table's pause runs out (the dealer's reveal, nothing more): the next round's bets open. */
 const nextRound = (s: Sim): Effect[] => {
   const { phase } = data(s);
   if (phase.kind !== 'results') throw new Error(`no results pause but ${phase.kind}`);
@@ -184,7 +184,8 @@ describe('Blackjack: the table', () => {
     const patch = settings.patchSchema.safeParse({ ...retired, startingChips: 2500 });
     expect(patch.success && patch.data).toEqual({ startingChips: 2500 });
     expect(settings.schema.safeParse({ ...DEFAULT_BLACKJACK_SETTINGS, ...retired }).success).toBe(true);
-    expect(RESULTS_MS).toBe(5000);
+    // The final table's beat before the results is fixed too, and short: the outcomes read, the payouts land.
+    expect(FINAL_HOLD_MS).toBe(1600);
     expect(gameById('blackjack').maxPlayers).toBeNull();
   });
 
@@ -1266,7 +1267,7 @@ describe('Blackjack: rounds', () => {
     const last = act(s, bob, { t: 'stand' });
     expect(chatTexts(last)).toEqual(['The dealer stands on 17.', 'Alice loses 100, Bob loses 100.', 'Alice is out of chips.', 'Bob is out of chips.', 'Everyone is out of chips. The house wins.']);
     expect(view(s).phase).toBe('ending');
-    const over = tick(s, 1200 + RESULTS_MS);
+    const over = tick(s, 1200 + FINAL_HOLD_MS);
     expect(chatTexts(over)).toEqual(['Game over! Alice and Bob tie with 0 points.']);
     expect(s.data.phase).toBe('lobby');
   });
@@ -1414,9 +1415,9 @@ describe('Blackjack: the end', () => {
     act(s, alice, { t: 'stand' });
     const second = act(s, bob, { t: 'stand' });
     expect(chatTexts(second)).toEqual(['The dealer stands on 17.', 'Alice loses 50, Bob wins 50.', 'Alice is out of chips.', 'Bob is the last one standing.']);
-    // The final table stays up for the reveal, then five seconds.
-    expect(data(s).phase).toEqual({ kind: 'ending', endsAt: s.now + revealAllowanceMs(2) + RESULTS_MS });
-    expect(tick(s, revealAllowanceMs(2) + RESULTS_MS - 1)).toEqual([]);
+    // The final table stays up for the reveal, then a short beat (the last outcomes read, the payouts land), then the results.
+    expect(data(s).phase).toEqual({ kind: 'ending', endsAt: s.now + revealAllowanceMs(2) + FINAL_HOLD_MS });
+    expect(tick(s, revealAllowanceMs(2) + FINAL_HOLD_MS - 1)).toEqual([]);
     tick(s, 1);
     expect(s.data.phase).toBe('lobby');
     expect(s.data.results?.reason).toBe('finished');
@@ -1465,7 +1466,7 @@ describe('Blackjack: the end', () => {
     expect(chatTexts(settled)).toEqual(['The dealer stands on 17.', 'Alice loses 100.', 'Alice is out of chips.', 'Everyone is out of chips. The house wins.']);
     expect(view(s).phase).toBe('ending');
     expect(data(s).seats[bob]).toBeUndefined();
-    tick(s, 1200 + RESULTS_MS);
+    tick(s, 1200 + FINAL_HOLD_MS);
     expect(s.data.phase).toBe('lobby');
     expect(standings(s)).toEqual([{ playerId: alice, score: 0, rank: 1 }]);
   });
@@ -1514,10 +1515,10 @@ describe('Blackjack: the host ends the game', () => {
     const settled = act(s, bob, { t: 'stand' });
     expect(chatTexts(settled)).toEqual(['The dealer stands on 17.', 'Alice wins 15, Bob loses 10.']);
     expect(view(s)).toMatchObject({ phase: 'ending', lastRound: { round: 1 } });
-    expect(data(s).phase).toEqual({ kind: 'ending', endsAt: s.now + revealAllowanceMs(3) + RESULTS_MS });
+    expect(data(s).phase).toEqual({ kind: 'ending', endsAt: s.now + revealAllowanceMs(3) + FINAL_HOLD_MS });
     expect(s.data.phase).toBe('playing');
     expect(errorsOf(end(s, alice))).toEqual([]);
-    expect(tick(s, revealAllowanceMs(3) + RESULTS_MS - 1)).toEqual([]);
+    expect(tick(s, revealAllowanceMs(3) + FINAL_HOLD_MS - 1)).toEqual([]);
     const effects = tick(s, 1);
     expect(s.data.phase).toBe('lobby');
     expect(s.data.game).toBeNull();
@@ -1623,7 +1624,7 @@ describe('Blackjack: seats coming and going', () => {
     expectScoresMatchChips(s);
     expect([score(s, carol), data(s).seats[carol]]).toEqual([0, undefined]);
     expect(view(s).phase).toBe('ending');
-    const over = tick(s, 1700 + RESULTS_MS);
+    const over = tick(s, 1700 + FINAL_HOLD_MS);
     expect(s.data.phase).toBe('lobby');
     expect(chatTexts(over)).toEqual(['Game over! Alice wins with 1015 points.']);
     expect(standings(s)).toEqual([

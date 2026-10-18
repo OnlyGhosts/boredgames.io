@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createElement } from 'react';
 import { renderToString } from 'react-dom/server';
-import { BLACKJACK_DEAL, BLACKJACK_REVEAL, revealAllowanceMs } from '@shared/games/blackjack/deal';
+import { BLACKJACK_DEAL, BLACKJACK_FINAL_HOLD_MS, BLACKJACK_REVEAL, revealAllowanceMs } from '@shared/games/blackjack/deal';
 import {
   DEFAULT_BLACKJACK_SETTINGS,
   type BlackjackRoomState,
@@ -306,6 +306,15 @@ describe('the animation timeline', () => {
     }
   });
 
+  it('keeps the final table up as long as a payout takes to rise and fade, and only a short beat', () => {
+    // The server holds the final table this long past the reveal, then the results come up over the lobby.
+    const css = readFileSync(fileURLToPath(new URL('../../platform/styles/table.css', import.meta.url)), 'utf8');
+    const float = Number(css.match(/\.tbl-payout \{[^}]*animation: tbl-rise (\d+)ms/)?.[1]);
+    expect(float).toBeGreaterThan(0);
+    expect(BLACKJACK_FINAL_HOLD_MS).toBeGreaterThanOrEqual(float);
+    expect(BLACKJACK_FINAL_HOLD_MS).toBeLessThan(2000);
+  });
+
   it('clears the last round to the discards before the next deal, once its outcomes have been up a moment', () => {
     const dealt = plan(view(), acting());
     const revealed = plan(acting(), nextBetting(), dealt, NOW + 5000);
@@ -485,6 +494,19 @@ describe('copy', () => {
     const bet = bobHands[0].bet;
     expect(seatLine(next, 'bob', settle('win', bet * 2), true, false)).toMatchObject({ state: 'settled', text: `Win +${bet * 2}` });
     expect(seatLine(next, 'bob', settle('push', bet), true, false)).toMatchObject({ state: 'settled', text: 'Push' });
+  });
+
+  it('says the game is over on a seat with no hand on the final table, never an empty line', async () => {
+    const { seatLine, seatMark } = await import('./components/Seats');
+    const final = view({ phase: 'ending', waitingFor: [] });
+    const line = seatLine(final, 'bob', [], false);
+    expect(line).toMatchObject({ state: 'over', text: 'Game over', tone: 'quiet' });
+    expect(seatMark(line, [], false)).toBe('idle');
+    // A seat with its last hand settled on show keeps its outcome; one out of chips says so.
+    const bobHands = tableOf(nextBetting())?.hands.bob ?? [];
+    expect(seatLine(nextBetting({ phase: 'ending' }), 'bob', bobHands, true)).toMatchObject({ state: 'settled', text: 'Lost' });
+    const out = view({ phase: 'ending', players: { ...view().players, bob: { chips: 0, bet: 0, hands: [], inRound: false, sittingOut: false, bustedOut: true } } });
+    expect(seatLine(out, 'bob', [], false)).toMatchObject({ state: 'out', text: 'Out' });
   });
 
   it('says a seat with chips that did not bet is sitting the hand out', async () => {
@@ -926,7 +948,10 @@ describe("the table’s focus and the stage", () => {
     // Everyone sat out: nobody to wait for, nothing dealt.
     expect(await at(view({ waitingFor: [] }), 'bob')).toEqual({ kind: 'bets', placed: [], waiting: [] });
     expect(await at(view({ phase: 'held' }), 'bob')).toEqual({ kind: 'idle', reason: 'held' });
-    expect(await at(nextBetting({ phase: 'ending' }), 'host')).toEqual({ kind: 'result', playerId: 'host' });
+    // The final table: the last hand's reveal for everyone, then my outcome with the game over (a watcher: the game over).
+    expect(await at(nextBetting({ phase: 'ending' }), 'host', { dealerPlaying: true, shown: false })).toEqual({ kind: 'dealer', last: true });
+    expect(await at(nextBetting({ phase: 'ending' }), 'carol', { dealerPlaying: true, shown: false })).toEqual({ kind: 'dealer', last: true });
+    expect(await at(nextBetting({ phase: 'ending' }), 'host')).toEqual({ kind: 'result', playerId: 'host', over: true });
     expect(await at(nextBetting({ phase: 'ending' }), 'carol')).toEqual({ kind: 'idle', reason: 'over' });
   });
 
@@ -944,6 +969,12 @@ describe("the table’s focus and the stage", () => {
     expect(focusLine({ kind: 'result', playerId: 'host' }, { ...s, result: { outcome: 'win', back: 100 } })).toEqual({ state: 'result', text: 'You win +100', tone: 'go' });
     expect(focusLine({ kind: 'result', playerId: 'host' }, { ...s, result: { outcome: 'loss', back: 0 } }).tone).toBe('bad');
     expect(focusLine({ kind: 'idle', reason: 'next' }, s).text).toBe('Next round soon');
+    // The final table: "Last hand" while its reveal plays, then "Game over", my last outcome beside it, for a watcher too.
+    expect(focusLine({ kind: 'dealer', last: true }, s)).toEqual({ state: 'dealer', text: 'Last hand', tone: 'other', sub: "Dealer’s turn" });
+    expect(focusLine({ kind: 'result', playerId: 'host', over: true }, { ...s, result: { outcome: 'loss', back: 0 } })).toEqual({ state: 'over', text: 'Game over', tone: 'quiet', sub: 'You lost' });
+    expect(focusLine({ kind: 'result', playerId: 'host', over: true }, { ...s, result: { outcome: 'blackjack', back: 250 } }).sub).toBe('Blackjack +250');
+    expect(focusLine({ kind: 'idle', reason: 'over' }, s)).toEqual({ state: 'over', text: 'Game over', tone: 'quiet' });
+    expect(focusLine({ kind: 'idle', reason: 'over' }, { ...s, standing: 'out' })).toEqual({ state: 'over', text: 'Game over', tone: 'quiet' });
   });
 
   it('keeps my hands on the stage whenever I am dealt in; not dealt in, the stage shows the hand in play', async () => {
@@ -1100,6 +1131,20 @@ describe("the table’s focus and the stage", () => {
     expect(attr(tagWith(html, 'table-turn'), 'class')).toBe('tbl-turn tbl-turn--go');
     expect(html).toContain('>You win +100<');
     expect(tagsWith(html, 'my-hands')).toHaveLength(1);
+  });
+
+  it('on the final table: the line says the game is over, my last outcome beside it, and a watcher reads it too', () => {
+    const final = bjRoom(nextBetting({ phase: 'ending', round: 2, waitingFor: [] }));
+    const html = render(final, 'host');
+    expect(attr(tagWith(html, 'table-turn'), 'data-state')).toBe('over');
+    expect(attr(tagWith(html, 'table-turn'), 'class')).toBe('tbl-turn tbl-turn--quiet');
+    expect(html).toMatch(/data-testid="table-turn"[^>]*><span class="tbl-turn__text">Game over<\/span><span class="tbl-turn__sub" data-testid="turn-sub">You win \+100</);
+    // The outcome stays on my hand, and the seats keep theirs.
+    expect(attr(tagWith(html, 'my-hand'), 'data-outcome')).toBe('win');
+    expect(html).toMatch(/data-testid="seat"[^>]*data-name="Pia"[\s\S]*?>Lost</);
+    const watching = render(final, 'carol', false);
+    expect(attr(tagWith(watching, 'table-turn'), 'data-state')).toBe('over');
+    expect(watching).toMatch(/data-testid="table-turn"[^>]*><span class="tbl-turn__text">Game over<\/span><\/p>/);
   });
 });
 

@@ -102,11 +102,14 @@ export function betsLabel(meWaiting: boolean, waiting: readonly string[], anyBet
 
 /** Under "Dealer's turn" while the dealer plays: the rule it plays by. */
 const DEALER_DRAWS = 'Draws to 17';
+/** The reveal of the game's last hand: the final table, the results next. */
+const LAST_HAND = 'Last hand';
+const GAME_OVER = 'Game over';
 
-const IDLE_LINES = { held: 'Waiting for players', over: 'Game over', next: 'Next round soon' } as const;
+const IDLE_LINES = { held: 'Waiting for players', next: 'Next round soon' } as const;
 
 export interface FocusLine {
-  /** The state, for data-state: the focus's kind, or where I stand when that is the news. */
+  /** The state, for data-state: the focus's kind, where I stand when that is the news, or `over` once the game is. */
   state: string;
   text: string;
   tone: TurnTone;
@@ -133,7 +136,9 @@ export interface FocusLineInput {
  * The one line on the table that says what is happening, under the ribbon: whose turn it is
  * ("Pia's turn, hand 2 of 3", with who is next), the dealer playing, the bets going down (and how
  * many are in), or how my round went; where I stand when that matters more (sitting a hand out,
- * out of chips), in the second part while somebody plays.
+ * out of chips), in the second part while somebody plays. Once the game is over the final table
+ * says so: "Last hand" while its reveal plays, then "Game over" (my last outcome beside it) until
+ * the results come up.
  */
 export function focusLine(focus: BjFocus, s: FocusLineInput): FocusLine {
   const standing = s.standing ?? 'playing';
@@ -147,6 +152,7 @@ export function focusLine(focus: BjFocus, s: FocusLineInput): FocusLine {
       return { state: 'turn', text: s.turnAway ? `${name} is away` : `${name}’s turn${which}`, tone: 'other', sub: note ?? `Next: ${next}` };
     }
     case 'dealer':
+      if (focus.last) return { state: 'dealer', text: LAST_HAND, tone: 'other', sub: "Dealer’s turn" };
       return { state: 'dealer', text: "Dealer’s turn", tone: 'other', sub: DEALER_DRAWS };
     case 'bets': {
       const sub = `${focus.placed.length} of ${focus.placed.length + focus.waiting.length} bets in`;
@@ -157,11 +163,15 @@ export function focusLine(focus: BjFocus, s: FocusLineInput): FocusLine {
     }
     case 'result': {
       const outcome = s.result?.outcome ?? 'push';
+      const said = resultLabel(outcome, s.result?.back ?? 0);
+      if (focus.over) return { state: 'over', text: GAME_OVER, tone: 'quiet', sub: said };
       const tone: TurnTone = outcome === 'loss' ? 'bad' : outcome === 'push' ? 'quiet' : 'go';
-      return { state: 'result', text: resultLabel(outcome, s.result?.back ?? 0), tone, sub: s.betQueued ? 'Bet placed' : undefined };
+      return { state: 'result', text: said, tone, sub: s.betQueued ? 'Bet placed' : undefined };
     }
     case 'idle':
       if (focus.reason === 'next' && standing === 'out') return { state: 'out', text: STANDING_LINES.out, tone: 'bad' };
+      // "Game over" reads the same, and carries the same state, for a watcher as for a player.
+      if (focus.reason === 'over') return { state: 'over', text: GAME_OVER, tone: 'quiet' };
       return { state: 'idle', text: IDLE_LINES[focus.reason], tone: 'quiet', sub: focus.reason === 'next' && s.betQueued ? 'Bet placed' : undefined };
   }
 }

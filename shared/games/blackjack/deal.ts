@@ -2,8 +2,9 @@
  * The pace of the table on screen: the client's plan (client/src/games/blackjack/lib/timeline.ts on
  * the platform's table timeline) follows these timings. dealAllowanceMs is how long a whole deal
  * takes to show and revealAllowanceMs how long the dealer's reveal takes; the server times the
- * results pause by them, so the next bets open the moment the outcomes show. Tests keep the client
- * in step and the whole deal under the client's animation backlog, however big the table.
+ * results pause by them, so the next bets open the moment the outcomes show, and the final table
+ * stays BLACKJACK_FINAL_HOLD_MS more before the results. Tests keep the client in step and the
+ * whole deal under the client's animation backlog, however big the table.
  */
 
 /** The client's animation timings, in ms. */
@@ -31,6 +32,15 @@ export const BLACKJACK_REVEAL = {
   /** After a fresh deal, before a peeked dealer blackjack turns over. */
   peekPause: 300,
 } as const;
+
+/**
+ * How long the final table stays up once its outcomes show, before the results: long enough to
+ * read the last outcomes, see the stacks change and let a winner’s "+N" finish rising (the payout
+ * float, table.css tbl-payout, runs as long), then the results come up. The line under the ribbon
+ * says "Game over" through it. Between rounds there is no such beat: the bets open as the outcomes
+ * show. Nothing else at the table runs on a clock: the bets and the turns wait for the players.
+ */
+export const BLACKJACK_FINAL_HOLD_MS = 1600;
 
 /**
  * How long the dealer's reveal takes to show, from the moment the hole card starts to turn until

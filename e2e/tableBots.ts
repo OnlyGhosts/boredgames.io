@@ -67,6 +67,9 @@ export function tableBot(name: string, code: string, base: string, { game: kind,
     // Each message goes once: a big table sends a snapshot per move, and a bot answering every one
     // of them with the same message would flood the room.
     if (room.phase === 'lobby') {
+      // A new game counts its rounds from 1 again: the bot bets in them as in the last game's.
+      betRound = -1;
+      acted = '';
       if (!readied && !room.players.find((p) => p.id === id)?.ready) {
         readied = true;
         send({ t: 'ready', ready: true });

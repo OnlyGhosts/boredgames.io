@@ -30,7 +30,8 @@ interface Props {
 
 /**
  * One short line on a seat: what it is doing, or how its round went (the stake has its own pill). While the dealer's reveal
- * still plays (`dealerPlaying`) a seat with cards waits for it, so nothing runs ahead of the table.
+ * still plays (`dealerPlaying`) a seat with cards waits for it, so nothing runs ahead of the table. On the final table a
+ * seat with no hand on show reads "Game over", as one would read "Next round" between rounds.
  */
 export function seatLine(view: BlackjackView, id: string, hands: TableHand[], settledShown: boolean, dealerPlaying = false): SeatLine {
   const seat = view.players[id];
@@ -60,7 +61,7 @@ export function seatLine(view: BlackjackView, id: string, hands: TableHand[], se
   // Away while the bets are open: the deal does not wait for them, and they sit the hand out.
   if (betting && !view.waitingFor.includes(id)) return { state: 'away', text: 'Away', tone: 'quiet' };
   if (betting) return { state: 'betting', text: 'Betting', tone: 'quiet' };
-  if (view.phase === 'ending' || view.phase === 'gameOver') return { state: 'next', text: '', tone: 'quiet' };
+  if (view.phase === 'ending' || view.phase === 'gameOver') return { state: 'over', text: 'Game over', tone: 'quiet' };
   return { state: 'next', text: 'Next round', tone: 'quiet' };
 }
 

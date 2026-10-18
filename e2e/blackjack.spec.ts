@@ -1,4 +1,5 @@
 import { expect, test, type Browser, type BrowserContext, type Locator, type Page } from '@playwright/test';
+import { BLACKJACK_FINAL_HOLD_MS } from '../shared/games/blackjack/deal';
 import { closeResults, createParty, expectReadyCount, joinByCode, readyAll } from './party';
 import { tableBots, type TableBot } from './tableBots';
 import { tilesReadable } from './tableFit';
@@ -10,7 +11,8 @@ import { tilesReadable } from './tableFit';
  * through the control panel (1/2, 2x, MAX for all in, a typed amount, Enter, the Space shortcut), hands played one at a time in seat order with only the acting page's
  * moves lit, the hole card hidden on every page until the dealer plays, the settled table staying
  * up through the next betting with each outcome paid by the rules, the chips always equal to the
- * platform score, and the host's End game taking everyone to the lobby with the results. The phone layout is
+ * platform score, and the host's End game taking everyone to the lobby with the results (the final table saying
+ * "Game over" for a short beat first). The phone layout is
  * checked at 390x844 and 320x568. Then tables of 2, 6, 12, 24 and 50 players (bots on their own
  * sockets): nothing scrolls at any phone size or on a desktop, the tiles step down with the table,
  * and the seat in play is marked on every page. The shoe is really shuffled, so the checks hold
@@ -240,6 +242,83 @@ async function settledHands(p: Player): Promise<SettledHand[]> {
   return hands.evaluateAll((els) => els.map((el) => ({ outcome: (el as HTMLElement).dataset.outcome ?? '', bet: Number((el as HTMLElement).dataset.bet), payout: Number((el as HTMLElement).dataset.payout) })));
 }
 
+/** A page's settled table as one read: the dealer, my hands, my chips, the line under the banner and the other seats' hands. */
+interface SettledTable {
+  round: string;
+  holeHidden: string;
+  faceDown: number;
+  dealerCards: number;
+  hands: SettledHand[];
+  chips: number;
+  turn: { state: string; text: string; sub: string };
+  /** Each other seat's hands on this page's tiles, and how many of them still show no outcome. */
+  seats: Record<string, { hands: number; open: number }>;
+}
+
+/**
+ * Reads `p`'s settled table in the first frame all of its own hands show their outcomes, in one go
+ * in the page: the final table gives way to the results a short beat later, too soon for one check
+ * at a time on every page.
+ */
+async function settledTable(p: Player): Promise<SettledTable> {
+  const read = await p.page.waitForFunction(
+    () => {
+      const one = (id: string) => document.querySelector<HTMLElement>(`[data-testid="${id}"]`);
+      const all = (selector: string, root: ParentNode = document) => [...root.querySelectorAll<HTMLElement>(selector)];
+      const table = one('bj-table');
+      const mine = all('[data-testid="my-hand"]');
+      if (!table || table.dataset.settled !== 'true' || mine.length === 0 || mine.some((h) => h.dataset.outcome === undefined)) return null;
+      const dealer = one('dealer-hand');
+      const turn = one('table-turn');
+      const seats: Record<string, { hands: number; open: number }> = {};
+      for (const seat of all('[data-testid="seat"]')) {
+        seats[seat.dataset.name ?? ''] = { hands: all('[data-testid="seat-hand"]', seat).length, open: all('[data-testid="seat-hand"]:not([data-outcome])', seat).length };
+      }
+      return {
+        round: table.dataset.round ?? '',
+        holeHidden: dealer?.dataset.holeHidden ?? '',
+        faceDown: all('[data-testid="dealer-card"][data-face="down"]').length,
+        dealerCards: Number(dealer?.dataset.cards ?? 0),
+        hands: mine.map((h) => ({ outcome: h.dataset.outcome ?? '', bet: Number(h.dataset.bet), payout: Number(h.dataset.payout) })),
+        chips: Number(one('my-chips')?.dataset.chips ?? Number.NaN),
+        turn: { state: turn?.dataset.state ?? '', text: turn?.querySelector('.tbl-turn__text')?.textContent ?? '', sub: turn?.querySelector('.tbl-turn__sub')?.textContent ?? '' },
+        seats,
+      };
+    },
+    null,
+    { polling: 'raf' },
+  );
+  return (await read.jsonValue()) as SettledTable;
+}
+
+/** Each hand paid by the rules: loss 0, push the stake, win twice it, blackjack 3 to 2 on top. Returns the stack after the settle. */
+function paidByTheRules(name: string, hands: SettledHand[], before: number, stake: number): number {
+  let staked = 0;
+  let back = 0;
+  for (const h of hands) {
+    staked += h.bet;
+    back += h.payout;
+    switch (h.outcome) {
+      case 'loss':
+        expect(h.payout).toBe(0);
+        break;
+      case 'push':
+        expect(h.payout).toBe(h.bet);
+        break;
+      case 'win':
+        expect(h.payout).toBe(h.bet * 2);
+        break;
+      case 'blackjack':
+        expect(h.payout).toBe(h.bet + Math.floor((h.bet * 3) / 2));
+        break;
+      default:
+        throw new Error(`${name}: unknown outcome ${h.outcome}`);
+    }
+  }
+  // Doubles and splits took their extra stakes from the stack; the payouts came back to it.
+  return before - (staked - stake) + back;
+}
+
 /**
  * The settled round, on every page: the dealer turned over, each hand paid by the rules (loss 0,
  * push the stake, win twice it, blackjack 3 to 2 on top) and the chips following the payouts.
@@ -259,30 +338,7 @@ async function checkSettlement(round: number, before: Record<string, number>, st
       .poll(async () => Number(await p.page.getByTestId('dealer-hand').getAttribute('data-cards')), { message: `${p.name}: the dealer’s cards on the table` })
       .toBeGreaterThanOrEqual(2);
     const hands = await settledHands(p);
-    let staked = 0;
-    let back = 0;
-    for (const h of hands) {
-      staked += h.bet;
-      back += h.payout;
-      switch (h.outcome) {
-        case 'loss':
-          expect(h.payout).toBe(0);
-          break;
-        case 'push':
-          expect(h.payout).toBe(h.bet);
-          break;
-        case 'win':
-          expect(h.payout).toBe(h.bet * 2);
-          break;
-        case 'blackjack':
-          expect(h.payout).toBe(h.bet + Math.floor((h.bet * 3) / 2));
-          break;
-        default:
-          throw new Error(`${p.name}: unknown outcome ${h.outcome}`);
-      }
-    }
-    // Doubles and splits took their extra stakes from the stack; the payouts came back to it.
-    chips[p.name] = before[p.name] - (staked - stakes[p.name]) + back;
+    chips[p.name] = paidByTheRules(p.name, hands, before[p.name], stakes[p.name]);
     await expect.poll(() => chipsOf(p), { message: `${p.name}: chips after the settle` }).toBe(chips[p.name]);
     // The other pages show the same seat settled in their strip.
     for (const other of players) {
@@ -413,8 +469,8 @@ test('round one: hands are played one at a time in seat order, then the dealer s
   });
   turnsInSeatOrder(turns);
   await checkSettlement(1, before, { Hana: 75, Pia: PIA_BET, Quinn: QUINN_BET });
-  // The settled table stays up for the reveal and a fixed 5 s, then the next round's betting opens
-  // with it still on show (the pause is by design, so the wait allows for it).
+  // The settled table stays up for the dealer's reveal, then the next round's betting opens with it
+  // still on show.
   for (const p of players) {
     await expect(screen(p)).toHaveAttribute('data-phase', 'betting', { timeout: 20_000 });
     await expect(p.page.getByTestId('round-indicator')).toHaveAttribute('data-round', '2');
@@ -463,8 +519,27 @@ test('round two: the amount is remembered, Space bets on the desktop, and the ho
     for (const p of players) await expect(p.page.getByTestId('toast').filter({ hasText: 'The game ends after this hand.' })).toBeVisible();
   });
   turnsInSeatOrder(turns);
-  // The stacks come from the settle itself: the game ends a few seconds after it, and the lobby shows no stacks.
-  const chips = await checkSettlement(2, before, stakes);
+  // The stacks come from the settle itself. The game ends a short beat after the outcomes show, so
+  // every page reads its final table at once, in the frame its outcomes show.
+  const tables = await Promise.all(players.map(settledTable));
+  const chips: Record<string, number> = {};
+  players.forEach((p, i) => {
+    const t = tables[i];
+    expect(t.round, `${p.name}: the round on the table`).toBe('2');
+    expect([t.holeHidden, t.faceDown], `${p.name}: the dealer turned over`).toEqual(['false', 0]);
+    expect(t.dealerCards, `${p.name}: the dealer’s cards on the table`).toBeGreaterThanOrEqual(2);
+    chips[p.name] = paidByTheRules(p.name, t.hands, before[p.name], stakes[p.name]);
+    expect(t.chips, `${p.name}: chips after the settle`).toBe(chips[p.name]);
+    // The other pages show the same seat settled on its tile.
+    players.forEach((other, j) => {
+      if (other !== p) expect(tables[j].seats[p.name], `${other.name} sees ${p.name} settled`).toEqual({ hands: t.hands.length, open: 0 });
+    });
+    if (turns.length > 0) {
+      // The hand the host ended the game after: the final table says the game is over, each player's last outcome beside it.
+      expect([t.turn.state, t.turn.text], `${p.name}: the line under the banner`).toEqual(['over', 'Game over']);
+      expect(t.turn.sub, `${p.name}: my last outcome`).toMatch(/^(You win \+[\d,]+|Blackjack \+[\d,]+|Push|You lost)$/);
+    }
+  });
   if (turns.length === 0) {
     // A dealer blackjack (about one deal in 21) settled the round at the deal, before any hand was
     // played, so there was no hand to end the game after: the host ends it between hands instead.
@@ -475,17 +550,19 @@ test('round two: the amount is remembered, Space bets on the desktop, and the ho
 
   for (const p of players) {
     const end = p.page.getByTestId('overlay-game-end');
-    await expect(end).toBeVisible({ timeout: 20_000 });
+    // No long pause: the results are up a short beat after the final outcomes (the slack is the snapshot and a busy machine).
+    await expect(end).toBeVisible({ timeout: BLACKJACK_FINAL_HOLD_MS + 3_000 });
     await expect(end.getByTestId('results-entry')).toHaveCount(3);
     await expect(end.getByTestId('results-reason')).toHaveText('The host ended the game.');
   }
-  // The results rank by chips.
-  const entries = await host.page.getByTestId('results-entry').evaluateAll((els) => els.map((el) => ({ rank: Number((el as HTMLElement).dataset.rank), name: el.textContent ?? '' })));
+  // The results rank by chips, each score the stack the final table showed.
+  const entries = await host.page.getByTestId('results-entry').evaluateAll((els) => els.map((el) => ({ rank: Number((el as HTMLElement).dataset.rank), name: el.textContent ?? '', score: Number((el as HTMLElement).dataset.score) })));
   const ranked = players.map((p) => ({ name: p.name, chips: chips[p.name] }));
   for (const entry of entries) {
     const me = ranked.find((r) => entry.name.includes(r.name));
     if (!me) throw new Error(`results entry without a player: ${entry.name}`);
     expect(entry.rank).toBe(1 + ranked.filter((r) => r.chips > me.chips).length);
+    expect(entry.score, `${me.name}: the score in the results`).toBe(me.chips);
   }
   for (const p of players) await closeResults(p.page);
   for (const p of players) await expect(p.page.getByTestId('room-code')).toHaveText(roomCode);
