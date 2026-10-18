@@ -121,23 +121,37 @@ async function blackjackState(p: Player): Promise<string> {
   return `${table} chips ${chips} hands ${hands}`;
 }
 
-/** Everyone bets until a round deals into turns (a dealer blackjack settles one at the deal). */
+/**
+ * Everyone bets until a round deals into turns. A dealer blackjack (about one deal in 21) settles a
+ * round at the deal, and its outcomes stay up a beat before the next round's bets open; a Bet tapped
+ * while they are up is only queued for that next round. So each round is bet on once its own bets
+ * are open on every page, and it has dealt only when the table shows that same round in play or
+ * settled: the last round's outcomes, still up, are not a deal.
+ */
 async function dealIntoTurns(players: Player[]): Promise<void> {
   const [host] = players;
-  for (let rounds = 0; rounds < 4; rounds++) {
+  for (let deals = 0; deals < 4; deals++) {
+    await expect(bj(host)).toHaveAttribute('data-phase', 'betting');
     const round = await bj(host).getAttribute('data-round');
+    if (!round) throw new Error('no round on the table');
     for (const p of players) {
+      await expect(bj(p)).toHaveAttribute('data-round', round);
+      await expect(bj(p)).toHaveAttribute('data-phase', 'betting');
       await expect(p.page.getByTestId('place-bet')).toBeEnabled();
       await p.page.getByTestId('place-bet').click();
     }
-    await expect.poll(async () => {
-      const phase = await bj(host).getAttribute('data-phase');
-      return phase === 'acting' || (phase === 'results' && (await bj(host).getAttribute('data-round')) === round);
-    }, { message: 'the round dealt' }).toBe(true);
-    if ((await bj(host).getAttribute('data-phase')) === 'acting') {
+    const dealt = async () => {
+      const [phase, now] = await Promise.all([bj(host).getAttribute('data-phase'), bj(host).getAttribute('data-round')]);
+      return now === round && (phase === 'acting' || phase === 'results') ? phase : null;
+    };
+    await expect.poll(dealt, { message: `round ${round}: dealt` }).not.toBeNull();
+    if ((await dealt()) === 'acting') {
       for (const p of players) await expect(bj(p)).toHaveAttribute('data-phase', 'acting');
       return;
     }
+    // Settled at the deal (the dealer's blackjack, or a natural in every hand): the dealer drew nothing.
+    await expect(host.page.getByTestId('dealer-hand')).toHaveAttribute('data-hole-hidden', 'false');
+    await expect(host.page.getByTestId('dealer-hand')).toHaveAttribute('data-cards', '2');
   }
   throw new Error('no round dealt into turns');
 }
@@ -264,6 +278,13 @@ test.describe('a server restart mid-game', () => {
     for (const p of players) await carriedOn(p);
     await expect.poll(() => Promise.all(players.map(blackjackState))).toEqual(before);
 
+    const restartRound = Number(await bj(host).getAttribute('data-round'));
+    await standOut(players);
+    for (const p of players) await expect(p.page.getByTestId('bj-table')).toHaveAttribute('data-settled', 'true');
+    // On into the next round straight from the outcomes, as after a dealer blackjack at the deal: a
+    // Bet tapped while they are up only queues for that round, so the bets go down once it opens.
+    await dealIntoTurns(players);
+    expect(Number(await bj(host).getAttribute('data-round'))).toBeGreaterThan(restartRound);
     await standOut(players);
     for (const p of players) await expect(p.page.getByTestId('bj-table')).toHaveAttribute('data-settled', 'true');
     await endGameAsHost(host.page);
