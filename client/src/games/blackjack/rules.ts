@@ -11,7 +11,7 @@ export const blackjackRules: GameRules = {
   // An ace and a king fanned: the natural, with the goal as the badge.
   hero: { kind: 'cards', cards: ['AS', 'KH'], badge: `${BLACKJACK}` },
   facts: [
-    { label: 'Goal', value: `${BLACKJACK}`, note: 'Beat the dealer, don’t go over' },
+    { label: 'Goal', value: `${BLACKJACK}`, note: 'Beat the dealer,\ndon’t go over' },
     { label: 'Bust', value: `Over ${BLACKJACK}`, note: 'Loses even if the dealer busts' },
     { label: 'Dealer', value: `Stands on ${DEALER_STANDS_AT}`, note: `Draws to ${DEALER_STANDS_AT - 1}` },
     { label: 'Blackjack pays', value: `${NATURAL_PAYOUT.wins} to ${NATURAL_PAYOUT.stake}`, note: 'Rounded down' },

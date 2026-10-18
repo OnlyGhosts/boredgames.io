@@ -102,6 +102,8 @@ describe('the How to play card', () => {
     expect(ruleOf(lobbyCss, '.rules__tab--accent')).toContain('color: var(--game-ink)');
     expect(ruleOf(lobbyCss, '.rules-fact__value')).toContain('color: var(--game-accent-text)');
     expect(ruleOf(lobbyCss, '.rules-fact__value')).toContain('white-space: nowrap');
+    // A note keeps the line break its game writes into it (Blackjack's goal: "don’t go over" on its own line).
+    expect(ruleOf(lobbyCss, '.rules-fact__note')).toContain('white-space: pre-line');
     expect(ruleOf(lobbyCss, '.rules-hero .playing-card')).toContain('--card-w: 44px');
     // The card carries the game's accent and its cuts for the hero and the facts.
     expect(tagWith(html, 'how-to-play-card')).toContain('--game-accent-text:var(--game-poker-text)');

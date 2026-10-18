@@ -114,7 +114,7 @@ describe('every game’s How to play', () => {
     expect(GAMES.quipgame.rules.scoring).toContain('Round two pays double, the flawless bonus included.');
     expect(GAMES.quipgame.rules.scoring).toContain('1,500, 1,000 and 500');
     // Blackjack: the goal, the bust, the dealer's play and the natural's payout are the four facts.
-    expect(factsOf('blackjack')).toEqual([`Goal: ${BLACKJACK} (Beat the dealer, don’t go over)`, `Bust: Over ${BLACKJACK} (Loses even if the dealer busts)`, `Dealer: Stands on ${DEALER_STANDS_AT} (Draws to ${DEALER_STANDS_AT - 1})`, `Blackjack pays: ${NATURAL_PAYOUT.wins} to ${NATURAL_PAYOUT.stake} (Rounded down)`]);
+    expect(factsOf('blackjack')).toEqual([`Goal: ${BLACKJACK} (Beat the dealer,\ndon’t go over)`, `Bust: Over ${BLACKJACK} (Loses even if the dealer busts)`, `Dealer: Stands on ${DEALER_STANDS_AT} (Draws to ${DEALER_STANDS_AT - 1})`, `Blackjack pays: ${NATURAL_PAYOUT.wins} to ${NATURAL_PAYOUT.stake} (Rounded down)`]);
     expect(factsOf('blackjack').join(' ')).toContain('Stands on 17');
     expect(factsOf('blackjack').join(' ')).toContain('3 to 2');
     expect(naturalWinnings(2)).toBe(3);

@@ -717,7 +717,7 @@ export interface RuleFact {
   label: string;
   /** The big accent-coloured value, a number or a short phrase ("21", "Stands on 17"); at most 12 characters, so it keeps to one line on a 320px phone. */
   value: string;
-  /** A few words under the value ("Draws to 16"). Prose: curly apostrophes, the last two words kept together. */
+  /** A few words under the value ("Draws to 16"). Prose: curly apostrophes, the last two words kept together; a \n starts a new line ("Beat the dealer,\ndon’t go over"). */
   note: string;
 }
 

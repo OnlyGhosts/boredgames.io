@@ -820,10 +820,12 @@ button.game-tile:active {
   white-space: nowrap;
 }
 
+/* A note may set its own line break ("Beat the dealer," over "don’t go over"). */
 .rules-fact__note {
   font-size: 0.75rem;
   line-height: 1.35;
   color: var(--color-text-muted);
+  white-space: pre-line;
 }
 
 /* Phones up to 371px wide: a tile has about 120 to 138px inside, less than "Stands on 17" takes at the full size (about 135px), so the value steps down (about 112px) and keeps to its line. */
