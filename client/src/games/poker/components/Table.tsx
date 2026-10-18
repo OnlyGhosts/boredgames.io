@@ -1,9 +1,10 @@
-import type { ReactNode } from 'react';
+import { useRef, type ReactNode } from 'react';
 import type { PokerRoomState, PokerView } from '@shared/games/poker/protocol';
 import { ChipFlights } from '../../../platform/table/ChipFlights';
 import { Deck, DiscardCorner } from '../../../platform/table/Deck';
 import { tileTier } from '../../../platform/table/grid';
 import { TableRibbon } from '../../../platform/table/Ribbon';
+import { useSeatRoom } from '../../../platform/table/room';
 import { TurnLine } from '../../../platform/table/TurnLine';
 import { nameOf, seatRing } from '../hooks';
 import { stageOwner, type PkFocus } from '../lib/focus';
@@ -46,7 +47,8 @@ function mucked(table: PokerTable | null): number {
  * the top left); the banner with the blinds, the hand and the street, and whose turn it is with
  * the clock; every
  * other player as a compact seat round the table from my left; the stage with my two cards.
- * Chips fly over it all.
+ * Chips fly over it all. On a phone my two cards take the room the seats leave (useSeatRoom), as
+ * many seats as the hand on the table was dealt with (data-seats).
  */
 export function Table({ room, view, meId, frame, live, now, isPhone, focus, standing, clock }: Props) {
   const { table, timeline, leaving } = frame;
@@ -55,12 +57,16 @@ export function Table({ room, view, meId, frame, live, now, isPhone, focus, stan
   const crowd = others.length === 0 ? 'none' : tileTier(others.length);
   const line = focusLine(focus, { view, meId, nameOf: (id) => nameOf(room, id), results: table?.results ?? null, standing });
   const staged = stageOwner(focus, table, meId);
+  const felt = useRef<HTMLElement | null>(null);
+  const seats = useSeatRoom(felt, { round: table?.hand ?? view.hand, count: others.length, wide: !isPhone, clock: true });
   return (
     <section
+      ref={felt}
       className={`tbl-felt tbl-felt--calm pk-table tbl-crowd--${crowd}`}
       aria-label="Table"
       data-testid="pk-table"
       data-hand={table?.hand ?? 0}
+      data-seats={seats}
       data-street={table?.street ?? ''}
       data-settled={Boolean(table?.results)}
       data-crowd={crowd}

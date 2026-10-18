@@ -49,7 +49,8 @@ export function PanelShell({ label, onSubmit, testId, data, actions, children }:
 
 /**
  * A spectator's panel in place of the controls: one quiet line saying they watch and can play the
- * next game. A host who watches keeps the table's buttons under it (Deal now, Skip).
+ * next game. A host who watches keeps the table's buttons under it (Deal now, Skip), a row that is
+ * always there, dimmed when nothing is on offer (Blackjack's TableAction).
  */
 export function WatchingPanel({ testId, actions }: { testId: string; actions?: ReactNode }) {
   return (

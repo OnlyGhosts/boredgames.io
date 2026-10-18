@@ -1,7 +1,9 @@
+import { useRef } from 'react';
 import type { BlackjackRoomState, BlackjackView } from '@shared/games/blackjack/protocol';
 import { tileTier } from '../../../platform/table/grid';
 import { Deck, DiscardCorner } from '../../../platform/table/Deck';
 import { TableRibbon } from '../../../platform/table/Ribbon';
+import { useSeatRoom } from '../../../platform/table/room';
 import { TurnLine } from '../../../platform/table/TurnLine';
 import { nameOf, seatOrder } from '../hooks';
 import { useBlackjack } from '../store';
@@ -46,7 +48,8 @@ function BjTurnLine({ room, view, meId, focus, frame, extra }: { room: Blackjack
  * (the shoe in the top right corner); the banner with the table's rules, the round and whose turn
  * it is; every other player as a compact seat; the stage with my hands. The
  * dealer and the stage keep their place and size through every phase (blackjack.css); only the
- * seats in between change with the table.
+ * seats in between change with the table. On a phone the cards take the room the seats leave
+ * (useSeatRoom), as many seats as the round on the table was dealt with (data-seats).
  */
 export function Table({ room, view, meId, truth, frame, now, isPhone, focus, line, chipsOf }: Props) {
   const { table, timeline, leaving } = frame;
@@ -57,12 +60,16 @@ export function Table({ room, view, meId, truth, frame, now, isPhone, focus, lin
   const crowd = others.length === 0 ? 'none' : tileTier(others.length);
   const seated = view.players[meId] !== undefined;
   const staged = stageOwner(focus, { seated, dealtIn: (table?.hands[meId]?.length ?? 0) > 0 }, meId);
+  const felt = useRef<HTMLElement | null>(null);
+  const seats = useSeatRoom(felt, { round: table?.round ?? view.round, count: others.length, wide: !isPhone });
   return (
     <section
+      ref={felt}
       className={`tbl-felt tbl-felt--calm bj-table tbl-crowd--${crowd}${leaving ? ' bj-table--leaving' : ''}`}
       aria-label="Table"
       data-testid="bj-table"
       data-round={table?.round ?? 0}
+      data-seats={seats}
       data-settled={table?.settled ?? false}
       data-crowd={crowd}
     >

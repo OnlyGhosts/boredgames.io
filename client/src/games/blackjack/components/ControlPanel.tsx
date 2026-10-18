@@ -58,7 +58,7 @@ interface TableActionProps {
   turnName: string;
   /** The buttons may go: the socket is up, no tap is waiting, the reveal is over. */
   live: boolean;
-  /** A spectator's panel: nothing at all when nothing is on offer. */
+  /** A watching host's panel (a spectator who is not the host has no table buttons): Skip or Deal now, never Sit out. */
   watching?: boolean;
   /** The hand I just skipped (its turnKey): Skip stays dimmed until a little after the play has moved on. */
   skipped: string | null;
@@ -86,8 +86,9 @@ export function turnKey(view: BlackjackView): string | null {
 /**
  * The table's own buttons under Bet: Sit out while my bet is still to place, Deal now once a bet
  * is down (both, for a host who has not bet, side by side), Skip on another player's turn. The row
- * keeps its place all game long: with none on offer, Sit out stays there dimmed (a spectator's
- * panel shows none).
+ * keeps its place all game long: with none on offer, Sit out stays there dimmed. A watching host's
+ * row stays too, with Skip (in the turns) or Deal now dimmed, so their panel keeps one height and
+ * the table over it never grows or shrinks in a round (the cards on a phone go by its room).
  */
 export function TableAction({ view, meId, turnName, live, watching = false, skipped, onSkip }: TableActionProps) {
   const { canSitOut, canDealNow, canSkip } = view.controls;
@@ -101,7 +102,11 @@ export function TableAction({ view, meId, turnName, live, watching = false, skip
   }
   const sitOutOn = live && canSitOut;
   const dealNowOn = live && canDealNow;
-  if (!sitOutOn && !dealNowOn) return watching ? null : <TableButton label="Sit out" ariaLabel="Sit this hand out" testId="sit-out-off" enabled={false} onClick={() => undefined} />;
+  if (!sitOutOn && !dealNowOn) {
+    if (!watching) return <TableButton label="Sit out" ariaLabel="Sit this hand out" testId="sit-out-off" enabled={false} onClick={() => undefined} />;
+    if (view.phase === 'acting') return <TableButton label="Skip" ariaLabel={view.turn ? `Stand ${turnName}’s hand` : undefined} testId="skip-turn-off" enabled={false} onClick={() => undefined} />;
+    return <TableButton label="Deal now" ariaLabel="Deal now to everyone who has bet" testId="deal-now-off" enabled={false} onClick={() => undefined} />;
+  }
   return (
     <>
       {sitOutOn && <TableButton label="Sit out" ariaLabel="Sit this hand out" testId="sit-out" onClick={() => void sitOut(view, meId)} />}
@@ -174,8 +179,11 @@ export function ControlPanel({ room, view, meId, balance, watching, canSend, mov
 
   const live = canSend && !held && !dealerPlaying;
   const placed = (view.phase === 'betting' && seat !== undefined && seat.bet > 0) || queued || pending?.kind === 'bet';
-  // A spectator of the whole game has no moves: one line, and a watching host keeps Deal now and Skip.
-  if (watching) return <WatchingPanel testId="bj-panel" actions={<TableAction view={view} meId={meId} turnName={turnName} live={live} watching skipped={skipped} onSkip={setSkipped} />} />;
+  // A spectator of the whole game has no moves: one line. A watching host keeps the row of Deal now and Skip all game long.
+  if (watching) {
+    const host = room.hostId === meId;
+    return <WatchingPanel testId="bj-panel" actions={host ? <TableAction view={view} meId={meId} turnName={turnName} live={live} watching skipped={skipped} onSkip={setSkipped} /> : undefined} />;
+  }
 
   return (
     <PanelShell

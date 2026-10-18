@@ -61,6 +61,24 @@
   initial-value: 56px;
 }
 
+/*
+ * On a phone a calm table's cards take the room its seats leave: --tbl-spare is that room, written
+ * on the felt by the table (room.ts useSeatRoom, 0 until it is read); --tbl-grow is how much taller
+ * the game's fixed rows are for it (each game works it out from its cards), so the table reads the
+ * seats' room with the cards at their least size. Lengths, read as pixels.
+ */
+@property --tbl-spare {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+
+@property --tbl-grow {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+
 /* ---------- The felt ---------- */
 .tbl-felt {
   /* A game sets its card widths per place on the table (every card here is 2:3). */
@@ -840,11 +858,12 @@
 /* ---------- A calm table: the centre piece, the ribbon, the seats, the stage ---------- */
 /*
  * The first row (the game's centre piece: Blackjack's dealer, Poker's pot and board) and the last
- * (the stage with my hand) have a fixed height the game sets for the screen alone (--tbl-head-h,
- * --tbl-stage-h), never for the phase or the number of players: the first sits at the top edge,
- * the last at the bottom. The seats take the height they need and no more (down to nothing on a
- * crowded small screen), and whatever is left is shared evenly between the rows, so the ribbon and
- * the seats keep one rhythm between the dealer and my hand. --tbl-row-gap is the least gap.
+ * (the stage with my hand) have a fixed height the game sets for the screen (--tbl-head-h,
+ * --tbl-stage-h) and, on a phone, for the room the seats the round was dealt with leave
+ * (--tbl-spare), never for the phase: the first sits at the top edge, the last at the bottom. The
+ * seats take the height they need and no more (down to nothing on a crowded small screen), and
+ * whatever is left is shared evenly between the rows, so the ribbon and the seats keep one rhythm
+ * between the dealer and my hand. --tbl-row-gap is the least gap.
  */
 .tbl-felt--calm {
   display: grid;
@@ -1310,7 +1329,7 @@
 /*
  * A narrow full tile (three across a phone): the bet pill shares its row with the seat line
  * ("Waiting"), so it draws two chips, not three, and reads a four-digit stake short ("1k"); under
- * 113px (four players on a 320px or 360px phone) one chip. A chip hidden here is said with the
+ * 113px (four players on a 360px phone) one chip. A chip hidden here is said with the
  * spare plus, which Stakes.tsx renders whenever two or more are drawn.
  */
 @container tile (max-width: 139px) {

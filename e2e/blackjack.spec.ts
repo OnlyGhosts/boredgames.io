@@ -743,6 +743,12 @@ async function bigTable(browser: Browser, base: string, size: number): Promise<v
     // The tiles step down with the table (and the room a 390x844 phone leaves the seats: grid.ts tierFor).
     const tiers: Record<number, string> = { 2: 'full', 6: 'compact', 12: 'small', 24: 'small', 50: 'dense' };
     await expect(phone.getByTestId('seats')).toHaveAttribute('data-tier', tiers[size]);
+    // The cards take the room the seats leave (room.ts useSeatRoom): a table of two leaves the dealer's row and my hand big
+    // (55.5px when the cards went by the table's height alone), a table of twelve or more needs all its room, so its cards keep
+    // their least size (11% of the table's height) and its tiles the tier above.
+    const cards = await phone.getByTestId('bj-table').evaluate((el) => ({ w: parseFloat(getComputedStyle(el).getPropertyValue('--bj-card-w')), base: parseFloat(getComputedStyle(el).getPropertyValue('--bj-card-base')) }));
+    if (size === 2) expect(cards.w, '2 players: the cards').toBeGreaterThanOrEqual(70);
+    if (size >= 12) expect(Math.abs(cards.w - cards.base), `${size} players: the cards at their least size`).toBeLessThanOrEqual(0.1);
     expect(errors).toEqual([]);
   } finally {
     for (const b of bots) b.close();

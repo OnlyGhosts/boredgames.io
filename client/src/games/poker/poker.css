@@ -8,14 +8,23 @@
 /*
  * ---------- The table: fixed places for the board and the stage, like Blackjack's ----------
  * The first row (the pot over the board) and the stage (my two cards) have a fixed height, and
- * the cards in them a fixed size, that depend on the room the table has alone: never on the
- * street or the number of players. The banner and the seats in between take what is left. Every
- * card is 2:3; the board's five cards never run under the deck in the corner.
+ * the cards in them a fixed size, that depend on the room the table has and, for my two cards on
+ * a phone, on the seats the hand was dealt with: never on the street. The banner and the seats in
+ * between take what is left. Every card is 2:3; the board's five cards never run under the deck
+ * in the corner.
  *
- * --pk-card-w: a card's width on the board and the stage; --pk-pot-h: the pot's row.
+ * --pk-card-w: a card's width on the board; --pk-stage-w: my two cards' on the stage (the board's
+ * width on a desktop; on a phone, where five cards and the deck across keep the board's small, the
+ * board's and the room the seats leave, the phone blocks at the end); --pk-pot-h: the pot's row.
  */
 /* Worked out on the table, inherited as pixels (see table.css). */
 @property --pk-card-w {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 56px;
+}
+
+@property --pk-stage-w {
   syntax: '<length>';
   inherits: true;
   initial-value: 56px;
@@ -29,6 +38,7 @@
 
 .pk-table {
   --pk-card-w: min(clamp(56px, 12cqh, 120px), calc((100cqw - 2 * var(--tbl-pad) - 2 * var(--tbl-deck-w) - 40px) / 5.4));
+  --pk-stage-w: var(--pk-card-w);
   --pk-pot-h: clamp(30px, 4.4cqh, 40px);
   --tbl-mini-w: clamp(30px, 4.6cqh, 40px);
   --tbl-pill-h: clamp(28px, 3.9cqh, 36px);
@@ -36,7 +46,7 @@
   --tbl-row-gap: var(--space-4);
   --tbl-head-h: calc(var(--pk-pot-h) + 8px + var(--pk-card-w) * 1.5 + 4px);
   /* A fan's height with its pill (overlapping by 30%) and its outline's room. */
-  --tbl-stage-h: calc(var(--tbl-pill-h) * 0.7 + var(--pk-card-w) * 1.77 + 4px);
+  --tbl-stage-h: calc(var(--tbl-pill-h) * 0.7 + var(--pk-stage-w) * 1.77 + 4px);
 }
 
 /* ---------- The top centre: the pot over the board ---------- */
@@ -119,7 +129,7 @@
 }
 
 .pk-mine .tbl-hand {
-  --tbl-w: var(--pk-card-w);
+  --tbl-w: var(--pk-stage-w);
   /* The cards' box: a two-card fan and the hand's 3px each side. */
   --pk-fan-w: calc(var(--tbl-w) * (1 + var(--fan-step) * (var(--fan, 2) - 1)) + 6px);
   align-items: flex-end;
@@ -324,6 +334,15 @@
 @media (max-width: 760px), (min-aspect-ratio: 3/2) and (max-height: 520px) {
   .pk-table {
     --pk-card-w: min(clamp(30px, 10cqh, 56px), calc((100cqw - 2 * var(--tbl-pad) - 2 * var(--tbl-deck-w) - 24px) / 5.4));
+    /*
+     * My two cards: the board's card, and over it the room the seats leave them (--tbl-spare: the
+     * table works it out from the seats the hand was dealt with, room.ts useSeatRoom), 1.77px of it
+     * a card pixel, up to half as wide again as the board's and 84px. A crowd that needs all its
+     * room keeps the board's card; a few players leave my cards the felt. --tbl-grow tells the
+     * table how much taller the stage is for it.
+     */
+    --pk-stage-w: clamp(var(--pk-card-w), calc(var(--pk-card-w) + var(--tbl-spare) / 1.77), max(var(--pk-card-w), min(84px, var(--pk-card-w) * 1.5)));
+    --tbl-grow: calc((var(--pk-stage-w) - var(--pk-card-w)) * 1.77);
     --pk-pot-h: 28px;
     --tbl-mini-w: 22px;
     --tbl-pill-h: 24px;

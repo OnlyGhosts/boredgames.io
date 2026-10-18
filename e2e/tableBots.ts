@@ -13,6 +13,8 @@ export interface TableBot {
   setHold(hold: boolean): void;
   /** Errors the server sent back, for a failing spec to print. */
   errors: string[];
+  /** Leaves the room for good, as the Leave button does (closing the socket only drops the connection, and the seat waits). */
+  leave(): void;
   close(): void;
 }
 
@@ -100,6 +102,7 @@ export function tableBot(name: string, code: string, base: string, { game: kind,
       held = next;
       if (!next) step();
     },
+    leave: () => send({ t: 'leave' }),
     close: () => socket.close(),
   };
 

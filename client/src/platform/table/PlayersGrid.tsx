@@ -9,6 +9,7 @@ import { TotalPill, type Tone } from './Outcome';
 import { StackCount } from './Stakes';
 import type { StakeFormat } from './stakes';
 import { ARC_LIFT, GRID_GAP, arcLift, fitGrid, fitsRoom, naturalHeight, shapeOf, tierFor, tileHeight, type Room, type TileTier } from './grid';
+import { roomLeft } from './room';
 
 interface GridProps {
   /** How many tiles there are (the columns go by it, and the tier by the room they have). */
@@ -29,10 +30,10 @@ interface Measured {
 }
 
 /**
- * The grid's own size, and the room the table leaves it: its parent's height less the rows beside
- * it (the head, the ribbon, the stage) and the gaps between them. The corners floating over the
- * table (absolutely placed) take no row. The grid itself is capped to what the tiles need, so the
- * room, not the box, says which tier fits.
+ * The grid's own size, and the room the table leaves it (room.ts roomLeft: its parent's height
+ * less the rows beside it and the gaps between them, as the table reads it to size a phone's
+ * cards). The grid itself is capped to what the tiles need, so the room, not the box, says which
+ * tier fits.
  */
 function measure(el: HTMLElement): Measured {
   const style = getComputedStyle(el);
@@ -40,18 +41,7 @@ function measure(el: HTMLElement): Measured {
   const box = { width: el.clientWidth, height: el.clientHeight - padY };
   const parent = el.parentElement;
   if (!parent) return { box, room: { width: box.width, height: box.height } };
-  const parentStyle = getComputedStyle(parent);
-  let taken = 0;
-  let rows = 0;
-  for (const child of Array.from(parent.children)) {
-    const position = getComputedStyle(child).position;
-    if (position === 'absolute' || position === 'fixed') continue;
-    rows += 1;
-    if (child !== el) taken += (child as HTMLElement).offsetHeight;
-  }
-  const inner = parent.clientHeight - (parseFloat(parentStyle.paddingTop) || 0) - (parseFloat(parentStyle.paddingBottom) || 0);
-  const height = Math.max(0, inner - taken - Math.max(0, rows - 1) * (parseFloat(parentStyle.rowGap) || 0));
-  return { box, room: { width: box.width, height } };
+  return { box, room: { width: box.width, height: roomLeft(parent, el) } };
 }
 
 const sameSize = (a: { width: number; height: number }, b: { width: number; height: number }): boolean => a.width === b.width && a.height === b.height;

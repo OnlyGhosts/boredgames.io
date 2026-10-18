@@ -25,6 +25,7 @@ const { PlayerTile, PlayersGrid } = await import('./PlayersGrid');
 const { TurnLine } = await import('./TurnLine');
 const { TableStage } = await import('./TableStage');
 const G = await import('./grid');
+const R = await import('./room');
 const { Deck, DiscardCorner } = await import('./Deck');
 const { HandFan, OutcomeFlag } = await import('./HandFan');
 const { StackCount, StakePill } = await import('./Stakes');
@@ -172,6 +173,25 @@ describe('the players grid', () => {
     expect(G.leastHeight(7, 898, { wide: true, tier: 'full' })).toBe(90 + 18);
   });
 
+  it('never makes a phone’s full tile narrower than its stack in words: three across a 360px phone, two across a 320px one', () => {
+    // A full tile writes the stack beside the face: "12,500 chips" needs 103px in the ring of the seat on turn.
+    expect(G.TIER_SHAPES.full.minWidth).toBe(104);
+    // A 360px phone's seats (326px across): three full tiles of 105px in a row.
+    expect(G.fitGrid(3, { width: 326, height: 120 }, { tier: 'full' })).toEqual({ cols: 3, rows: 1 });
+    expect(G.leastHeight(3, 326, { tier: 'full' })).toBe(94);
+    // A 320px phone's (290px): three across were 93px and cut "1,250 chips" to "1,250 chip". Full tiles take two rows there,
+    // which a phone that short never has room for: one row of compact tiles (their stack and bet), whatever the room left.
+    expect(G.leastHeight(3, 290, { tier: 'full' })).toBe(2 * 94 + 6);
+    expect(G.fitGrid(3, { width: 290, height: 200 }, { tier: 'full' })).toEqual({ cols: 2, rows: 2 });
+    for (const height of [79, 120, 150, 190]) expect(G.tierFor(3, { width: 290, height }), `${height}px`).toBe('compact');
+    for (const count of [1, 2]) expect(G.tierFor(count, { width: 290, height: 120 }), `${count} others`).toBe('full');
+    // A 430px phone's (396px): never four across (95px), three.
+    expect(G.fitGrid(4, { width: 396, height: 300 }, { tier: 'full' }).cols).toBeLessThanOrEqual(3);
+    expect(G.fitGrid(11, { width: 396, height: 400 }, { tier: 'full' })).toEqual({ cols: 3, rows: 4 });
+    // The cards' share goes by the same tiers: three others on a 320px phone keep a row of compact tiles (68px) and the 8px over it.
+    expect(G.seatsNeed(3, { width: 290, height: 150 }, { growth: G.TURN_WRAP })).toBe(68 + G.SPARE);
+  });
+
   it('keeps the tier on show while it still fits: a richer one needs a few pixels to spare, so a room that wobbles never flips the tiles', () => {
     const room = (height: number) => ({ width: 356, height });
     // Compact on show, the full tier fits by a hair: it stays compact until the room is clearly enough.
@@ -256,6 +276,76 @@ describe('the players grid', () => {
   it('bows the desktop rows into a gentle arc: the middle lowest, the ends lifted', () => {
     expect([0, 1, 2, 3, 4].map((c) => G.arcLift(c, 5))).toEqual([1, 0.25, 0, 0.25, 1]);
     expect(G.arcLift(0, 1)).toBe(0);
+  });
+});
+
+describe('the room a phone’s cards take', () => {
+  // A 390x844 phone's seats: 356px across, 171px tall with the cards at their least size (Blackjack, no banner).
+  const phone = (height: number) => ({ width: 356, height });
+
+  it('leaves the seats their natural height in the tier their room gives them, and the cards the rest', () => {
+    // One to three others: a row of full tiles (96px and 8px over it), and never under their least height (94px) with a
+    // wrapped turn line (21px) over it, so a long name under the ribbon never steps them down to compact mid-round.
+    expect(G.seatsNeed(3, phone(171), { growth: G.TURN_WRAP })).toBe(94 + 21);
+    expect(G.seatsSpare(3, phone(171), { growth: G.TURN_WRAP })).toBe(56);
+    expect(G.seatsSpare(1, phone(171), { growth: G.TURN_WRAP })).toBe(56);
+    // Poker's turn line also has its clock to come back: 7px more.
+    expect(G.seatsSpare(3, phone(218), { growth: G.TURN_WRAP + G.TURN_CLOCK })).toBe(218 - 94 - 28);
+    // Five others: two rows of compact tiles at their natural 68px, the grid's 8px over them.
+    expect(G.seatsNeed(5, phone(171), { growth: G.TURN_WRAP })).toBe(2 * 68 + 6 + G.SPARE);
+    expect(G.seatsSpare(5, phone(171), { growth: G.TURN_WRAP })).toBe(171 - 150);
+    // Nobody else: the ribbon's own row keeps room for a wrapped line, the rest is the cards'.
+    expect(G.seatsNeed(0, phone(180), { growth: G.TURN_WRAP })).toBe(21);
+    expect(G.seatsSpare(0, phone(180), { growth: G.TURN_WRAP })).toBe(159);
+  });
+
+  it('gives a crowd only what is left over its tiles at their natural size: most big tables keep the least card', () => {
+    for (const count of [11, 23, 24, 49]) expect(G.seatsSpare(count, phone(171), { growth: G.TURN_WRAP }), `${count} others`).toBe(0);
+    // Sixteen others: three rows of small tiles (50px, 4px apart) and the grid's 8px leave 5px.
+    expect(G.seatsSpare(16, phone(171), { growth: G.TURN_WRAP })).toBe(171 - (3 * 50 + 2 * 4 + G.SPARE));
+    // Never more than the room, and never a negative share.
+    expect(G.seatsNeed(49, phone(171))).toBe(171);
+    expect(G.seatsSpare(3, phone(70), { growth: G.TURN_WRAP })).toBe(0);
+    // Three others in 90px: a row of compact tiles (full ones have no room), their 68px and the 8px over them.
+    expect(G.seatsSpare(3, phone(90), { growth: G.TURN_WRAP })).toBe(90 - 76);
+    // Whole pixels, rounded down: a room read a fraction apart never moves the cards.
+    expect(G.seatsSpare(3, phone(171.7), { growth: G.TURN_WRAP })).toBe(56);
+  });
+
+  it('reads the table’s rows once each: the pieces side by side in a row (the line beside the dealer on the shortest phones) count as that row', () => {
+    // Head 0-72, the ribbon inside it at 20-56, the stage 220-292: two rows, 144px.
+    expect(R.rowsTaken([{ top: 0, bottom: 72 }, { top: 20, bottom: 56 }, { top: 220, bottom: 292 }])).toEqual({ height: 144, rows: 2 });
+    // Head, ribbon and stage one under the other, in any order: three rows.
+    expect(R.rowsTaken([{ top: 230, bottom: 300 }, { top: 0, bottom: 100 }, { top: 110, bottom: 150 }])).toEqual({ height: 210, rows: 3 });
+    // A piece running past the row it sits in takes the row to its bottom.
+    expect(R.rowsTaken([{ top: 0, bottom: 72 }, { top: 30, bottom: 90 }])).toEqual({ height: 90, rows: 1 });
+    expect(R.rowsTaken([])).toEqual({ height: 0, rows: 0 });
+  });
+
+  it('sizes a round by the seats it began with: a player leaving mid-round changes nothing until the next round', () => {
+    const start = R.latchSeats(null, 3, 4);
+    expect(start).toEqual({ round: 3, count: 4 });
+    // Someone leaves in round 3: the cards keep the size the four seats gave them.
+    expect(R.latchSeats(start, 3, 3)).toBe(start);
+    expect(R.latchSeats(start, 3, 0)).toBe(start);
+    // The next round on the table: three seats.
+    expect(R.latchSeats(R.latchSeats(start, 3, 3), 4, 3)).toEqual({ round: 4, count: 3 });
+    // Nobody is seated mid-game, but a count that rises all the same is taken at once: the seats never lack room.
+    expect(R.latchSeats(start, 3, 5)).toEqual({ round: 3, count: 5 });
+  });
+
+  it('starts with the cards at their least size: nothing written until the table is laid out, the seats it planned for on the felt', () => {
+    const Probe = ({ count }: { count: number }) => {
+      const seats = R.useSeatRoom({ current: null }, { round: 1, count, wide: false });
+      return createElement('section', { 'data-seats': seats });
+    };
+    expect(html(createElement(Probe, { count: 3 }))).toBe('<section data-seats="3"></section>');
+    const css = readFileSync(join(import.meta.dirname, '../styles/table.css'), 'utf8');
+    // Registered lengths, so the table reads them as pixels; 0 until written.
+    expect(css).toMatch(/@property --tbl-spare \{\s*syntax: '<length>';\s*inherits: false;\s*initial-value: 0px;/);
+    expect(css).toMatch(/@property --tbl-grow \{\s*syntax: '<length>';\s*inherits: false;\s*initial-value: 0px;/);
+    expect(R.SPARE_VAR).toBe('--tbl-spare');
+    expect(R.GROW_VAR).toBe('--tbl-grow');
   });
 });
 

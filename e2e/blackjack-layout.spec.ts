@@ -12,9 +12,9 @@ import { tableBots, type TableBot } from './tableBots';
 
 /**
  * Blackjack's fixed places. On a real table (a page and bots on their own sockets, at 390x844,
- * 320x568 and 1440x900, with 2 and 6 players) the dealer's hand and the stage at the bottom never
- * move or resize through the betting, the deal, my turn, another player's turn, the dealer's play
- * and the settled table. Then a harness (e2e/harness: the real components and styles, built by
+ * 320x568 and 1440x900, with 2 and 6 players, and 4 on the 320x568) the dealer's hand and the stage
+ * at the bottom never move or resize through the betting, the deal, my turn, another player's turn,
+ * the dealer's play and the settled table. Then a harness (e2e/harness: the real components and styles, built by
  * Vite, fed rigged snapshots) seats me with 2 to 16 split hands at every phone size and on a
  * desktop: nothing scrolls, every hand (full or folded into a chip) is wholly inside my place, my
  * hands keep the stage on another player's turn, and a watcher sees that player's many hands fit
@@ -76,6 +76,9 @@ async function nothingScrolls(page: Page, label: string): Promise<void> {
   expect(over, `${label}: nothing scrolls`).toEqual({ document: false, main: false, table: false, seats: false, mine: false, stage: false });
 }
 
+/** The width the table works its cards out at (the dealer's row and the stage share it), in px. */
+const cardWidth = (page: Page): Promise<number> => page.getByTestId('bj-table').evaluate((el) => Math.round(parseFloat(getComputedStyle(el).getPropertyValue('--bj-card-w')) * 10) / 10);
+
 /**
  * Another player's turn: my hand stays on the stage at the bottom centre at full size (its cards
  * as wide as the dealer's, never shrunk into a side column), and the acting player's hand shows
@@ -134,6 +137,10 @@ async function fixedPlaces(browser: Browser, base: string, size: { width: number
     await expect(page.getByTestId('seat')).toHaveCount(players - 1);
     const botIds = new Set(bots.map((b) => b.id));
     const ref = await places(page);
+    // The owner's phone with one other player: the cards take the felt the seat leaves them (55.5px when they went by the
+    // table's height alone), and keep that size through the round (the places below).
+    if (size.width === 390 && size.height === 844 && players === 2) expect(await cardWidth(page), `${label}: the cards`).toBeGreaterThanOrEqual(70);
+    if (size.width === 320 && players === 4) await expect(page.getByTestId('seats'), `${label}: the seats`).toHaveAttribute('data-tier', 'compact');
     const seen = new Set<string>();
     const check = async (phase: string) => {
       const now = await places(page);
@@ -202,6 +209,92 @@ for (const players of [2, 6]) {
     });
   }
 }
+
+// Four players on the narrowest phone: three full tiles across it would be 93px, too narrow for "1,000 chips" beside the face (it read
+// "1,000 chip"), so the other three sit on compact tiles, every stack whole, in every phase.
+test('4 players at 320x568: the dealer’s hand and mine never move or resize, and every stack reads whole', async ({ browser, baseURL }) => {
+  test.setTimeout(120_000);
+  await fixedPlaces(browser, baseURL ?? 'http://localhost:4173', { width: 320, height: 568 }, 4);
+});
+
+/** Stands my hands until round `round` settles (the bots play theirs), then waits for its results on the stage. */
+async function playOut(page: Page, round: number): Promise<void> {
+  const roundOf = async () => Number(await page.getByTestId('round-indicator').getAttribute('data-round'));
+  for (let step = 0; step < 12 && (await roundOf()) <= round; step++) {
+    const stand = page.getByTestId('action-stand');
+    await expect.poll(async () => (await roundOf()) > round || (await stand.isEnabled()), { timeout: 20_000, message: `round ${round}: my turn or the settle` }).toBe(true);
+    if ((await roundOf()) > round) break;
+    await stand.click();
+    await expect.poll(async () => (await roundOf()) > round || !(await stand.isEnabled()), { timeout: 20_000 }).toBe(true);
+  }
+  await expect(page.getByTestId('hand-stage')).toHaveAttribute('data-kind', /^(result|bets)$/, { timeout: 30_000 });
+}
+
+/**
+ * The cards on a phone take the room the seats leave, as many seats as the round on the table was
+ * dealt with: two players leaving in the middle of a round leave the cards as they are until the
+ * round is over, and the next deal sizes them for the three seats left (two rows of compact tiles
+ * become one row of full ones, and the cards take the rest).
+ */
+test('390x844: two players leave mid-round: the cards keep their size to the end of the round, and the next deal sizes them for the seats left', async ({ browser, baseURL }) => {
+  test.setTimeout(120_000);
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
+  const page = await ctx.newPage();
+  const errors: string[] = [];
+  page.on('pageerror', (err) => errors.push(err.message));
+  let bots: TableBot[] = [];
+  try {
+    const code = await createParty(page, 'Hana', 'blackjack');
+    bots = await tableBots(5, code, baseURL ?? 'http://localhost:4173', { game: 'blackjack', hold: true, thinkMs: 50 });
+    await expectReadyCount(page, 6);
+    await page.getByTestId('start-game').click();
+    const screen = page.getByTestId('blackjack-screen');
+    const table = page.getByTestId('bj-table');
+    await expect(screen).toHaveAttribute('data-phase', 'betting');
+    await expect(page.getByTestId('seat')).toHaveCount(5);
+    await expect(table).toHaveAttribute('data-seats', '5');
+    const five = await cardWidth(page);
+    const ref = await places(page);
+    const same = async (label: string) => {
+      const now = await places(page);
+      expectSame(`${label}: the dealer’s hand`, ref.dealer, now.dealer);
+      expectSame(`${label}: my hands`, ref.mine, now.mine);
+      expect(await cardWidth(page), `${label}: the cards`).toBe(five);
+      await nothingScrolls(page, label);
+      await tilesReadable(page, label);
+    };
+    // Round 1 is dealt, then two of the five leave in the middle of it.
+    await page.getByTestId('place-bet').click();
+    await expect.poll(async () => (await screen.getAttribute('data-phase')) !== 'betting', { timeout: 20_000 }).toBe(true);
+    for (const b of bots.slice(3)) b.leave();
+    await expect(page.getByTestId('seat')).toHaveCount(3);
+    // The round goes on as it was dealt: five seats' worth of room, the cards where and as big as they were.
+    await expect(table).toHaveAttribute('data-seats', '5');
+    await same('round 1, two seats gone');
+    for (const b of bots) b.setHold(false);
+    await playOut(page, 1);
+    await same('round 1 settled');
+    // Round 2 is dealt to the three seats left: the cards take the room the two seats gave back.
+    await expect(page.getByTestId('place-bet')).toBeEnabled({ timeout: 20_000 });
+    await page.getByTestId('place-bet').click();
+    await expect(table).toHaveAttribute('data-seats', '3', { timeout: 20_000 });
+    await expect.poll(() => cardWidth(page), { message: 'round 2: the cards for three seats' }).toBeGreaterThan(five + 5);
+    const three = await cardWidth(page);
+    const ref2 = await places(page);
+    expect(ref2.mine.height, 'round 2: a taller stage').toBeGreaterThan(ref.mine.height);
+    await playOut(page, 2);
+    const now = await places(page);
+    expectSame('round 2 settled: the dealer’s hand', ref2.dealer, now.dealer);
+    expectSame('round 2 settled: my hands', ref2.mine, now.mine);
+    expect(await cardWidth(page), 'round 2 settled: the cards').toBe(three);
+    await nothingScrolls(page, 'round 2 settled');
+    await tilesReadable(page, 'round 2 settled');
+    expect(errors).toEqual([]);
+  } finally {
+    for (const b of bots) b.close();
+    await ctx.close();
+  }
+});
 
 // ---------------------------------------------------------------------------
 // The harness: many split hands
@@ -544,6 +637,117 @@ test.describe('many hands (the harness)', () => {
         await expect(page.getByTestId('seat-total')).toHaveCount(0);
         await stakesShown(page, query);
         await tilesReadable(page, query);
+      } finally {
+        await ctx.close();
+      }
+    });
+  }
+
+  // The cards on a phone take the room the seats leave (room.ts useSeatRoom), as many seats as the round was dealt with: a small
+  // table on the owner's 390x844 phone gets big cards (55.5px when they went by the table's height alone, 60px for a watcher),
+  // a table of twelve or more keeps the tiles it had (small at 390x844, compact at 430x932), and where it needs all its room
+  // the least card. A watcher's table is taller by the bet controls: its seats have that room first, the cards what they leave.
+  // Every stack is four digits ("1,250 chips"), as a table's are from the default 1,000. On the narrowest phone three full tiles
+  // across were 93px and cut it to "1,250 chip": three others there sit on compact tiles (or, for a watcher with the height, two
+  // rows of full ones), every stack whole, in every phase.
+  for (const [size, cases] of [
+    [
+      { width: 320, height: 568 },
+      [
+        { others: 3, watch: false, phase: 'betting', tier: 'compact', least: 45 },
+        { others: 3, watch: false, phase: 'mine', tier: 'compact', least: 45 },
+        { others: 3, watch: false, phase: 'results', tier: 'compact', least: 45 },
+        { others: 3, watch: true, phase: 'other', tier: 'full', least: 0 },
+        { others: 5, watch: true, phase: 'other', tier: 'compact', least: 45 },
+        { others: 5, watch: true, phase: 'results', tier: 'compact', least: 45 },
+      ],
+    ],
+    [
+      { width: 390, height: 844 },
+      [
+        { others: 1, watch: false, tier: 'full', least: 70 },
+        { others: 3, watch: false, tier: 'full', least: 70 },
+        { others: 5, watch: false, tier: 'compact', least: 60 },
+        { others: 11, watch: false, tier: 'small', least: 0 },
+        { others: 23, watch: false, tier: 'small', least: 0 },
+        { others: 49, watch: false, tier: 'dense', least: 0 },
+        { others: 2, watch: true, tier: 'full', least: 72 },
+        { others: 12, watch: true, tier: 'compact', least: 70 },
+      ],
+    ],
+    [
+      { width: 430, height: 932 },
+      [
+        { others: 1, watch: false, tier: 'full', least: 80 },
+        { others: 11, watch: false, tier: 'compact', least: 60 },
+        { others: 49, watch: false, tier: 'dense', least: 60 },
+      ],
+    ],
+  ] as const) {
+    test(`${size.width}x${size.height}: the cards take the room the seats leave: big at a small table, and a big table keeps its tiles`, async ({ browser }) => {
+      const ctx = await browser.newContext({ viewport: size });
+      const page = await ctx.newPage();
+      try {
+        for (const { others, watch, tier, least, ...rest } of cases) {
+          const phase = 'phase' in rest ? rest.phase : watch ? 'other' : 'mine';
+          const query = `phase=${phase}&others=${others}&hands=1&active=0${watch ? '&watch=1' : ''}&stake=100&bet=50&chips=1250`;
+          await open(page, query);
+          await expect(page.getByTestId('bj-table'), query).toHaveAttribute('data-seats', String(others));
+          await expect(page.getByTestId('seats'), query).toHaveAttribute('data-tier', tier);
+          const base = await page.getByTestId('bj-table').evaluate((el) => Math.round(parseFloat(getComputedStyle(el).getPropertyValue('--bj-card-base')) * 10) / 10);
+          if (least > 0) await expect.poll(() => cardWidth(page), { message: `${query}: the cards` }).toBeGreaterThanOrEqual(least);
+          else await expect.poll(() => cardWidth(page), { message: `${query}: the least card` }).toBe(base);
+          await nothingScrolls(page, query);
+          // A phone's full and compact tiles show every stack and bet; the small and dense ones never did.
+          if (tier === 'full' || tier === 'compact') await stakesShown(page, query);
+          await tilesReadable(page, query);
+        }
+      } finally {
+        await ctx.close();
+      }
+    });
+  }
+
+  // A host who watches keeps the row of table buttons all game long: Skip in the turns, Deal now (dimmed until a bet is down) through
+  // the dealer's reveal and the next bets. Their panel never changes height, so the felt over it, whose room a phone's cards go by, never
+  // grows in a round: the reveal once took Skip away, the felt grew 39px, and the cards went from 60px to 67.9px at 390x844 with seven
+  // others (64.4px at 360x740 with five), the dealer's row and the stage with them.
+  for (const [size, others] of [
+    [{ width: 390, height: 844 }, 7],
+    [{ width: 360, height: 740 }, 5],
+    [{ width: 390, height: 844 }, 2],
+  ] as const) {
+    test(`${size.width}x${size.height}, ${others} others: a watching host's panel, cards and places hold from a player's turn through the dealer's reveal`, async ({ browser }) => {
+      const ctx = await browser.newContext({ viewport: size });
+      const page = await ctx.newPage();
+      try {
+        const html = page.locator('html');
+        const screen = page.getByTestId('blackjack-screen');
+        const read = async () => ({ ...(await places(page)), panel: await boxOf(page, 'bj-panel'), card: await cardWidth(page) });
+        await open(page, `phase=dealer&watch=1&others=${others}&chips=1250&stepMs=3000`);
+        // The last other player's turn: the host may Skip it.
+        await expect(html).toHaveAttribute('data-harness-step', '0');
+        await expect(page.getByTestId('skip-turn')).toBeEnabled();
+        const turn = await read();
+        await nothingScrolls(page, 'the turn');
+        await tilesReadable(page, 'the turn');
+        // The round settles and the dealer's cards turn over: nothing may go, the row stays, dimmed.
+        await expect(html).toHaveAttribute('data-harness-step', '1', { timeout: 10_000 });
+        await expect(page.getByTestId('deal-now-off')).toBeDisabled();
+        await expect(page.getByTestId('skip-turn')).toHaveCount(0);
+        const reveal = await read();
+        // The outcomes shown, the next bets open (none down yet): the same row.
+        await expect(screen).toHaveAttribute('data-busy', 'false', { timeout: 10_000 });
+        await expect(page.getByTestId('deal-now-off')).toBeDisabled();
+        const results = await read();
+        for (const [phase, now] of [['the reveal', reveal], ['the next bets', results]] as const) {
+          expectSame(`${phase}: the panel`, turn.panel, now.panel);
+          expectSame(`${phase}: the dealer’s hand`, turn.dealer, now.dealer);
+          expectSame(`${phase}: the stage`, turn.mine, now.mine);
+          expect(now.card, `${phase}: the cards`).toBe(turn.card);
+        }
+        await nothingScrolls(page, 'the next bets');
+        await tilesReadable(page, 'the next bets');
       } finally {
         await ctx.close();
       }

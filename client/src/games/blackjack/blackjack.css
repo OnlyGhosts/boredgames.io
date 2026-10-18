@@ -3,16 +3,24 @@
 /*
  * ---------- The table: fixed places for the dealer and the stage ----------
  * The dealer's row (the first) and the stage (the last) have a fixed height, and the cards in them
- * a fixed size, that depend on the room the table has alone (the cq units of tbl in table.css):
- * never on the phase or the number of players. The banner and the seats in between take what is
- * left. Every card here is 2:3; a hand is a stepped fan 1.77 card widths tall with its pill over
- * the top right corner (HandFan).
+ * a fixed size, that depend on the room the table has (the cq units of tbl in table.css) and, on a
+ * phone, on the seats the round was dealt with: never on the phase. The banner and the seats in
+ * between take what is left. On a phone the cards take the room the seats leave (--tbl-spare, the
+ * phone blocks at the end), worked out as the round on the table begins: a player who leaves in the
+ * middle of a round leaves the cards as they are until the next deal. Every card here is 2:3; a
+ * hand is a stepped fan 1.77 card widths tall with its pill over the top right corner (HandFan).
  *
- * --bj-card-w: a card's width on the dealer's row and the stage; --bj-label-h: the word Dealer's line.
- * --tbl-pill-h: the totals' pill.
+ * --bj-card-w: a card's width on the dealer's row and the stage; --bj-card-base: its least on a
+ * phone; --bj-label-h: the word Dealer's line. --tbl-pill-h: the totals' pill.
  */
 /* Worked out on the table, inherited as pixels (see table.css). */
 @property --bj-card-w {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 64px;
+}
+
+@property --bj-card-base {
   syntax: '<length>';
   inherits: true;
   initial-value: 64px;
@@ -47,7 +55,11 @@
 
 /* A long draw shrinks the dealer's cards to the room on the right, clear of the shoe. */
 .bj-dealer .tbl-hand {
-  --bj-room: calc(50cqw + var(--bj-anchor) - var(--tbl-deck-w) * 1.5 - 12px);
+  /*
+   * The room from the fan's start to the shoe: the dealer's box begins where the fan does (its
+   * padding centres the first two cards), so its whole width is the room on the right.
+   */
+  --bj-room: calc(100cqw - var(--tbl-deck-w) * 1.5 - 12px);
   --tbl-w: min(var(--bj-card-w), max(14px, calc(var(--bj-room) / (1 + var(--fan-step) * (var(--fan, 2) - 1)))));
 }
 
@@ -384,7 +396,18 @@
 /* ---------- Phones: the sizes go by the room the table has, a step smaller ---------- */
 @media (max-width: 760px), (min-aspect-ratio: 3/2) and (max-height: 520px) {
   .bj-table {
-    --bj-card-w: clamp(30px, 11cqh, 60px);
+    /*
+     * The least card is 11% of the table's height, up to 60px. Over it the cards take the room the
+     * seats leave them (--tbl-spare: the table works it out from the seats the round was dealt
+     * with, room.ts useSeatRoom), shared by the dealer's fan and mine, 1.77 card widths each: a
+     * card pixel takes 3.54px. They stop at 84px, and where the dealer's four cards (2.32 card
+     * widths from the anchor, 0.72 left of the middle) would no longer clear the shoe. A crowd
+     * that needs all its room keeps the least card; a few players leave the cards the felt.
+     * --tbl-grow tells the table how much taller the two rows are for it.
+     */
+    --bj-card-base: clamp(30px, 11cqh, 60px);
+    --bj-card-w: clamp(var(--bj-card-base), calc(var(--bj-card-base) + var(--tbl-spare) / 3.54), max(var(--bj-card-base), min(84px, calc((50cqw - var(--tbl-pad) - 1px - var(--tbl-deck-w) * 1.5 - 9px) / 1.6))));
+    --tbl-grow: calc((var(--bj-card-w) - var(--bj-card-base)) * 3.54);
     --bj-label-h: 18px;
     --tbl-mini-w: 22px;
     --tbl-pill-h: 24px;
@@ -395,18 +418,24 @@
   .bj-dealer__label {
     font-size: 0.8rem;
   }
+
+  /* The banner goes on every phone, as on a short one (table.css), its height to the cards or the seats: the round, the rule and whose turn it is stay. */
+  .bj-table.tbl-felt--calm .tbl-ribbon__band {
+    display: none;
+  }
 }
 
 /*
  * The shortest phones (320x568, a phone on its side): five other players need two rows of tiles
- * tall enough for the stack and the bet. The word Dealer goes, and the round and whose turn it is
- * move up into the room left of the dealer's hand (its cards fan right from the centre) rather
- * than take a row of their own. A table with nobody else at it has the room: it keeps the line in
- * the middle, halfway between the dealer and my hand (the cards keep their size either way).
+ * tall enough for the stack and the bet, so the least card is 30px. The word Dealer goes, and the
+ * round and whose turn it is move up into the room left of the dealer's hand (its cards fan right
+ * from the centre) rather than take a row of their own. A table with nobody else at it has the
+ * room: it keeps the line in the middle, halfway between the dealer and my hand. Either way the
+ * cards take the room the seats leave, as on any phone.
  */
 @media (max-width: 760px) and (max-height: 620px), (min-aspect-ratio: 3/2) and (max-height: 520px) {
   .bj-table {
-    --bj-card-w: 30px;
+    --bj-card-base: 30px;
     --bj-label-h: 0px;
     --tbl-pill-h: 22px;
     --tbl-deck-w: 28px;

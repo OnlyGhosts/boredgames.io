@@ -891,6 +891,32 @@ describe('the table controls (no clocks)', () => {
     expect(css).not.toContain('tbl-panel__status');
   });
 
+  it('keeps a watching host’s row of table buttons all game long (Deal now or Skip, dimmed when neither is on offer), so the panel and the table over it never change height; other spectators have no row', async () => {
+    const { TableAction } = await import('./components/ControlPanel');
+    // Quinn watches the whole game and is the host.
+    const watchingHost = (game: BlackjackView) => render(bjRoom(game, { hostId: 'carol' }), 'carol', true);
+    const row = (html: string) => html.match(/<div class="tbl-panel__actions">(<button[^>]*>[^<]*<\/button>)<\/div>/)?.[1] ?? '';
+    // The bets open with none down yet: Deal now, dimmed. Once one is down: Deal now. Another player's turn: Skip.
+    const open = watchingHost(view());
+    expect(attr(tagWith(open, 'bj-panel'), 'data-watching')).toBe('true');
+    expect(row(open)).toContain('data-testid="deal-now-off"');
+    expect(disabled(open, 'deal-now-off')).toBe(true);
+    expect(row(open)).toContain('>Deal now<');
+    expect(row(watchingHost(view({ controls: { ...NO_CONTROLS, canDealNow: true } })))).toContain('data-testid="deal-now"');
+    const theirs = acting({ turn: { playerId: 'bob', handIndex: 0 }, actions: NO_ACTIONS, controls: { ...NO_CONTROLS, canSkip: true } });
+    expect(row(watchingHost(theirs))).toContain('data-testid="skip-turn"');
+    // Nothing may go (the dealer's reveal playing, a tap waiting, the socket down): the same row, dimmed, never gone.
+    const held = (game: BlackjackView) => renderToString(TableAction({ view: game, meId: 'carol', turnName: 'Pia', live: false, watching: true, skipped: null, onSkip: () => undefined }));
+    expect(disabled(held(theirs), 'skip-turn-off')).toBe(true);
+    expect(attr(tagWith(held(theirs), 'skip-turn-off'), 'aria-label')).toBe('Stand Pia’s hand');
+    for (const game of [nextBetting(), acting({ phase: 'results', turn: null })]) {
+      expect(disabled(held(game), 'deal-now-off')).toBe(true);
+      expect(held(game)).not.toContain('Sit out');
+    }
+    // A spectator who is not the host has no table buttons at all, so no row to keep.
+    for (const game of [view(), view({ controls: { ...NO_CONTROLS, canDealNow: true } }), theirs]) expect(render(bjRoom(game), 'carol')).not.toContain('tbl-panel__actions');
+  });
+
   it('sends the new moves to the server', async () => {
     const { socket } = await import('../../platform/net/socket');
     const sent: unknown[] = [];
@@ -1118,17 +1144,46 @@ describe("the table’s focus and the stage", () => {
     }
   });
 
-  it('sizes the dealer and the stage from the screen alone: fixed rows, and no card size that goes by the players or the phase', () => {
+  it('sizes the dealer and the stage from the screen and, on a phone, the room the round’s seats leave: fixed rows, never the phase', () => {
     const css = readFileSync(fileURLToPath(new URL('./blackjack.css', import.meta.url)), 'utf8');
     // The calm table's fixed first and last rows (table.css) are the dealer's and the stage's.
     expect(css).toMatch(/\.bj-table \{[^}]*--tbl-head-h: calc\(var\(--bj-label-h\) \+ var\(--bj-fan-h\)\);\s*--tbl-stage-h: var\(--bj-fan-h\);/);
     // The cards go by the room the table has (cq units), worked out once on the table.
     expect(css).toMatch(/@property --bj-card-w \{\s*syntax: '<length>';\s*inherits: true;/);
     expect(css).toMatch(/\.bj-table \{\s*--bj-card-w: clamp\(64px, 13cqh, 132px\);/);
+    // On a phone the least card is 11% of the table's height, up to 60px (the shortest phones pin it at 30px: their seats need
+    // every pixel). Over it the cards take the room the seats leave (--tbl-spare, worked out by the table from the seats the
+    // round was dealt with: room.ts useSeatRoom), shared by the dealer's fan and mine, 1.77 card widths each (3.54px a card
+    // pixel), up to 84px and the widest card whose four in the dealer's row (2.32 card widths from the anchor, 0.72 left of the
+    // middle) still clear the shoe: 73.8px on a 390px phone. --tbl-grow tells the table how much taller the two rows are for it,
+    // so it reads the seats' room with the cards at their least size however big they are.
+    expect(css).toMatch(/@property --bj-card-base \{\s*syntax: '<length>';\s*inherits: true;/);
+    const phone = css.slice(css.indexOf('@media (max-width: 760px), (min-aspect-ratio: 3/2) and (max-height: 520px)'));
+    expect(phone).toMatch(
+      /\.bj-table \{\s*(\/\*[^*]*(\*(?!\/)[^*]*)*\*\/\s*)?--bj-card-base: clamp\(30px, 11cqh, 60px\);\s*--bj-card-w: clamp\(var\(--bj-card-base\), calc\(var\(--bj-card-base\) \+ var\(--tbl-spare\) \/ 3\.54\), max\(var\(--bj-card-base\), min\(84px, calc\(\(50cqw - var\(--tbl-pad\) - 1px - var\(--tbl-deck-w\) \* 1\.5 - 9px\) \/ 1\.6\)\)\)\);\s*--tbl-grow: calc\(\(var\(--bj-card-w\) - var\(--bj-card-base\)\) \* 3\.54\);/,
+    );
+    expect(css.slice(css.indexOf('@media (max-width: 760px) and (max-height: 620px)'))).toMatch(/\.bj-table \{\s*--bj-card-base: 30px;/);
+    // Only the phone's rule takes the seats' room: a desktop's cards go by the table alone.
+    expect(css.slice(0, css.indexOf('@media (max-width: 760px), (min-aspect-ratio: 3/2) and (max-height: 520px)'))).not.toMatch(/var\(--tbl-spare\)/);
+    // The banner goes on every phone (table.css hides it under 761px tall already): its 30px go to the cards or the seats.
+    expect(phone).toMatch(/\.bj-table\.tbl-felt--calm \.tbl-ribbon__band \{\s*display: none;/);
+    // A watcher's table is taller by the bet controls their one-line panel has not got: the seats have that room first, the cards
+    // what they leave, so the felt says nothing of who is watching.
+    expect(css).not.toMatch(/watching/);
+    expect(attr(tagWith(render(bjRoom(acting()), 'carol'), 'bj-table'), 'class')).not.toContain('watching');
+    // The felt says how many seats the round was dealt with (the others: Pia for the host, both players for a watcher), and on
+    // the server render nothing has been worked out yet: the cards at their least size.
+    expect(attr(tagWith(render(bjRoom(acting()), 'host'), 'bj-table'), 'data-seats')).toBe('1');
+    expect(attr(tagWith(render(bjRoom(acting()), 'carol'), 'bj-table'), 'data-seats')).toBe('2');
+    expect(attr(tagWith(render(bjRoom(acting()), 'host'), 'bj-table'), 'style')).toBeUndefined();
+    // The dealer's long draw shrinks to the room from the fan's start to the shoe: the dealer's
+    // content box begins where the fan does (its padding centres the first two cards), so its whole
+    // inline size is that room (half of it once left a 6-card draw at 17px beside 80px of felt).
+    expect(css).toMatch(/\.bj-dealer \.tbl-hand \{\s*(\/\*[^*]*(\*(?!\/)[^*]*)*\*\/\s*)?--bj-room: calc\(100cqw - var\(--tbl-deck-w\) \* 1\.5 - 12px\);/);
     expect(render(bjRoom(view()), 'host')).toContain('tbl-felt tbl-felt--calm bj-table');
-    // A crowd never resizes the dealer's cards or the stage's.
+    // The crowd on show never resizes the dealer's cards or the stage's: only the seats the round began with do.
     for (const rule of css.match(/[^{}]*tbl-crowd--[^{}]*\{[^}]*\}/g) ?? []) {
-      expect(rule).not.toMatch(/--bj-(card-w|fan-h|label-h)/);
+      expect(rule).not.toMatch(/--bj-(card-w|card-base|fan-h|label-h)|--tbl-spare/);
     }
     // The fan keeps one height however many cards (the step down shrinks past four).
     const table = readFileSync(fileURLToPath(new URL('../../platform/styles/table.css', import.meta.url)), 'utf8');

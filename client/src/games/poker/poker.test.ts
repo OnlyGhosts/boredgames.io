@@ -770,15 +770,38 @@ describe('the stage and the line under the ribbon', () => {
 });
 
 describe('the table keeps its places', () => {
-  it('sizes the board and the stage from the room the table has, in the calm table’s fixed first and last rows', () => {
+  it('sizes the board from the room the table has and my cards on a phone from the room the hand’s seats leave, in the calm table’s fixed first and last rows', () => {
     const css = readFileSync(join(import.meta.dirname, 'poker.css'), 'utf8');
     expect(css).toMatch(/\.pk-table \{[^}]*--tbl-head-h: calc\(var\(--pk-pot-h\) \+ 8px \+ var\(--pk-card-w\) \* 1\.5 \+ 4px\);/);
-    expect(css).toMatch(/\.pk-table \{[^}]*--tbl-stage-h: calc\(var\(--tbl-pill-h\) \* 0\.7 \+ var\(--pk-card-w\) \* 1\.77 \+ 4px\);/);
+    // The stage is sized for my two cards' own width (--pk-stage-w), the board's on a desktop.
+    expect(css).toMatch(/\.pk-table \{[^}]*--tbl-stage-h: calc\(var\(--tbl-pill-h\) \* 0\.7 \+ var\(--pk-stage-w\) \* 1\.77 \+ 4px\);/);
     // Worked out once on the table, from its height and its width (five cards and the deck across).
     expect(css).toMatch(/@property --pk-card-w \{\s*syntax: '<length>';/);
-    expect(css).toMatch(/\.pk-table \{\s*--pk-card-w: min\(clamp\(56px, 12cqh, 120px\), calc\(\(100cqw - 2 \* var\(--tbl-pad\) - 2 \* var\(--tbl-deck-w\) - 40px\) \/ 5\.4\)\);/);
-    // A crowd never resizes the board or my cards.
-    for (const rule of css.match(/[^{}]*tbl-crowd--[^{}]*\{[^}]*\}/g) ?? []) expect(rule).not.toMatch(/--pk-card-w/);
+    expect(css).toMatch(/@property --pk-stage-w \{\s*syntax: '<length>';\s*inherits: true;/);
+    expect(css).toMatch(/\.pk-table \{\s*--pk-card-w: min\(clamp\(56px, 12cqh, 120px\), calc\(\(100cqw - 2 \* var\(--tbl-pad\) - 2 \* var\(--tbl-deck-w\) - 40px\) \/ 5\.4\)\);\s*--pk-stage-w: var\(--pk-card-w\);/);
+    expect(css).toMatch(/\.pk-mine \.tbl-hand \{\s*--tbl-w: var\(--pk-stage-w\);/);
+    // On a phone the board is bound by its width (five cards beside the deck keep it under 50px at 390 wide), so my two cards
+    // take their own size: the board's card, and over it the room the seats leave (--tbl-spare, worked out by the table from the
+    // seats the hand was dealt with: room.ts useSeatRoom), 1.77px of it a card pixel, up to half as wide again as the board's
+    // and 84px (a flat 84px put 84px cards under a 49px board). --tbl-grow tells the table how much taller the stage is for it.
+    const phone = css.slice(css.indexOf('@media (max-width: 760px), (min-aspect-ratio: 3/2) and (max-height: 520px)'));
+    expect(phone).toMatch(
+      /\.pk-table \{[^}]*--pk-stage-w: clamp\(var\(--pk-card-w\), calc\(var\(--pk-card-w\) \+ var\(--tbl-spare\) \/ 1\.77\), max\(var\(--pk-card-w\), min\(84px, var\(--pk-card-w\) \* 1\.5\)\)\);\s*--tbl-grow: calc\(\(var\(--pk-stage-w\) - var\(--pk-card-w\)\) \* 1\.77\);/,
+    );
+    // The shortest phones pin the board at 30px; my cards take the same rule over it (45px at the most).
+    expect(css.slice(css.indexOf('@media (max-width: 760px) and (max-height: 620px)'))).toMatch(/\.pk-table \{[^}]*--pk-card-w: 30px;\s*--tbl-pill-h/);
+    // The banner with the blinds stays wherever the phone is tall enough (table.css hides it under 761px): they show nowhere else.
+    expect(phone).not.toMatch(/tbl-ribbon__band/);
+    // A watcher's taller table (no bet controls under it) gives its seats that room first, the cards what they leave: the felt
+    // says nothing of who is watching. It says how many seats the hand was dealt with; the server render works out nothing.
+    expect(css).not.toMatch(/watching/);
+    const watched = tagWith(render(pkRoom(view()), 'dave', false), 'pk-table');
+    expect(attr(watched, 'class')).not.toContain('watching');
+    expect(attr(watched, 'data-seats')).toBe('3');
+    expect(attr(watched, 'style')).toBeUndefined();
+    expect(attr(tagWith(render(pkRoom(view()), 'bob', false), 'pk-table'), 'data-seats')).toBe('2');
+    // The crowd on show never resizes the board or my cards: only the seats the hand began with do.
+    for (const rule of css.match(/[^{}]*tbl-crowd--[^{}]*\{[^}]*\}/g) ?? []) expect(rule).not.toMatch(/--pk-(card|stage)-w|--tbl-spare/);
     // The board, the pot over it and the deck in the corner: no spotlight, no tray.
     const html = render(pkRoom(view({ turn: 'carol' })), 'bob', false);
     expect(html).not.toContain('tbl-stage--tight');

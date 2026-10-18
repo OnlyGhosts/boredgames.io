@@ -285,7 +285,15 @@ is left is shared evenly between the rows, so the ribbon and the seats keep one 
 row and the stage have a fixed height (`--tbl-head-h`, `--tbl-stage-h`) and their cards a fixed
 size that the game works out from the room its table has (`cq` units of the `tbl` container on
 `.tbl__table`, registered with `@property` as lengths so they are worked out once on the table),
-never from the phase or the number of players. My own hand is on the stage whenever I am dealt
+never from the phase. On a phone the cards also take the room the seats leave: `useSeatRoom`
+(`platform/table/room.ts`) reads the seats' room with the cards at their least size (the room now
+plus `--tbl-grow`, how much taller the game's rows are for its cards), takes off what the seats
+need (`seatsNeed` in `grid.ts`: their natural height in the tier that room gives them, and room for
+the line under the ribbon to wrap) and writes the rest on the felt as `--tbl-spare`, which the
+game's phone rule turns into card width up to a cap. It reads the seats the round on the table was
+dealt with (Blackjack's round, Poker's hand), and reads again only when that count or the felt's
+size changes, so a player leaving mid-round never moves the cards: they change, if at all, as the
+next round is dealt. My own hand is on the stage whenever I am dealt
 in, in every phase and on every turn, my stake by its total (a pill of chips, read as "Bet 10"); the player on turn plays in
 their own seat (lit, and nowhere else). Not dealt in (watching, sitting out, out of chips), the
 stage shows the hand in play with its owner's name by its total, and that seat leaves its cards to
@@ -316,8 +324,10 @@ in a grid that fits its space: [`grid.ts`](../client/src/platform/table/grid.ts)
 (full, compact, small, dense) from the room the table leaves the seats, the richest whose fewest
 rows keep the tile's least height (`tierFor`: a desktop keeps the cards in miniature in the seats
 for seven others across, a phone steps down to compact for four), fits the columns to the room
-left, never narrower than the tier's `minWidth` so names and totals stay whole (a narrow full tile
-gives its name, stack, bet and cards a row each; a compact tile under 150px wide and 70px tall
+left, never narrower than the tier's `minWidth` so names, totals and a full tile's stack in words
+stay whole (104px on a phone: three full tiles across a 360px phone, two across a 320px one, where
+three others take a row of compact tiles instead; a narrow full tile gives its name, stack, bet and
+cards a row each; a compact tile under 150px wide and 70px tall
 puts its stack and total on one line (the stack alone across it while there is no total), the hand
 in play's total alone for split hands, and its bet pill on a line of its own; a
 narrow small tile wears its total as a badge on its corner), keeps a full tile to its top rows before the deal (`bare`), and a desktop sets them on
@@ -336,7 +346,10 @@ one in a single row on a phone; then one big primary button, Blackjack's Bet and
 Call), each with a small `icon` after its label, dimmed when not on offer and
 `primary` on the one the game suggests; then `actions`, the table's own full-width secondary
 buttons (`TableButton`: Blackjack's Sit out, Deal now and Skip) in a row that keeps its place, Sit
-out dimmed when none is on offer; on the shortest phones that row shares the main button's row),
+out dimmed when none is on offer; on the shortest phones that row shares the main button's row;
+`WatchingPanel` in place of the controls for a spectator, with the row under its line only for a
+watching host, whose Skip or Deal now stays dimmed when neither is on offer, so a panel never
+changes height in a round and the felt over it, whose room a phone's cards go by, never moves),
 `TotalPill` / `PayoutFloat` / `outlineClass` (the outcome colours),
 `TableCard` (a card that slides in from the deck, turns over and leaves for the discards),
 `ChipFlights` (chips sliding between `data-table-anchor` places) and `useHotkeys` in

@@ -309,8 +309,23 @@ test('the host sets the stacks, the blinds and two hands, two phones join and th
   await chipsConserved();
 });
 
+/** My two cards' width on the stage and the board's card width, as `page` draws them. */
+const cardWidths = (page: Page): Promise<{ mine: number; board: number }> =>
+  page.evaluate(() => {
+    const table = document.querySelector('[data-testid="pk-table"]');
+    return {
+      mine: Math.round((document.querySelector('[data-testid="my-cards"] .playing-card')?.getBoundingClientRect().width ?? 0) * 10) / 10,
+      board: table ? Math.round(parseFloat(getComputedStyle(table).getPropertyValue('--pk-card-w')) * 10) / 10 : 0,
+    };
+  });
+
 test('hand one: a raise through the panel, a call and a fold, the board street by street, and a showdown on the table with the pot to the winner', async () => {
   for (const p of phones()) await phoneLayoutHolds(p, PORTRAIT);
+  // Three at the table on a 390x844 phone: my two cards take the room the two seats leave, half as wide again as the board's
+  // (they were the board's 49px, five cards and the deck across keeping them small).
+  for (const p of phones()) {
+    await expect.poll(async () => { const w = await cardWidths(p.page); return w.mine / w.board; }, { message: `${p.name}: my cards half as wide again as the board's` }).toBeGreaterThan(1.45);
+  }
   for (const p of phones()) await expect(p.page.getByTestId('hand-hint')).toHaveText(/^(Pair of .+|.+ high)$/);
 
   const raiser = await actor();
@@ -568,6 +583,13 @@ async function bigTable(browser: Browser, base: string, size: number): Promise<v
       }
       if (own) await page.setViewportSize(own);
     };
+    if (size === 12) {
+      // Twelve players on a 390x844 phone: the seats need all their room, so they keep the tiles they had (compact, with every
+      // stack and bet) and my cards the board's size.
+      await expect(phone.getByTestId('seats')).toHaveAttribute('data-tier', 'compact');
+      const w = await cardWidths(phone);
+      expect(Math.abs(w.mine - w.board), '12 players: my cards as wide as the board’s').toBeLessThanOrEqual(0.5);
+    }
     await fits(phone, PHONES);
     await fits(desk, DESKTOPS);
     // The seat to act is lit on both pages (its tile, unless it is the page's own seat) and named under the ribbon.

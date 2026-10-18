@@ -140,7 +140,7 @@ const NO_ACTIONS = { canHit: false, canStand: false, canDouble: false, canSplit:
 const NO_CONTROLS = { canSitOut: false, canDealNow: false, canSkip: false };
 const HIDDEN = (up: Card) => ({ cards: [up], holeHidden: true, total: handTotal([up]).total, soft: false, blackjack: false });
 
-/** The snapshots of one scenario, in order: a watcher's have no seat of mine in them. */
+/** The snapshots of one scenario, in order: a watcher's have no seat of mine in them, and no seat to sit out (as the host, Deal now and Skip stay). */
 export function scenarioRooms(s: Scenario): BlackjackRoomState[] {
   const rooms = seatedRooms(s);
   if (!s.watch) return rooms;
@@ -149,7 +149,7 @@ export function scenarioRooms(s: Scenario): BlackjackRoomState[] {
     const players = Object.fromEntries(Object.entries(game.players).filter(([id]) => id !== ME));
     const order = game.order.filter((id) => id !== ME);
     const lastRound = game.lastRound ? { ...game.lastRound, order: game.lastRound.order.filter((id) => id !== ME), hands: Object.fromEntries(Object.entries(game.lastRound.hands).filter(([id]) => id !== ME)) } : null;
-    return { ...room, game: { ...game, players, order, lastRound, waitingFor: game.waitingFor.filter((id) => id !== ME), actions: NO_ACTIONS } };
+    return { ...room, game: { ...game, players, order, lastRound, waitingFor: game.waitingFor.filter((id) => id !== ME), actions: NO_ACTIONS, controls: { ...game.controls, canSitOut: false } } };
   });
 }
 
@@ -227,6 +227,8 @@ function seatedRooms(s: Scenario): BlackjackRoomState[] {
   };
 
   const firstOther = others[0] ?? ME;
+  // A watcher has no hands: the last turn of the round is the last other player's (the host watching may Skip it).
+  const last = s.watch ? (others[others.length - 1] ?? ME) : ME;
   const room = (game: BlackjackView) => roomOf(players, game, s.start);
   switch (s.phase) {
     case 'betting':
@@ -236,9 +238,9 @@ function seatedRooms(s: Scenario): BlackjackRoomState[] {
     case 'other':
       return [room(acting(firstOther, 0))];
     case 'mine':
-      return [room(acting(ME, s.active))];
+      return [room(last === ME ? acting(ME, s.active) : acting(last, 0))];
     case 'dealer':
-      return [room(acting(ME, s.hands - 1)), room(settled())];
+      return [room(last === ME ? acting(ME, s.hands - 1) : acting(last, 0)), room(settled())];
     case 'results':
       return [room(settled())];
   }

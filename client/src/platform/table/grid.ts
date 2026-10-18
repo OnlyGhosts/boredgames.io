@@ -35,14 +35,22 @@ export interface TierShape {
   /** The most columns the tier may spread to when the grid is short. */
   maxCols: number;
   /**
-   * The narrowest the tile still reads (its name, its total, the Playing tag): a short grid never
-   * spreads to columns narrower than this, the tiles get shorter instead.
+   * The narrowest the tile still reads (its name, its total, the Playing tag, a full tile's stack in
+   * words): a grid has no more columns than fit at this width (tiles that would need more take
+   * another row, or a poorer tier where the rows have no room), and a short grid never spreads
+   * past them, the tiles get shorter instead.
    */
   minWidth: number;
 }
 
+/**
+ * A phone's tiles. A full tile writes the stack in words beside the face ("12,500 chips"), which
+ * needs 103px in the thick ring of the seat on turn ("1,250 chips" 96px): so never under 104px,
+ * three across a 360px phone (105px), two across a 320px one (three there were 93px, and cut the
+ * stack to "1,250 chip").
+ */
 export const TIER_SHAPES: Record<TileTier, TierShape> = {
-  full: { width: 168, height: 96, minHeight: 94, cols: [1, 4], maxCols: 4, minWidth: 92 },
+  full: { width: 168, height: 96, minHeight: 94, cols: [1, 4], maxCols: 4, minWidth: 104 },
   compact: { width: 116, height: 68, minHeight: 52, cols: [3, 5], maxCols: 5, minWidth: 64 },
   small: { width: 70, height: 50, minHeight: 36, cols: [4, 6], maxCols: 10, minWidth: 44 },
   dense: { width: 46, height: 30, minHeight: 26, cols: [6, 8], maxCols: 14, minWidth: 24 },
@@ -197,7 +205,7 @@ export function fitsRoom(count: number, room: Room, { wide = false, tier = tileT
 }
 
 /** A richer tier takes over only with this much to spare, so a room that wobbles by a pixel never flips the tiles. */
-const SPARE = 8;
+export const SPARE = 8;
 
 /** The poorest tier a count may fall to when its usual one has no room: full gives up its cards for compact; the rest keep what they show (the stack and the bet stay on a compact tile). */
 const LOWEST: Record<TileTier, TileTier> = { full: 'compact', compact: 'compact', small: 'small', dense: 'dense' };
@@ -218,6 +226,36 @@ export function tierFor(count: number, room: Room | null, { wide = false, curren
     if (leastHeight(count, room.width, { wide, tier }) + (richer(tier) ? SPARE : 0) <= room.height) return tier;
   }
   return usual;
+}
+
+/**
+ * How much taller the ribbon over the seats may grow within a round than it was when the table
+ * last read its room (useSeatRoom): the line saying whose turn it is wrapping a long name onto a
+ * second line (a 19px line on a phone and the 2px between), and in Poker the turn clock (26px on a
+ * phone) standing again where a 19px line of words stood.
+ */
+export const TURN_WRAP = 21;
+export const TURN_CLOCK = 7;
+
+/**
+ * The height the seats keep out of `room` (their room with the cards at their least size) when a
+ * phone's cards grow into the rest: the tiles' natural height in the tier the room gives them,
+ * with SPARE over it, and never less than that tier's least height with `growth` over it (what the
+ * ribbon may still take in the round), so the tiles keep their tier and their size whatever the
+ * line under the ribbon says. With nobody else at the table, `growth` alone: the ribbon's own row
+ * may still need it. Never more than the room.
+ */
+export function seatsNeed(count: number, room: Room, { wide = false, growth = 0 }: { wide?: boolean; growth?: number } = {}): number {
+  if (count <= 0) return Math.min(room.height, growth);
+  const tier = tierFor(count, room, { wide });
+  const natural = naturalHeight(count, room.width, { wide, tier }) + SPARE;
+  const least = leastHeight(count, room.width, { wide, tier }) + growth;
+  return Math.min(room.height, Math.max(natural, least));
+}
+
+/** What the seats leave the cards of `room`, in whole pixels (seatsNeed): 0 where they need it all. */
+export function seatsSpare(count: number, room: Room, options: { wide?: boolean; growth?: number } = {}): number {
+  return Math.max(0, Math.floor(room.height - seatsNeed(count, room, options)));
 }
 
 /**
