@@ -1038,27 +1038,59 @@ stylesheet (`import './wordle.css'`) and build the module with
 where `rules` is your `rules.ts` (section 6.4): the How to play card in the lobby, and `Art` is
 your `art.tsx` (section 6.5): the picture on the game's lobby tile.
 
-**Drawing the picture.** Every tile is one neutral panel with the game's picture on top and its
+**Drawing the picture.** Every tile is one neutral panel with the game’s picture on top and its
 name on the footer strip, so the pictures carry all the colour and must share one style: the
-mascots' (flat fills, an ink outline, a hard ink shadow). The frame does most of it:
+mascots’ flat fills. A picture sits on three backgrounds, the dark theme’s graphite panel
+(#20221F), the light theme’s white one and the picked tile’s lilac, so it is drawn with no black
+and no grey outlines at all: black vanishes into the dark panel and grey looks dull on all three.
+Every edge is deep lime or deep lilac. The frame does most of it:
 
 - Draw inside [`GameArt`](../client/src/platform/components/GameArt.tsx) with `game` set to your
   id; the component takes no props (the picker renders it bare and sizes it through `.game-tile__art .game-art`). It is a 64 x 46 canvas; keep your shapes within about 2 to 60 across and 2 to 42 down, because
-  the frame draws the whole picture once more in solid ink, 2.2 units right and down, underneath
-  (the shadow), and that copy must fit too.
-- Colours come only from `ART` (`ink`, `lime`, `lilac`, `paper`): theme tokens that are the same
-  in both themes, so the picture never changes between dark and light. Never a raw hex and never
-  the game's accent. Use lime or lilac for the main shape and paper where a thing is white (a card
-  face, a speech bubble); ink for small solid details (eyes, pips, dots).
-- Every shape gets `{...OUTLINE}` (2.5 units of ink, round joins) on top of its fill; fine lines
-  inside a shape (a card's inner frame, a chip's ring) get `{...DETAIL}` (1.8 units). A stroke-only
-  path must say `fill="none"`, or SVG fills it black.
+  the frame draws the whole picture once more, 2.2 units right and down, underneath (the shadow),
+  and that copy must fit too.
+- Colours come only from `ART` (`lime`, `lilac`, `paper`, `edgeLime`, `edgeLilac`, `ink`): theme
+  tokens that are the same in both themes, so the picture never changes between dark and light.
+  Never a raw hex, never a grey and never the game’s accent. Use lime or lilac for the main shape
+  and paper where a thing is white (a card face, a speech bubble, a face).
+- A lime or lilac shape is `{...shape('lime')}` or `{...shape('lilac')}`: its fill with a 2.2-unit
+  edge in the deep shade of the same colour, round joins. A white shape has no colour of its own
+  to deepen, so it borrows the deep edge of the colour it sits beside or belongs with:
+  `{...shape('paper', 'lime')}` for the ace’s face over the lime card back, the marker’s cone on its
+  lime body and Click Race’s base under its lime button; `{...shape('paper', 'lilac')}` for Quip
+  Game’s bubble beside the lilac one, the spy’s face under the lilac hat and the white chip in
+  Poker’s stack, which joins it to the lilac chip under it. A line (a squiggle, a spark) is
+  `<Line d="..." fill="lilac" width={2} />`: lime or lilac over its own deep edge, 2.2 showing each
+  side. Never an ink outline, never an ink line, never a grey one.
+- Ink (`ART.ink`) is only for small solid details well inside a shape (an ace and its spade on
+  the white face, the dots in a bubble, a chip’s ring, a spy’s glasses), filled, never stroked, and
+  at least 2 units clear of that shape’s edge (and of any edge drawn over it), so nothing black
+  ever touches the tile. Any other detail is filled in one of the two edge colours: a marker’s nib
+  is a deep lilac point inside its cone (the colour of the squiggle it draws), a card back’s print
+  is the deep lime of its own edge.
+- The shadow is free: `components.css` paints the copy underneath with every shape filled in its
+  edge colour (a white shape in the one it borrows) and leaves the details out, a flat sticker
+  shadow that reads on all three tiles. A translucent ink shadow vanishes on the graphite panel,
+  and none at all loses the mascots’ hard shadow and leaves a lilac shape on the picked tile with
+  only its edge.
+- The picked tile is lilac, so there (and only there) `lobby.css` swaps both edges for deeper cuts
+  of the same hues (`--game-edge-lime-picked`, `--game-edge-lilac-picked`): the drawing keeps its
+  character and every edge and shadow still parts its shape from the tile. You draw nothing extra.
 - Two to four shapes that read as one object at 90px wide, the size of a phone tile: a marker over
-  a scribble, a hat over glasses, two bubbles, two cards, a stack of chips. Tilt one piece a little
-  (`transform="rotate(...)"`) so it feels drawn, not diagrammed.
+  a squiggle, a hat on a face in dark glasses, two bubbles, two cards, a stack of chips. Tilt one
+  piece a little (`transform="rotate(...)"`) so it feels drawn, not diagrammed. Check it selected
+  too: on the lilac tile a lilac shape is only its deep lilac edge and shadow.
 - The SVG is `aria-hidden` (the name sits under it) and carries `data-art="<id>"`;
-  [`client/src/games/art.test.ts`](../client/src/games/art.test.ts) checks every game's picture
-  renders that way in tokens only and shows on the tile.
+  [`client/src/games/art.test.ts`](../client/src/games/art.test.ts) checks every game’s picture
+  renders that way in tokens only, that every lime or lilac shape carries its own deep edge and
+  every white one the deep edge of a colour in the same picture, that ink is never a stroke, that
+  the palette and tokens hold no grey and every edge is a deeper cut of lime or lilac, that the
+  edges read on both tiles and the picked ones on the lilac, and that the picture shows on the tile.
+
+| Edge (`ART`, token) | Rims | On #20221F | On #FFFFFF | On its own fill | On paper | On the picked tile: token, on #A699D5 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `edgeLime`, `--game-edge-lime` #6B8A1E | lime shapes and lines (#C7E976), a white shape that belongs with lime | 4.03:1 | 3.98:1 | 2.91:1 | 3.64:1 | `--game-edge-lime-picked` #405311, 3.30:1 |
+| `edgeLilac`, `--game-edge-lilac` #7466AD | lilac shapes and lines (#A699D5), a white shape beside lilac | 3.24:1 | 4.95:1 | 1.92:1 | 4.53:1 | `--game-edge-lilac-picked` #4F408C, 3.33:1 |
 
 Style rules that keep the look consistent (details in section 8):
 
@@ -1126,7 +1158,7 @@ about 2 s), `settings-menu`, `site-header`, `brand-link`, `wordmark`.
 ### Step 6: ship it
 
 Set `status: 'live'` in `GameMeta`. The game tile (your picture on a neutral panel, the name on
-its footer strip, lilac with an ink check when picked) appears in the lobby picker from `GAME_LIST`; `/wordle/CODE` already routes;
+its footer strip, the whole tile lilac when picked) appears in the lobby picker from `GAME_LIST`; `/wordle/CODE` already routes;
 the PWA, Vercel function and Redis driver need no change.
 
 ---
@@ -1474,24 +1506,27 @@ export const templateRules: GameRules = {
 ### 6.5 `client/src/games/template/art.tsx`
 
 The picture on the lobby tile, in the mascots' style (how to draw one: step 4 in section 5). The
-frame draws the shadow; the game draws a few flat shapes from the `ART` palette, each with the
-`OUTLINE`.
+frame draws the shadow; the game draws a few flat shapes, each through `shape()` (a lime or lilac
+fill with its own deep edge, a white one with the deep lime or lilac it borrows) or `Line`, and no
+ink or grey outline anywhere.
 
 ```tsx
 /**
- * Click Race's lobby picture: a big lime button on a paper base, mid-tap. The template of a game's
- * picture: a few flat shapes from the ART palette, each with the OUTLINE, inside the GameArt frame,
- * which draws the hard shadow.
+ * Click Race’s lobby picture: a big lime button on a white base, mid-tap. The template of a game’s
+ * picture: a few flat shapes from the ART palette, each through `shape()` (a lime or lilac fill
+ * edged in its own deep shade, a white one in the deep lime or lilac of the shape it belongs with)
+ * or `Line`, inside the GameArt frame, which draws the shadow.
  */
-import { ART, GameArt, OUTLINE } from '../../platform/components/GameArt';
+import { GameArt, Line, shape } from '../../platform/components/GameArt';
 
 export function ClickRaceArt() {
   return (
     <GameArt game="template">
-      <path d="M32 2v6M19 6l4 5M45 6l-4 5" fill="none" {...OUTLINE} />
-      <rect x="12" y="27" width="40" height="12" rx="6" fill={ART.paper} {...OUTLINE} />
-      <ellipse cx="32" cy="23" rx="15" ry="10" fill={ART.lime} {...OUTLINE} />
-      <path d="M23 20c1.5-3 4.5-5 8.5-5" fill="none" stroke={ART.paper} strokeWidth={2.5} strokeLinecap="round" />
+      <Line d="M32 4.5v4.5" fill="lilac" width={1.8} />
+      <Line d="M19.5 7.5l3.5 4" fill="lilac" width={1.8} />
+      <Line d="M44.5 7.5l-3.5 4" fill="lilac" width={1.8} />
+      <rect x="12" y="28" width="40" height="12" rx="6" {...shape('paper', 'lime')} />
+      <ellipse cx="32" cy="24" rx="15" ry="10" {...shape('lime')} />
     </GameArt>
   );
 }
@@ -2058,7 +2093,7 @@ operating system preference is not consulted).
 | Shadows | `--shadow-sm` and `--shadow-md` are `none` (flat surfaces sit on their border); `--shadow-lg` is a soft drop for floating layers only (sheets, toasts); `--shadow-piece` and `--shadow-pencil` lift the pieces of the How to play hero (a fanned card, the spy's card, the pencil over the canvas) |
 | Surfaces | `--color-bg` #141514, `--color-surface` #20221F, `--color-surface-2` #2B2E29 (raised), `--color-surface-3` #191C19 (inset wells: inputs, lists), `--color-border` #454A43, `--color-border-strong` #747D6F (control borders) |
 | Text | `--color-text` #F1F0E8, `--color-text-muted` #B9C0B3, `--color-text-faint` (small text, AA on the panels) |
-| Games | `--game-<id>` per game (the same hex as `GameMeta.accent`), `--game-ink` for the glyph on top and `--game-paper`, the off-white in a game's picture; `--tile-foot-bg/fg/border` are the lobby tile's footer strip (the panel's graphite on dark, solid ink on light); `--game-<id>-text` and `--game-<id>-soft` are the accent as text (the How to play card's key facts) and as the wash under its hero, one pair per theme, AA on the panels |
+| Games | `--game-<id>` per game (the same hex as `GameMeta.accent`), `--game-ink` for the glyph on top and `--game-paper`, the off-white in a game’s picture; `--game-edge-lime` and `--game-edge-lilac`, the picture’s only two edges (a white shape borrows one), the same in both themes and at least 3:1 on both tiles, with `--game-edge-lime-picked` and `--game-edge-lilac-picked`, the deeper cuts the picked lilac tile swaps in (section 5, step 4); `--tile-foot-bg/fg` are the lobby tile’s footer strip (the panel’s graphite on dark, solid ink on light), with no line over it; `--game-<id>-text` and `--game-<id>-soft` are the accent as text (the How to play card's key facts) and as the wash under its hero, one pair per theme, AA on the panels |
 | Brand | `--color-primary` (lime #C7E976, a FILL that always carries `--color-primary-contrast` ink text), `--color-primary-hover`, `--color-primary-soft`, `--color-primary-text` (lime as text/border/stroke on dark, a dark olive on white); `--color-secondary*` (lilac #A699D5) with the same five |
 | Status | `--color-success`, `-soft`, `-text`; `--color-warning*`; `--color-danger*`; `--color-info-soft`; `--color-focus` (flat, restrained, AA on the panels) |
 | Chat | `--chat-correct-bg/fg`, `--chat-close-bg/fg`, `--chat-guessed-bg/fg` |
@@ -2103,7 +2138,7 @@ layout, which is a good reference for a non-scrolling phone game.
 | [`Wordmark`](../client/src/platform/components/Wordmark.tsx) | `className?` | The outlined boredgames.io logo (Poppins Black + Regular paths) inline, accessible name "boredgames.io", "games" in `--color-primary-mark` |
 | [`PhoneBored`](../client/src/platform/components/Mascots.tsx) / `PhoneHappy` | `className?` | The two phone characters from `branding/mascots/boredgames-mascots.svg`, each cropped to itself, decorative (`aria-hidden`); the logo draws `BoredArt` and `HappyArt` together; celebrations only |
 | [`GameGlyph`](../client/src/platform/components/GameGlyph.tsx) | `game: GameMeta`, icon props | The game's 24px line glyph (the How to play hero draws it at 30px on the game's accent plate when the game has no illustration of its own, and at 34px as Scribble's pencil) |
-| [`GameArt`](../client/src/platform/components/GameArt.tsx) | `game: GameId`, children | The frame a game's lobby picture (`GameClientModule.Art`) is drawn in: a 64 x 46 canvas, `aria-hidden`, with the hard ink shadow drawn under whatever the game draws; `ART` (ink, lime, lilac, paper, as tokens), `OUTLINE` and `DETAIL` are the palette and strokes (section 5, step 4) |
+| [`GameArt`](../client/src/platform/components/GameArt.tsx) | `game: GameId`, children | The frame a game’s lobby picture (`GameClientModule.Art`) is drawn in: a 64 x 46 canvas, `aria-hidden`, with a flat sticker shadow (each shape filled in its own edge colour) drawn under whatever the game draws; `ART` (lime, lilac, paper, deep lime and deep lilac edges, and ink for details, as tokens; no grey) is the palette, `shape('lime' \| 'lilac')` a shape’s fill and its own deep edge, `shape('paper', 'lime' \| 'lilac')` a white shape with the deep edge it borrows, `Line` a lime or lilac line with its edge (section 5, step 4) |
 | [`GameTopBar`](../client/src/platform/components/GameTopBar.tsx) | `meta`, `room`, `isPhone`, `testId`, `className?`, `status?` (none for a card table, whose round is on its ribbon), `statusTestId?` ('round-indicator'), `statusData?`, `clock?`, `players: { label?, open, onOpen }`, `menu: { open, onOpen }`, `middle?`, `below?`, `compact?` | Every game's top bar as on the brand board (`gamebar.css`, `.gbar*`): a back arrow (`game-back`, it asks before leaving: `leave-sheet`, `game-leave-confirm`, `game-leave-yes`), the game's name large and the status ("Round 2/3": on the right on a desktop, in small type under the name on a phone, so the name, the round and the buttons each keep their own space), then the options button (a phone) or (a desktop) the host's End game (`end-game`, a tinted button with a danger border and the power icon that fills solid under the pointer; it asks first in `end-sheet`, with your `endGameNote`; "Ending soon" once asked for a later end), Leave for everyone (`leave-room`, the same shape on the quiet outline, the icon alone on a tablet; it opens the same `leave-sheet` as the back arrow) and the gear, whose popover is the device's preferences alone. Below, the player chips (`PlayerChips`: avatar, name, a status badge from your `playerStatus`; the row is the `players-toggle` button and never scrolls, a "+K" chip takes what does not fit) and the timer ring at the end. Keep the status short (`RoundStatus` renders "Round 1/5"); it stays on one line. `TableShell` renders it for the card tables, `compact` at every size. `compact` packs it into one row (a card table, The Spy Game on a phone): the chips give way to a players button (`players-toggle`: the people icon and the count in a pill, a 44px target), and a `clock` sits small in the row; the name stays whole at every phone width |
 | `GameMenuSheet` | `open`, `onClose()`, `children?` | The phone options sheet behind the bar's menu button (`menu-sheet`): theme and sound, your rows, then the ways out as tall rows (`ExitActions` in `GameExit.tsx`): End game for the host in the danger colour ("Ends it for everyone"), Leave room ("Only you leave"); each opens its confirm step in the sheet ("End the game for everyone?" with what it does; "Leave the room?" with whether the game goes on) |
 | [`ResultPoints`](../client/src/platform/components/RoundResult.tsx) / `ResultNext` / `earnersOf` | `rows`, `label`, `rowTestId?`, `empty` / `noun`, `paused`, `settling`, `testId` / `players`, `points` | A round or turn result (`results.css`): put them in an `.overlay__card.result-card` after a `.result-kicker` (how it ended, on the game's accent) and a `.result-reveal` (the word, the spy); the points list shows avatar, name, role tag and `+points`; the footer says what comes next ("Next turn soon", paused, or "starting" when the time is up) with no timer of its own: **one countdown per screen**, the top bar's ring (The Spy Game's ring counts the vote and the time to the next round while its round clock waits) |

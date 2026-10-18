@@ -115,12 +115,26 @@
   --game-ink: #141514;
   /* The off-white in a game's picture (the mascots' palette: lime, lilac, this paper and ink), the same in both themes. */
   --game-paper: #f7f5ec;
+  /*
+   * A picture’s edges, the same in both themes, and the only two: deep lime and deep lilac, never
+   * grey and never ink. A lime or lilac shape is rimmed in the deep shade of its own colour; a white
+   * (paper) shape borrows the deep lime or deep lilac of the shape it sits beside or belongs with.
+   * Each is at least 3:1 on #20221f and on #ffffff, at least 3:1 on the paper and at least 1.6:1
+   * on its own fill.
+   */
+  --game-edge-lime: #6b8a1e;
+  --game-edge-lilac: #7466ad;
+  /*
+   * The same two hues cut deeper for the picked tile, which is lilac: lobby.css swaps them in there
+   * and only there, so every edge and sticker shadow still parts its shape from the tile (3.30:1
+   * and 3.33:1 on #a699d5).
+   */
+  --game-edge-lime-picked: #405311;
+  --game-edge-lilac-picked: #4f408c;
 
-  /* A game tile's footer strip, the name on it and the line over it: the panel's own graphite on dark, solid ink on light. */
+  /* A game tile’s footer strip and the name on it: the panel’s own graphite on dark, solid ink on light. */
   --tile-foot-bg: #20221f;
   --tile-foot-fg: #f1f0e8;
-  --tile-foot-border: #454a43;
-
   /*
    * Each accent as text (the How to play card's key facts) and as a soft wash (its hero): on dark
    * the accent itself or a lighter cut, every text cut AA (4.5:1) on the panel and the raised surface.
@@ -203,8 +217,6 @@
   --chat-guessed-fg: #5e468c;
 
   --tile-foot-bg: #141514;
-  --tile-foot-border: #141514;
-
   /* The game accents cut dark for text (AA on white and on the pale lime), their washes pale. */
   --game-scribble-text: #5e468c;
   --game-scribble-soft: #ece7f7;

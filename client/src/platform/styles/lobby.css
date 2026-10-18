@@ -347,7 +347,6 @@
 
 /* One neutral panel for every game; the pictures carry the colour. */
 .game-tile {
-  position: relative;
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -376,8 +375,15 @@ button.game-tile:active {
   transform: translateY(1px);
 }
 
-/* Selected: the whole panel fills lilac with the picture on top, the strip turns lilac with ink text, and an ink check badge sits in the corner. */
+/*
+ * Selected: the whole panel fills lilac with the picture on top and the strip turns lilac with the
+ * name in bold ink; the fill alone marks it, no badge and no line. On the lilac the picture’s edges
+ * (and the sticker shadow drawn in them) take the deeper cuts of the same two hues (tokens.css), so
+ * a lilac shape still stands off the tile.
+ */
 .game-tile.is-selected {
+  --game-edge-lime: var(--game-edge-lime-picked);
+  --game-edge-lilac: var(--game-edge-lilac-picked);
   border-color: var(--color-secondary);
   background: var(--color-secondary);
   color: var(--color-secondary-contrast);
@@ -396,10 +402,9 @@ button.game-tile:active {
   height: auto;
 }
 
-/* The name on its footer strip: the panel's graphite on dark, solid ink on light (tokens.css). */
+/* The name on its footer strip, straight under the picture with no line between: the panel’s graphite on dark, solid ink on light (tokens.css). */
 .game-tile__name {
   padding: 7px 4px 8px;
-  border-top: 1.5px solid var(--tile-foot-border);
   background: var(--tile-foot-bg);
   color: var(--tile-foot-fg);
   font-family: var(--font-display);
@@ -410,23 +415,9 @@ button.game-tile:active {
 }
 
 .game-tile.is-selected .game-tile__name {
-  border-top-color: color-mix(in srgb, var(--game-ink) 35%, transparent);
   background: var(--color-secondary);
   color: var(--color-secondary-contrast);
   font-weight: 700;
-}
-
-.game-tile__check {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  display: grid;
-  place-items: center;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: var(--game-ink);
-  color: var(--color-secondary);
 }
 
 /* A phone: a little less room for the picture. */

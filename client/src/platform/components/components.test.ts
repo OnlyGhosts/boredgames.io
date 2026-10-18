@@ -606,14 +606,19 @@ describe('wordmark and mascots', () => {
     for (const f of svgs) expect(readFileSync(`${pub}/${f}`, 'utf8').toLowerCase(), f).not.toContain('#6c5ce7');
   });
 
-  it('draws every game on an illustrated tile: its picture over its name on the footer strip, the picked one lilac with an ink check', () => {
+  it('draws every game on an illustrated tile: its picture over its name on the footer strip, the picked one lilac, with no line and no badge', () => {
     const tokens = stylesheet('tokens.css');
     for (const g of GAME_LIST) {
       expect(tokens).toContain(`--game-${g.id}: ${g.accent};`);
     }
-    // The pictures are drawn in the mascots' palette through tokens the same in both themes; the strip flips from graphite to ink on light.
+    // The pictures are drawn in the mascots’ palette through tokens the same in both themes, every edge deep lime or deep lilac and never grey, a white shape borrowing its neighbour’s (client/src/games/art.test.ts checks they read); the strip flips from graphite to ink on light.
     expect(tokens).toContain('--game-paper: #f7f5ec;');
+    for (const edge of ['--game-edge-lime', '--game-edge-lilac', '--game-edge-lime-picked', '--game-edge-lilac-picked']) expect(tokens.match(new RegExp(`${edge}: #[0-9a-f]{6};`, 'g')), edge).toHaveLength(1);
+    expect(tokens).not.toContain('--game-edge-paper');
+    expect(tokens).not.toContain('--game-graphite');
     expect(tokens.match(/--tile-foot-bg: #[0-9a-f]{6};/g)).toHaveLength(2);
+    // Nothing draws a line between the picture and the name any more.
+    expect(tokens).not.toContain('--tile-foot-border');
     const html = renderToString(createElement(GamePicker, { room: room(), isHost: true, game: null }));
     // The picture slot comes before the name on every tile (the module's Art fills it once the games are registered: client/src/games/art.test.ts).
     expect(html.match(/<span class="game-tile__art">/g)).toHaveLength(GAME_LIST.filter((x) => x.status === 'live').length);
@@ -624,13 +629,16 @@ describe('wordmark and mascots', () => {
     expect(noOrphan('Adults only. Crude and filthy.')).toBe('Adults only. Crude and\u00a0filthy.');
     expect(noOrphan('Scribble')).toBe('Scribble');
     expect(html).not.toContain('✏️');
+    // The picked tile says so to assistive tech and with its lilac fill; there is no check badge.
     expect(tagWith(html, 'game-tile')).toContain('aria-checked="true"');
-    // Only the picked tile wears the check badge.
-    expect(html.match(/class="game-tile__check"/g)).toHaveLength(1);
-    expect(html.indexOf('game-tile__check')).toBeLessThan(html.indexOf('data-game="spygame"'));
+    expect(html.match(/aria-checked="true"/g)).toHaveLength(1);
+    expect(html.match(/role="radio"/g)).toHaveLength(GAME_LIST.filter((x) => x.status === 'live').length);
+    expect(html).not.toContain('game-tile__check');
+    // Nothing else sits on a tile: with no game registered here its picture slot is empty, so no tile carries an icon.
+    for (const tile of html.split('data-testid="game-tile"').slice(1)) expect(tile.slice(0, tile.indexOf('</button>'))).not.toContain('<svg');
     // The line glyph still names the game at the top of How to play: on the accent plate of a hero that has no illustration of its own (RulesHero.tsx).
     expect(renderToString(createElement(RulesCard, { meta: gameById('poker'), rules: { summary: '', hero: { kind: 'glyph' }, facts: [], round: '', scoring: '', end: '', settings: '', watchers: '' }, mode: 'popover' }))).toContain('data-glyph="poker"');
-    // Three to a row, a short last row stretching to fill; one neutral panel with the name on its strip; the picked tile is the lilac fill with ink.
+    // Three to a row, a short last row stretching to fill; one neutral panel with the name on its strip and no line over it; the picked tile is the lilac fill with ink.
     const lobby = stylesheet('lobby.css');
     expect(ruleOf(lobby, '.game-picker__list .game-tile')).toContain('flex: 1 1 calc(33.33% - 6px)');
     expect(ruleOf(lobby, '.game-tile')).toContain('background: var(--color-surface)');
@@ -640,16 +648,27 @@ describe('wordmark and mascots', () => {
     expect(ruleOf(lobby, '.game-tile__name')).toContain('background: var(--tile-foot-bg)');
     expect(ruleOf(lobby, '.game-tile__name')).toContain('color: var(--tile-foot-fg)');
     expect(ruleOf(lobby, '.game-tile__name')).toContain('font-family: var(--font-display)');
+    expect(ruleOf(lobby, '.game-tile__name')).not.toContain('border');
     expect(ruleOf(lobby, '.game-tile.is-selected')).toContain('background: var(--color-secondary)');
     expect(ruleOf(lobby, '.game-tile.is-selected')).toContain('color: var(--color-secondary-contrast)');
+    // On the picked lilac tile, and only there, the picture’s two edges (and the sticker shadow drawn in them) take their deeper cuts.
+    expect(ruleOf(lobby, '.game-tile.is-selected')).toContain('--game-edge-lime: var(--game-edge-lime-picked);');
+    expect(ruleOf(lobby, '.game-tile.is-selected')).toContain('--game-edge-lilac: var(--game-edge-lilac-picked);');
+    expect(lobby.match(/--game-edge-[a-z-]+:/g)).toEqual(['--game-edge-lime:', '--game-edge-lilac:']);
+    const src = fileURLToPath(new URL('../..', import.meta.url));
+    const sheets = (readdirSync(src, { recursive: true }) as string[]).filter((f) => f.endsWith('.css') && !/(?:^|\/)(?:tokens|lobby)\.css$/.test(f));
+    expect(sheets.length).toBeGreaterThan(5);
+    for (const sheet of sheets) expect(readFileSync(`${src}/${sheet}`, 'utf8'), sheet).not.toMatch(/--game-edge-[a-z-]+:/);
+    expect(tokens.match(/--game-edge-(?:lime|lilac):/g)).toHaveLength(2);
+    // Nothing sits positioned on a tile any more (the check badge is gone), so the tile is no positioning context.
+    expect(ruleOf(lobby, '.game-tile')).not.toContain('position');
     expect(ruleOf(lobby, '.game-tile.is-selected .game-tile__name')).toContain('background: var(--color-secondary)');
-    expect(ruleOf(lobby, '.game-tile.is-selected .game-tile__name')).toContain('border-top-color: color-mix(in srgb, var(--game-ink) 35%, transparent)');
+    expect(ruleOf(lobby, '.game-tile.is-selected .game-tile__name')).not.toContain('border');
     // Only an unpicked tile lifts under the pointer: an unscoped button hover would outrank .is-selected and swap the picked tile's lilac for the hover surface.
     expect(lobby).not.toMatch(/button\.game-tile:hover/);
     expect(ruleOf(lobby, 'button.game-tile:not(.is-selected):hover')).toContain('background: var(--color-surface-2)');
     expect(lobby).not.toMatch(/rgba?\(/);
-    expect(ruleOf(lobby, '.game-tile__check')).toContain('background: var(--game-ink)');
-    expect(ruleOf(lobby, '.game-tile__check')).toContain('color: var(--color-secondary)');
+    expect(lobby).not.toContain('game-tile__check');
     // A phone gives the picture a little less room; the narrowest phones shrink the name so "The Spy Game" fits its tile.
     expect(mediaBlock(lobby, '(max-width: 760px)')).toMatch(/\.game-tile__art \{[^}]*height: 72px/);
     expect(lobby).toMatch(/@media \(max-width: 359px\) \{[^@]*\.game-tile__name \{[^}]*font-size: 0.75rem/);

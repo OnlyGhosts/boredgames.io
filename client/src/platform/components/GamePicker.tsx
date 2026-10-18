@@ -6,7 +6,6 @@ import { playerCountLabel } from '../lib/party';
 import { selectGame } from '../net/actions';
 import { registeredGame } from '../registry';
 import { HowToPlay } from './HowToPlay';
-import { CheckIcon } from './Icons';
 
 interface Props {
   room: RoomState;
@@ -71,7 +70,8 @@ export function GamePicker({ room, isHost, game }: Props) {
 
 /**
  * One game on the grid: its picture (the module's Art, in the mascots' style) on a neutral panel
- * over the name on a footer strip. The picked one fills lilac and wears an ink check badge.
+ * over the name on a footer strip. The picked one fills lilac with its name in bold: no badge, no
+ * line; `aria-checked` carries the state.
  */
 function GameTile({ game, selected, readonly = false, onSelect }: { game: GameMeta; selected: boolean; readonly?: boolean; onSelect?(): void }) {
   const Art = registeredGame(game.id)?.Art;
@@ -79,11 +79,6 @@ function GameTile({ game, selected, readonly = false, onSelect }: { game: GameMe
     <>
       <span className="game-tile__art">{Art ? <Art /> : null}</span>
       <span className="game-tile__name">{game.name}</span>
-      {selected && (
-        <span className="game-tile__check" aria-hidden="true">
-          <CheckIcon size={12} strokeWidth={3.5} />
-        </span>
-      )}
     </>
   );
   if (readonly) {
