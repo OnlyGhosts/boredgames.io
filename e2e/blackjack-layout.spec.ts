@@ -1,7 +1,11 @@
 import { expect, test, type Browser, type Page } from '@playwright/test';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
+import { tmpdir } from 'node:os';
+import { extname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import react from '@vitejs/plugin-react';
-import { createServer, type ViteDevServer } from 'vite';
+import { build } from 'vite';
 import { createParty, expectReadyCount } from './party';
 import { stakesShown, tilesReadable } from './tableFit';
 import { tableBots, type TableBot } from './tableBots';
@@ -10,7 +14,7 @@ import { tableBots, type TableBot } from './tableBots';
  * Blackjack's fixed places. On a real table (a page and bots on their own sockets, at 390x844,
  * 320x568 and 1440x900, with 2 and 6 players) the dealer's hand and the stage at the bottom never
  * move or resize through the betting, the deal, my turn, another player's turn, the dealer's play
- * and the settled table. Then a harness (e2e/harness: the real components and styles, served by
+ * and the settled table. Then a harness (e2e/harness: the real components and styles, built by
  * Vite, fed rigged snapshots) seats me with 2 to 16 split hands at every phone size and on a
  * desktop: nothing scrolls, every hand (full or folded into a chip) is wholly inside my place, my
  * hands keep the stage on another player's turn, and a watcher sees that player's many hands fit
@@ -204,25 +208,95 @@ for (const players of [2, 6]) {
 // ---------------------------------------------------------------------------
 
 const HARNESS_PORT = 5199;
-let vite: ViteDevServer | null = null;
+
+/*
+ * The harness is built once and served as plain files, not by the Vite dev server. Each load of
+ * the dev harness asks for ~400 modules, most answered 304 Not Modified, and Chromium keeps a 2 MB
+ * shared-memory region alive per 304 until a V8 GC: ~0.8 GB per page.goto, which these tests'
+ * many loads on one page pile up to ~20 GB. Under --disable-dev-shm-usage those regions are
+ * deleted files in $TMPDIR that du cannot see, and a full disk fails every load with
+ * net::ERR_INSUFFICIENT_RESOURCES. Built, a load is a handful of files, sent with no-store and no
+ * validators so none is ever revalidated into a 304.
+ */
+let harnessDir: string | null = null;
+let harnessServer: Server | null = null;
+
+const TYPES: Record<string, string> = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json',
+  '.webmanifest': 'application/manifest+json',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.webp': 'image/webp',
+  '.woff2': 'font/woff2',
+  '.mp3': 'audio/mpeg',
+  '.txt': 'text/plain; charset=utf-8',
+};
+
+/** Serves the built harness from `dir`: "/" (the harness, its scenario in the query) is index.html. */
+async function serveHarness(dir: string, req: IncomingMessage, res: ServerResponse): Promise<void> {
+  let path = '';
+  try {
+    path = decodeURIComponent(new URL(req.url ?? '/', 'http://localhost').pathname);
+  } catch {
+    // A malformed path is simply not found.
+  }
+  const file = resolve(dir, `.${path === '/' ? '/index.html' : path}`);
+  const body = file.startsWith(dir + sep) ? await readFile(file).catch(() => null) : null;
+  if (!body) {
+    res.writeHead(404, { 'Cache-Control': 'no-store' }).end();
+    return;
+  }
+  res.writeHead(200, { 'Content-Type': TYPES[extname(file)] ?? 'application/octet-stream', 'Content-Length': body.length, 'Cache-Control': 'no-store' }).end(body);
+}
 
 test.describe('many hands (the harness)', () => {
   test.beforeAll(async () => {
+    test.setTimeout(120_000);
     const root = fileURLToPath(new URL('..', import.meta.url));
-    vite = await createServer({
-      configFile: false,
-      root: `${root}e2e/harness`,
-      publicDir: `${root}client/public`,
-      plugins: [react()],
-      resolve: { alias: { '@shared': `${root}shared` } },
-      server: { port: HARNESS_PORT, strictPort: true, fs: { allow: [root] } },
-      logLevel: 'error',
+    const dir = await mkdtemp(join(tmpdir(), 'bj-harness-'));
+    harnessDir = dir;
+    const nodeEnv = process.env.NODE_ENV;
+    try {
+      await build({
+        configFile: false,
+        root: `${root}e2e/harness`,
+        publicDir: `${root}client/public`,
+        plugins: [react()],
+        resolve: { alias: { '@shared': `${root}shared` } },
+        build: { outDir: dir, emptyOutDir: true, reportCompressedSize: false },
+        logLevel: 'error',
+      });
+    } finally {
+      // build() sets NODE_ENV=production for this whole worker when it is unset: put it back, so servers later specs spawn don't inherit it.
+      if (nodeEnv === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = nodeEnv;
+    }
+    const server = createServer((req, res) => {
+      serveHarness(dir, req, res).catch(() => res.destroy());
     });
-    await vite.listen();
+    await new Promise<void>((done, fail) => {
+      server.once('error', fail);
+      server.listen(HARNESS_PORT, 'localhost', () => {
+        server.off('error', fail);
+        done();
+      });
+    });
+    harnessServer = server;
   });
 
   test.afterAll(async () => {
-    await vite?.close();
+    const server = harnessServer;
+    harnessServer = null;
+    if (server) {
+      const closed = new Promise<void>((done) => server.close(() => done()));
+      server.closeAllConnections();
+      await closed;
+    }
+    if (harnessDir) await rm(harnessDir, { recursive: true, force: true });
+    harnessDir = null;
   });
 
   /** Every hand and chip (and each card of a full hand) lies wholly inside `container`. */

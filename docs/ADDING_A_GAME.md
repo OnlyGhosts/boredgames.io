@@ -1141,8 +1141,9 @@ assertion pattern.
 A layout a real game cannot reach on demand (a seat with twelve split hands) is checked against
 the real components with rigged snapshots instead: [`e2e/harness/`](../e2e/harness) renders
 Blackjack's screen from a scenario in the query string, and
-[`e2e/blackjack-layout.spec.ts`](../e2e/blackjack-layout.spec.ts) serves it with Vite on its own
-port. Nothing in the production build imports it, and the server has no test-only hook.
+[`e2e/blackjack-layout.spec.ts`](../e2e/blackjack-layout.spec.ts) builds it with Vite and serves the
+built files on its own port. Nothing in the production build imports it, and the server has no
+test-only hook.
 
 The platform test ids you will use: `home-create`, `home-join`, `code-input-0..3`, `join-panel`,
 `create-panel`, `name-step`, `home-name`, `home-continue`, `home-back`, `room-preview`,

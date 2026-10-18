@@ -1,8 +1,8 @@
 /**
  * A test-only page that renders the real Blackjack table (the production components and styles)
  * from a rigged snapshot, for layouts a real game cannot reach on demand: a seat with 12 split
- * hands, a big table on a given turn. Served by Vite from e2e/blackjack-layout.spec.ts; nothing in
- * the production build imports it. The scenario comes from the query string (see scenario.ts).
+ * hands, a big table on a given turn. Built by Vite and served by e2e/blackjack-layout.spec.ts;
+ * nothing in the app's build imports it. The scenario comes from the query string (see scenario.ts).
  */
 import '../../client/src/platform/styles/fonts.css';
 import '../../client/src/platform/styles/tokens.css';
