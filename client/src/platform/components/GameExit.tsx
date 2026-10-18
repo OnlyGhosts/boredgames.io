@@ -128,27 +128,48 @@ export function ExitActions({ room, isHost, onPick }: { room: RoomState | null; 
   );
 }
 
-/** The desktop top bar's End game, for the host: opens the confirm step; reads as a note once asked for. */
+/**
+ * The game bar's End game, for the host (a desktop or a tablet): the waiting room's 44px button
+ * shape in the danger tint; it opens the confirm step and reads as a note once asked for. A card
+ * table's full tablet bar keeps the button's icon alone (it keeps its name for screen readers) and
+ * shows the note under the game's name instead (EndingNote).
+ */
 export function EndGameButton({ room, onOpen, open }: { room: RoomState; onOpen(): void; open: boolean }) {
   if (room.endRequested) {
     return (
       <span className="gbar-end gbar-end--pending" data-testid="end-game-requested">
-        <EndIcon size={15} /> Ending soon
+        <EndIcon size={18} /> <span>Ending soon</span>
       </span>
     );
   }
   return (
-    <button type="button" className="btn btn--sm gbar-end" onClick={onOpen} aria-haspopup="dialog" aria-expanded={open} data-testid="end-game">
-      <EndIcon size={15} /> End game
+    <button type="button" className="room-card__btn gbar-end" onClick={onOpen} aria-haspopup="dialog" aria-expanded={open} aria-label="End game" data-testid="end-game">
+      <EndIcon size={18} /> <span>End game</span>
     </button>
   );
 }
 
-/** The desktop top bar's Leave, for everyone, beside the host's End game: opens the leave confirm step, a 44px target (the icon alone, a square, on a tablet's full bar). */
+/**
+ * A card table's full tablet bar has no room beside the code for the note: "Ending soon" goes under
+ * the game's name instead, in the status's place (GameTopBar), so the words still show.
+ */
+export function EndingNote() {
+  return (
+    <span className="gbar-ending" data-testid="end-game-requested">
+      <EndIcon size={14} /> <span>Ending soon</span>
+    </span>
+  );
+}
+
+/**
+ * The game bar's Leave, for everyone, after the host's End game: the waiting room's own Leave (a
+ * 44px button with the icon and a short label), opening the leave confirm. On a tablet's full bar
+ * the icon alone, a 44px square.
+ */
 export function LeaveButton({ onOpen, open }: { onOpen(): void; open: boolean }) {
   return (
-    <button type="button" className="btn btn--secondary btn--sm gbar-leave" onClick={onOpen} aria-haspopup="dialog" aria-expanded={open} aria-label="Leave room" data-testid="leave-room">
-      <LogoutIcon size={15} /> <span>Leave</span>
+    <button type="button" className="room-card__btn gbar-leave" onClick={onOpen} aria-haspopup="dialog" aria-expanded={open} aria-label="Leave room" data-testid="leave-room">
+      <LogoutIcon size={20} /> <span>Leave</span>
     </button>
   );
 }

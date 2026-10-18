@@ -1,5 +1,5 @@
 import { expect, test, type Browser, type BrowserContext, type Locator, type Page } from '@playwright/test';
-import { closeResults, createParty, enterNameIfAsked, gameNameWhole, readyAll } from './party';
+import { closeResults, createParty, enterNameIfAsked, gameBarFits, readyAll } from './party';
 
 /**
  * A whole two-round Spy Game between a desktop host and two phones (390x844, touch): roles, the
@@ -180,8 +180,12 @@ test('the host creates a Spy Game room, two phones join by code and the host set
     await expect(clock(p)).toBeVisible();
   }
   for (const p of players) await expect(p.page.getByTestId('round-indicator')).toContainText('1/2');
-  // A phone's one-row top bar cuts nothing: the name stays whole beside the round and the clock, which keep their own space.
-  await gameNameWhole(pia.page);
+  // The top bar fits from the narrowest phone to a desktop, for a guest and for the host with End game. A phone's one row
+  // (the logo, the name and round, the code, the clock, the players and the menu) is the fullest line of any game: there the
+  // name gives way, with an ellipsis, and nothing else does (on the narrowest phones the logo makes way so the round stays
+  // whole); from a tablet up it is whole.
+  await gameBarFits(pia.page, { nameMayCutBelow: 768 });
+  await gameBarFits(host.page, { nameMayCutBelow: 768 });
   await expect(pia.page.getByTestId('spygame-header').locator('.gbar__name')).toBeVisible();
   await expect(pia.page.getByTestId('round-indicator')).toBeVisible();
   await expect(clock(pia)).toBeVisible();

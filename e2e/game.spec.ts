@@ -1,5 +1,5 @@
 import { expect, test, type Browser, type BrowserContext, type Locator, type Page } from '@playwright/test';
-import { closeResults, createParty, enterNameIfAsked, joinByLink, leaveLobby, readyAll } from './party';
+import { closeResults, createParty, endGameAsHost, enterNameIfAsked, expectResults, gameBarFits, joinByLink, leaveLobby, readyAll } from './party';
 
 /**
  * One browser, three contexts = three players sharing a room on the real production server.
@@ -392,6 +392,45 @@ test('the lobby after the game has the scores reset for everyone and the party t
   await readyAll([bob.page, carol.page]);
   await expect(host.page.getByTestId('player-count')).toHaveText('3 of 3 ready');
   await expect(host.page.getByTestId('start-game')).toBeEnabled();
+});
+
+test('a long phrase never pushes the players out of the bar: on a tablet the word gives way, every player keeps a chip or the "+K"', async () => {
+  // Custom words only, every one a phrase of 16 letters or more: wider than a tablet's players row has room for beside the chips, the round and the clock.
+  const phrases = ['swimming pool party', 'roller coaster loop', 'golden gate bridge', 'statue of liberty', 'wheelbarrow wheel', 'hot air balloon ride', 'birthday cake candles', 'haunted house party', 'chocolate chip cookie', 'traffic light pole'];
+  const box = host.page.getByTestId('settings-customWords');
+  await box.fill(phrases.join('\n'));
+  await box.blur();
+  await expect(host.page.getByTestId('settings-customWords-count')).toHaveText(`${phrases.length} words`);
+  await host.page.getByTestId('settings-row-customWordsOnly').click();
+  await expect(host.page.getByTestId('settings-customWordsOnly')).toBeChecked();
+  await host.page.getByTestId('start-game').click();
+
+  await expect.poll(findDrawer, { timeout: 10_000 }).not.toBeNull();
+  const drawer = await findDrawer();
+  if (!drawer) throw new Error('no drawer');
+  await drawer.page.getByTestId('word-choice').first().click();
+  const guesser = players.find((p) => p !== drawer);
+  if (!guesser) throw new Error('unreachable');
+  await expect(guesser.page.getByTestId('word-mask')).toBeVisible();
+  // From the narrowest phone to a desktop, on a tablet above all: the strip keeps a player's chip, none cut, and the word stays in its room.
+  await gameBarFits(guesser.page);
+  // A big room's round and turn run to two figures each: written as a 24-player room's would read, the status stays whole
+  // beside the long phrase at every size too (its two parts stacked where one line has no room).
+  await guesser.page.getByTestId('round-indicator').locator('.gbar__part').evaluateAll((parts) => {
+    parts[0].textContent = 'Round 10/10';
+    parts[1].textContent = 'Turn 24/24';
+  });
+  await gameBarFits(guesser.page);
+
+  await endGameAsHost(host.page);
+  for (const p of players) {
+    await expectResults(p.page);
+    await closeResults(p.page);
+  }
+  await host.page.getByTestId('settings-row-customWordsOnly').click();
+  await box.fill('');
+  await box.blur();
+  await expect(host.page.getByTestId('settings-customWords-count')).toHaveText('0 words');
 });
 
 test('leaving removes the player and tells the others', async () => {

@@ -6,10 +6,15 @@ import {
   WORDMARK_ICON_TRANSFORM,
   WORDMARK_VIEWBOX,
 } from '../brand/wordmark';
-import { BoredArt, HappyArt } from './Mascots';
+import { BoredArt, HappyArt, MASCOTS_VIEWBOX } from './Mascots';
 
 interface WordmarkProps {
   className?: string;
+  /**
+   * 'full' (default): the two phones and the text. 'icon': the two phones alone, on their own
+   * artboard (a phone's game bar, where the game's name, the code and the menu share the line).
+   */
+  variant?: 'full' | 'icon';
 }
 
 /**
@@ -19,8 +24,17 @@ interface WordmarkProps {
  * the lime (cut darker on light); the phones keep their own colours. Height comes from CSS; the
  * viewBox keeps the proportions.
  */
-export function Wordmark({ className }: WordmarkProps) {
+export function Wordmark({ className, variant = 'full' }: WordmarkProps) {
   const titleId = useId();
+  if (variant === 'icon') {
+    return (
+      <svg className={`wordmark wordmark--icon${className ? ` ${className}` : ''}`} viewBox={MASCOTS_VIEWBOX} role="img" aria-labelledby={titleId} data-testid="wordmark">
+        <title id={titleId}>boredgames.io</title>
+        <BoredArt />
+        <HappyArt />
+      </svg>
+    );
+  }
   return (
     <svg className={`wordmark${className ? ` ${className}` : ''}`} viewBox={WORDMARK_VIEWBOX} role="img" aria-labelledby={titleId} data-testid="wordmark">
       <title id={titleId}>boredgames.io</title>

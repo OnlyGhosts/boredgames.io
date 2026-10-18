@@ -94,6 +94,12 @@ Open http://localhost:5173. The Vite dev server proxies `/ws` and `/api` to the 
    out, or let the host switch the party to another game from the lobby. The code and the invite
    link stay the same whatever game is on.
 
+While a game is on, its top bar is the waiting room's header with the game in it: the logo (its
+gear "o" holds the theme and sound), the game's name with the round under it, and the room code's
+lime tiles, so anyone can still read the code out to a late friend. Leave (and the host's End
+game) sit at its right end, behind the options button on a phone; leaving always asks first, from
+the logo too.
+
 For the games with words, prompts or places (Scribble, The Spy Game and Quip Game) the
 host also picks a **content mode** for the whole party: *Family* keeps it clean, *Unhinged (18+)*
 is adults only and plays only the adult packs, the cheeky ones plus the explicit ones (sex, drink

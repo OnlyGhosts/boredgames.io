@@ -442,8 +442,12 @@ test('the hidden template game plays a whole Click Race between two players', as
   // The top bar: a chip per player and a timer ring whose arc starts whole.
   await expect(host.page.getByTestId('player-chip')).toHaveCount(2);
   await expect(host.page.getByTestId('timer').locator('.timer__arc')).toHaveAttribute('stroke-dashoffset', /^[0-9.]+$/);
-  // The back arrow asks before leaving; Stay keeps the player in the game.
-  await guest.page.getByTestId('game-back').click();
+  // Leaving asks first, from the bar's Leave and from the logo (never a plain link out of a game); Stay keeps the player in the game.
+  await guest.page.getByTestId('leave-room').click();
+  await expect(guest.page.getByTestId('game-leave-confirm')).toBeVisible();
+  await guest.page.getByTestId('game-leave-no').click();
+  await expect(guest.page.getByTestId('leave-sheet')).toHaveCount(0);
+  await guest.page.getByTestId('brand-link').click();
   await expect(guest.page.getByTestId('game-leave-confirm')).toBeVisible();
   await guest.page.getByTestId('game-leave-no').click();
   await expect(guest.page.getByTestId('leave-sheet')).toHaveCount(0);

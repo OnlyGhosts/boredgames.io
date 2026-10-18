@@ -34,7 +34,7 @@ export function ClickRaceScreen({ room, meId, isHost }: GameScreenProps<Template
 
   return (
     <div className="race">
-      {/* Every game's top bar: options, name and status, the clock, players. */}
+      {/* Every game's top bar: the logo, the name and status, the room code, the ways out; the players and the clock under it. */}
       <GameTopBar
         meta={meta}
         room={room}

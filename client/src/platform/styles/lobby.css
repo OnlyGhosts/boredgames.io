@@ -43,7 +43,7 @@
  * The gear's popover drops out from under the bar, like a menu from a toolbar: past the logo's
  * own offset inside the bar's 44px line, its 10px padding and its 1px border, then 8px clear.
  */
-.lobby .settings-menu--logo .settings-menu__panel {
+.lobby .settings-menu .settings-menu__panel {
   top: calc(100% + (44px - var(--wordmark-height)) / 2 + 19px);
 }
 
@@ -68,65 +68,7 @@
   min-width: 0;
 }
 
-/* The code itself, each character on its own lime block, so it is the first thing anyone sees and easy to read out. */
-.room-card__value {
-  flex: none;
-  display: flex;
-  gap: 4px;
-  font-family: var(--font-display);
-  font-size: 1.9375rem;
-  font-weight: 700;
-  /* A touch bolder than the font's heaviest weight: a hairline stroke in the glyph's own colour. */
-  -webkit-text-stroke: 0.5px currentColor;
-  line-height: 1;
-  user-select: all;
-}
-
-.room-card__char {
-  display: grid;
-  place-items: center;
-  width: 1.2em;
-  height: 1.4em;
-  border-radius: 10px;
-  background: var(--color-primary);
-  color: var(--color-primary-contrast);
-  box-shadow: inset 0 0 0 1.5px var(--color-primary-edge);
-}
-
-/* Copy, Share and Leave: the icon and a short label on a quiet well, 44px tall like everything else on the bar. */
-.room-card__btn {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  min-height: 44px;
-  padding: 0 14px 0 12px;
-  border-radius: var(--radius-item);
-  border: 1.5px solid var(--color-border);
-  background: var(--color-surface-3);
-  color: var(--color-text);
-  font-size: 0.875rem;
-  font-weight: 600;
-  white-space: nowrap;
-  transition:
-    background-color 100ms ease-out,
-    border-color 100ms ease-out,
-    transform 70ms ease-out;
-}
-
-.room-card__btn svg {
-  flex: none;
-}
-
-.room-card__btn:hover {
-  background: var(--color-surface-2);
-  border-color: var(--color-border-strong);
-}
-
-.room-card__btn:active {
-  transform: translateY(1px);
-}
+/* The tiles and the bar's buttons (.room-card__value, .room-card__char, .room-card__btn) are components.css's: the game bar draws the same ones. */
 
 /* ---------- Two columns on desktop, one on phones ---------- */
 .lobby__grid {
@@ -1114,13 +1056,13 @@ button.content-mode:not(:disabled):hover {
   }
 
   /* The tiles leave room for the three squares at their right: a little smaller on a narrow phone. */
-  .room-card__value {
+  .room-card .room-card__value {
     gap: clamp(4px, 1.2vw, 8px);
     font-size: clamp(1.25rem, 6.2vw, 2.25rem);
   }
 
   /* The icon over its label: three squares, Copy, Share and Leave, each a 44px target and more. */
-  .room-card__btn {
+  .room-card .room-card__btn {
     flex-direction: column;
     gap: 4px;
     width: 56px;
@@ -1134,7 +1076,7 @@ button.content-mode:not(:disabled):hover {
     justify-content: center;
   }
 
-  .lobby .settings-menu--logo .settings-menu__panel {
+  .lobby .settings-menu .settings-menu__panel {
     top: calc(100% + 12px);
     left: calc(50% - min(150px, (100vw - 2 * var(--gutter)) / 2));
   }
@@ -1151,11 +1093,11 @@ button.content-mode:not(:disabled):hover {
     gap: 6px;
   }
 
-  .room-card__value {
+  .room-card .room-card__value {
     gap: 3px;
   }
 
-  .room-card__btn {
+  .room-card .room-card__btn {
     width: 46px;
     font-size: 0.75rem;
   }

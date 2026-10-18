@@ -76,7 +76,7 @@ describe('Click Race screen', () => {
     usePlatformStore.getState().handleServerMessage(welcome('host', state));
     const host = renderToString(createElement(templateClient.Screen, { room: state, meId: 'host', isHost: true }));
     expect(tagWith(host, 'end-game')).toContain('gbar-end');
-    expect(host).toContain('End game</button>');
+    expect(host).toContain('<span>End game</span></button>');
     usePlatformStore.getState().handleServerMessage(welcome('bob', state));
     const guest = renderToString(createElement(templateClient.Screen, { room: state, meId: 'bob', isHost: false }));
     expect(guest).not.toContain('data-testid="end-game"');

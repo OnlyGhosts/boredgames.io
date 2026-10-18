@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createElement } from 'react';
 import { renderToString } from 'react-dom/server';
@@ -355,6 +357,24 @@ describe('sounds', () => {
       vi.useRealTimers();
       vi.restoreAllMocks();
     }
+  });
+});
+
+describe('the top bar', () => {
+  it('gives the round and the turn as two parts of the status, so a narrow bar stacks them rather than cutting one', () => {
+    const state = inTurn(drawingPhase('host'));
+    enter(state, 'bob');
+    const html = renderToString(createElement(ScribbleScreen, { room: state, meId: 'bob', isHost: false }));
+    const status = html.slice(html.indexOf('data-testid="round-indicator"'));
+    expect(status).toMatch(/^[^>]*><span class="gbar__part">Round \d+\/\d+<\/span><span class="sr-only"> · <\/span><span class="gbar__part">Turn \d+\/\d+<\/span><\/span>/);
+  });
+
+  it('draws the bar’s word a size down on a tablet, and lets a word wider than all its room wrap inside itself', () => {
+    const css = readFileSync(fileURLToPath(new URL('./styles/scribble.css', import.meta.url)), 'utf8');
+    expect(css).toMatch(/\n\.gbar__middle \.word__group \{[^}]*flex-wrap: wrap/);
+    const tablet = css.slice(css.indexOf('@media (min-width: 761px) and (max-width: 1023px) {'));
+    expect(tablet).toMatch(/\.gbar__middle \.game__word \.tile \{[^}]*width: 20px;[^}]*height: 26px/);
+    expect(tablet).toMatch(/\.gbar__middle \.game__word \.word__group \{[^}]*gap: 3px/);
   });
 });
 

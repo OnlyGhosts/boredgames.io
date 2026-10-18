@@ -59,6 +59,11 @@
   color: var(--color-primary-mark);
 }
 
+/* The two phones alone (the Wordmark's 'icon' variant, a phone's game bar): their own artboard's proportions. */
+.wordmark--icon {
+  aspect-ratio: 278.81 / 249.91;
+}
+
 .brand {
   display: flex;
   align-items: center;
@@ -552,14 +557,19 @@
   font-size: 0.9375rem;
 }
 
+/*
+ * The logo's gear and its popover (SettingsMenu): no box of their own, so both place themselves on
+ * the logo (the positioned parent). The popover opens under the logo, its right edge at the gear,
+ * never past either end of the logo.
+ */
 .settings-menu {
-  position: relative;
+  display: contents;
 }
 
 .settings-menu__panel {
   position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
+  top: calc(100% + 12px);
+  left: max(0px, calc(min(var(--gear-x) + 22px, 100%) - min(300px, calc(100vw - 2 * var(--gutter)))));
   z-index: 70;
   width: min(300px, calc(100vw - 2 * var(--gutter)));
   padding: 4px var(--space-4);
@@ -979,7 +989,7 @@
  * The site's one connection notice (ConnectionNotice): a card at the top centre of every screen,
  * above the overlays and the toasts, in the inverted notice colours so it stands apart from the
  * page in either theme. A tap on it reaches the screen under it. On a phone it sits under the top
- * bar's first row, like the toasts, so it never hides the back arrow or the game's name.
+ * bar's first row, like the toasts, so it never hides the logo or the game's name.
  */
 .conn-notice {
   position: fixed;
@@ -1600,60 +1610,124 @@ button.exit-action--end:hover {
 }
 
 /*
- * The desktop top bar's ways out, beside the gear: End game for the host, a serious action on a
- * tinted button with a danger border that fills solid under the pointer; Leave for everyone, the
- * same shape on the quiet outline. Both 44px targets, as tall as the bar's row.
+ * ---------- The room code and the room's buttons: the waiting room's bar and the game bar share them ----------
+ * The code itself, each character on its own lime block, so it is the first thing anyone sees and
+ * easy to read out (RoomCode).
  */
-.gbar-end,
-.gbar-leave {
+.room-card__value {
+  flex: none;
+  display: flex;
+  gap: 4px;
+  font-family: var(--font-display);
+  font-size: 1.9375rem;
+  font-weight: 700;
+  /* A touch bolder than the font's heaviest weight: a hairline stroke in the glyph's own colour. */
+  -webkit-text-stroke: 0.5px currentColor;
+  line-height: 1;
+  user-select: all;
+}
+
+.room-card__char {
+  display: grid;
+  place-items: center;
+  width: 1.2em;
+  height: 1.4em;
+  border-radius: 10px;
+  background: var(--color-primary);
+  color: var(--color-primary-contrast);
+  box-shadow: inset 0 0 0 1.5px var(--color-primary-edge);
+}
+
+/* The room's buttons (Copy, Share and Leave in the waiting room; End game and Leave in a game): the icon and a short label on a quiet well, 44px tall like everything else on the bar. */
+.room-card__btn {
+  flex: none;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+  gap: 6px;
   min-height: 44px;
   padding: 0 14px 0 12px;
+  border-radius: var(--radius-item);
+  border: 1.5px solid var(--color-border);
+  background: var(--color-surface-3);
+  color: var(--color-text);
+  font-size: 0.875rem;
+  font-weight: 600;
+  white-space: nowrap;
+  transition:
+    background-color 100ms ease-out,
+    border-color 100ms ease-out,
+    transform 70ms ease-out;
+}
+
+.room-card__btn svg {
+  flex: none;
+}
+
+.room-card__btn:hover {
+  background: var(--color-surface-2);
+  border-color: var(--color-border-strong);
+}
+
+.room-card__btn:active {
+  transform: translateY(1px);
+}
+
+/*
+ * The game bar's ways out (a desktop or a tablet; a phone has them in its options sheet): the
+ * room's 44px buttons. End game for the host, a serious action in the danger tint that fills solid
+ * under the pointer; Leave for everyone, the waiting room's own. A tablet's full bar keeps their
+ * icons alone (gamebar.css).
+ */
+.gbar-end {
+  gap: 8px;
+  border-color: var(--color-danger);
+  background: var(--color-danger-soft);
+  color: var(--color-danger-text);
   font-weight: 700;
 }
 
-.gbar-end {
-  border: 1.5px solid var(--color-danger);
-  background: var(--color-danger-soft);
-  color: var(--color-danger-text);
-}
-
-/* A tablet's bar is full (the name, a game's word, the round, End game, the gear): Leave keeps its icon alone, a 44px square. */
-@media (max-width: 1023px) {
-  .gbar-leave {
-    width: 44px;
-    height: 44px;
-    padding: 0;
-    gap: 0;
-  }
-
-  .gbar-leave span {
-    display: none;
-  }
-}
-
-.gbar-end.btn:hover:not(:disabled) {
+.room-card__btn.gbar-end:hover {
   background: var(--color-danger);
   border-color: var(--color-danger);
   color: var(--color-bg);
 }
 
-.gbar-end.btn:active:not(:disabled) {
+.room-card__btn.gbar-end:active {
   background: var(--color-danger-text);
   border-color: var(--color-danger-text);
   color: var(--color-bg);
 }
 
+/* Once asked for, End game is a note in the same place: "Ending soon" on a dashed edge. */
 .gbar-end--pending {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
   min-height: 44px;
-  padding: 0 12px;
-  border-style: dashed;
-  border-radius: var(--radius-sm);
+  padding: 0 14px 0 12px;
+  border: 1.5px dashed var(--color-danger);
+  border-radius: var(--radius-item);
   font-size: 0.875rem;
   font-weight: 600;
   white-space: nowrap;
+}
+
+/* A card table's full tablet bar has no room for the note beside the code: "Ending soon" goes under the game's name instead, in the status's place. */
+.gbar-ending {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--color-danger-text);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.gbar-ending svg {
+  flex: none;
 }
 
 @keyframes sheet-in {
@@ -1963,10 +2037,6 @@ button.exit-action--end:hover {
   margin: -10px 0;
 }
 
-.settings-menu--logo {
-  display: contents;
-}
-
 /* A clear 44px target centred on the gear; the logo draws the gear itself. */
 .settings-menu__logo-gear {
   position: absolute;
@@ -2011,13 +2081,6 @@ button.exit-action--end:hover {
   .wordmark__gear {
     transition: none;
   }
-}
-
-/* The popover opens under the logo, its right edge at the gear, never past either end of the logo. */
-.settings-menu--logo .settings-menu__panel {
-  top: calc(100% + 12px);
-  right: auto;
-  left: max(0px, calc(min(var(--gear-x) + 22px, 100%) - min(300px, calc(100vw - 2 * var(--gutter)))));
 }
 
 .site-header--hero .logo {

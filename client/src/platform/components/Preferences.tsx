@@ -1,7 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { DEFAULT_THEME, type Theme } from '../lib/storage';
 import { usePlatformStore } from '../store/usePlatformStore';
-import { GearIcon } from './Icons';
 
 const THEMES: { value: Theme; label: string }[] = [
   { value: 'dark', label: 'Dark' },
@@ -52,20 +51,13 @@ export function PreferenceRows() {
 }
 
 /**
- * The gear in a header: a small popover with the device's preferences and nothing else (a room's
- * and a game's own buttons live on their bars). Escape or a tap outside closes it and gives the
- * focus back to the gear.
+ * The logo's gear (the "o" of ".io", in the waiting room's header and in a game's top bar): a clear
+ * 44px button laid over the gear the logo draws (the logo's box, the positioned parent, says where
+ * the gear is in --gear-x and --gear-y), opening a small popover with the device's preferences
+ * and nothing else (a room's and a game's own buttons live on their bars). Escape or a tap outside
+ * closes it and gives the focus back to the gear.
  */
-interface SettingsMenuProps {
-  /**
-   * Where the trigger lives. 'icon' (default) is a gear button of its own. 'logo' is a clear
-   * button laid over the logo's gear "o" (the logo draws the gear; its box, the positioned
-   * parent, says where the gear is in --gear-x and --gear-y).
-   */
-  variant?: 'icon' | 'logo';
-}
-
-export function SettingsMenu({ variant = 'icon' }: SettingsMenuProps) {
+export function SettingsMenu() {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const buttonRef = useRef<HTMLButtonElement | null>(null);
@@ -90,20 +82,18 @@ export function SettingsMenu({ variant = 'icon' }: SettingsMenuProps) {
   }, [open]);
 
   return (
-    <div className={`settings-menu${variant === 'logo' ? ' settings-menu--logo' : ''}`} ref={rootRef}>
+    <div className="settings-menu" ref={rootRef}>
       <button
         ref={buttonRef}
         type="button"
-        className={variant === 'logo' ? 'settings-menu__logo-gear' : 'icon-btn'}
+        className="settings-menu__logo-gear"
         aria-label="Settings"
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-controls={open ? panelId : undefined}
         onClick={() => setOpen((v) => !v)}
         data-testid="settings-menu"
-      >
-        {variant === 'icon' && <GearIcon size={20} />}
-      </button>
+      />
       {open && (
         <div className="settings-menu__panel" id={panelId} role="dialog" aria-label="Settings" data-testid="settings-popover">
           <PreferenceRows />

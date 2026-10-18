@@ -23,21 +23,22 @@ const { Wordmark } = await import('./Wordmark');
 const { WORDMARK_BOX, WORDMARK_GEAR_CENTRE, WORDMARK_GEAR_POSITION } = await import('../brand/wordmark');
 const { PlayerList } = await import('./PlayerList');
 const { BoredArt, HappyArt, MASCOTS_VIEWBOX, PHONE_BORED_VIEWBOX, PHONE_HAPPY_VIEWBOX, PhoneBored, PhoneHappy } = await import('./Mascots');
-const { SiteHeader } = await import('./SiteHeader');
+const { Logo, SiteHeader } = await import('./SiteHeader');
+const { RoomCode } = await import('./RoomCode');
 const { noticeFor } = await import('../lib/connectionNotice');
 const { ReadyControls, readyState } = await import('./ReadyControls');
 const { AvatarPicker } = await import('./AvatarPicker');
 const { GamePicker } = await import('./GamePicker');
 const { RulesCard } = await import('./HowToPlay');
 const { noOrphan } = await import('../lib/format');
-const { COLUMNS_QUERY, PHONE_QUERY } = await import('../lib/media');
+const { COLUMNS_QUERY, PHONE_QUERY, TABLET_QUERY } = await import('../lib/media');
 const { roomBesideList } = await import('../lib/useListRoom');
 const { Lobby } = await import('../screens/Lobby');
 const { GAME_LIST } = await import('@shared/platform/games');
 const { AVATAR_COLORS, AVATAR_FACES } = await import('@shared/platform/avatar');
 const { Avatar } = await import('./Avatar');
 const { arcFraction, remainingMs } = await import('../lib/useCountdown');
-const { GameMenuSheet, GameTopBar, RoundStatus } = await import('./GameTopBar');
+const { GameMenuSheet, GameTopBar, RoundStatus, StatusParts } = await import('./GameTopBar');
 const { CHIP_GAP, CHIP_WIDTH, chipCapacity, chipLayout, chipOrder, chipStatus } = await import('./PlayerChips');
 const { ResultNext, ResultPoints, earnersOf } = await import('./RoundResult');
 
@@ -266,7 +267,7 @@ describe('waiting overlay', () => {
     expect(toasts).toBeGreaterThan(zIndexOf(css, '.waiting-overlay'));
     expect(toasts).toBeGreaterThan(zIndexOf(css, '.results-popup'));
     expect(toasts).toBeLessThan(zIndexOf(css, '.conn-notice'));
-    // On a phone the notice drops under the top bar's first row, like the toasts, clear of the back arrow and the game's name.
+    // On a phone the notice drops under the top bar's first row, like the toasts, clear of the logo and the game's name.
     expect(css).toMatch(/@media \(max-width: 760px\) \{\s*\.conn-notice \{\s*top: calc\(64px \+ env\(safe-area-inset-top\)\);/);
     // The remove buttons keep a 44px target and let a long name wrap instead of overflowing the card.
     const remove = css.slice(css.indexOf('.waiting__remove .btn {'));
@@ -459,7 +460,7 @@ describe('the light theme', () => {
     expect(ruleOf(css, '.btn--primary')).toContain('border-color: var(--color-primary-edge)');
     expect(ruleOf(css, '.avatar')).toContain('var(--avatar-wash)');
     expect(ruleOf(css, '.avatar-picker__group .swatch.is-selected')).toContain('var(--avatar-wash)');
-    expect(ruleOf(stylesheet('lobby.css'), '.room-card__char')).toContain('var(--color-primary-edge)');
+    expect(ruleOf(stylesheet('components.css'), '.room-card__char')).toContain('var(--color-primary-edge)');
     expect(ruleOf(stylesheet('table.css'), '.tbl-panel .btn:disabled')).toContain('background: var(--btn-disabled-bg)');
   });
 
@@ -577,6 +578,13 @@ describe('wordmark and mascots', () => {
     const css = stylesheet('components.css');
     expect(ruleOf(css, '.settings-menu__logo-gear')).toContain('left: var(--gear-x)');
     expect(ruleOf(css, '.settings-menu__logo-gear')).toContain('width: 44px');
+    // The menu has no box of its own: the gear and the popover both place themselves on the logo, the popover under it, ending at the gear.
+    expect(tagWith(html, 'settings-menu')).toBeTruthy();
+    expect(html).toContain('<div class="settings-menu">');
+    expect(ruleOf(css, '.settings-menu')).toContain('display: contents');
+    expect(ruleOf(css, '.settings-menu__panel')).toContain('top: calc(100% + 12px)');
+    expect(ruleOf(css, '.settings-menu__panel')).toContain('left: max(0px, calc(min(var(--gear-x) + 22px, 100%)');
+    expect(css).not.toContain('settings-menu--');
   });
 
   it('puts the logo (no controller icon, no live site name) in the site header, its gear "o" being the settings button', () => {
@@ -1005,12 +1013,19 @@ describe('lobby', () => {
     expect(ruleOf(css, '.lobby__top .room-card')).toContain('flex: 1 1 auto');
     // The label and the tiles together, centred between the logo and the buttons; Copy and Share compact, 44px tall, with their hover and pressed states.
     expect(ruleOf(css, '.room-card__code')).toMatch(/align-items: center;[^}]*justify-content: center/);
-    expect(ruleOf(css, '.room-card__btn')).toContain('min-height: 44px');
-    expect(ruleOf(css, '.room-card__btn')).not.toContain('flex-direction: column');
-    expect(ruleOf(css, '.room-card__btn:hover')).toContain('border-color: var(--color-border-strong)');
-    expect(ruleOf(css, '.room-card__btn:active')).toContain('transform: translateY(1px)');
+    // The tiles and the buttons are one rule for the waiting room and the game bar (components.css); the room keeps none of its own.
+    const shared = stylesheet('components.css');
+    expect(ruleOf(shared, '.room-card__btn')).toContain('min-height: 44px');
+    expect(ruleOf(shared, '.room-card__btn')).not.toContain('flex-direction: column');
+    expect(ruleOf(shared, '.room-card__btn:hover')).toContain('border-color: var(--color-border-strong)');
+    expect(ruleOf(shared, '.room-card__btn:active')).toContain('transform: translateY(1px)');
+    for (const sel of ['.room-card__value {', '.room-card__char {', '.room-card__btn {']) expect(css.includes(`\n${sel}`), sel).toBe(false);
+    // The room's phone sizes reach only its own card, never the game bar's tiles.
+    const narrow = mediaBlock(css, '(max-width: 360px)');
+    expect(narrow).toMatch(/\.room-card \.room-card__value \{/);
+    expect(narrow).toMatch(/\.room-card \.room-card__btn \{/);
     // The gear's popover clears the bar's bottom edge (the logo's offset in the 44px line, 10px padding, 1px border) by 8px.
-    expect(ruleOf(css, '.lobby .settings-menu--logo .settings-menu__panel')).toContain('top: calc(100% + (44px - var(--wordmark-height)) / 2 + 19px)');
+    expect(ruleOf(css, '.lobby .settings-menu .settings-menu__panel')).toContain('top: calc(100% + (44px - var(--wordmark-height)) / 2 + 19px)');
     // A phone: the bar's surface moves to the card, the label over the tiles, the buttons squares; the popover hangs from the bare logo again.
     const phone = mediaBlock(css, '(max-width: 760px), (min-aspect-ratio: 3/2) and (max-height: 520px)');
     expect(phone).toMatch(/\.lobby__top \{[^}]*flex-direction: column/);
@@ -1018,8 +1033,9 @@ describe('lobby', () => {
     expect(phone).toMatch(/\.room-card \{[^}]*background: var\(--color-surface\)/);
     expect(phone).toMatch(/\.room-card \{[^}]*border-radius: var\(--radius-md\)/);
     expect(phone).toMatch(/\.room-card__code \{[^}]*flex-direction: column/);
-    expect(phone).toMatch(/\.room-card__btn \{[^}]*flex-direction: column/);
-    expect(phone).toMatch(/\.lobby \.settings-menu--logo \.settings-menu__panel \{[^}]*top: calc\(100% \+ 12px\)/);
+    expect(phone).toMatch(/\.room-card \.room-card__value \{[^}]*font-size: clamp\(1\.25rem, 6\.2vw, 2\.25rem\)/);
+    expect(phone).toMatch(/\.room-card \.room-card__btn \{[^}]*flex-direction: column/);
+    expect(phone).toMatch(/\.lobby \.settings-menu \.settings-menu__panel \{[^}]*top: calc\(100% \+ 12px\)/);
   });
 
   it('on a phone pins Start, Ready and the row under them to the bottom of the screen, short page or long, its line across the whole page', () => {
@@ -1119,10 +1135,13 @@ describe('lobby', () => {
   });
 
   it('shows each character of the room code on its own lime block with an ink letter, so it stands out to read aloud', () => {
-    const char = ruleOf(stylesheet('lobby.css'), '.room-card__char');
+    const char = ruleOf(stylesheet('components.css'), '.room-card__char');
     expect(char).toContain('background: var(--color-primary)');
     expect(char).toContain('color: var(--color-primary-contrast)');
-    expect(ruleOf(stylesheet('lobby.css'), '.room-card__value')).toContain('display: flex');
+    expect(ruleOf(stylesheet('components.css'), '.room-card__value')).toContain('display: flex');
+    // One component draws them in the room and in a game: the code a letter at a time for screen readers.
+    const tiles = renderToString(createElement(RoomCode, { code: 'UBRD', testId: 'game-code' }));
+    expect(tiles).toBe('<span class="room-card__value" data-testid="game-code" aria-label="Room code U B R D"><span class="room-card__char">U</span><span class="room-card__char">B</span><span class="room-card__char">R</span><span class="room-card__char">D</span></span>');
   });
 
   it('keeps a full row of game tiles on a 320px phone, and the last row never leaves one tile alone as a banner', () => {
@@ -1220,7 +1239,7 @@ describe('lobby', () => {
     const phone = mediaBlock(css, '(max-width: 760px), (min-aspect-ratio: 3/2) and (max-height: 520px)');
     expect(phone).toMatch(/\.lobby \.site-header \{[^}]*justify-content: center/);
     expect(renderToString(createElement(SiteHeader, {}))).not.toContain('site-header__actions');
-    expect(phone).toMatch(/\.lobby \.settings-menu--logo \.settings-menu__panel \{[^}]*left: calc\(50% - /);
+    expect(phone).toMatch(/\.lobby \.settings-menu \.settings-menu__panel \{[^}]*left: calc\(50% - /);
   });
 });
 
@@ -1419,7 +1438,7 @@ describe('the ways out of a game', () => {
     expect(guest).toContain('data-testid="leave-room"');
   });
 
-  it('puts End game and Leave in the desktop top bar for the host, Leave alone for a guest, and nothing but the preferences in the gear', () => {
+  it('puts End game and Leave at the right of the desktop top bar for the host, Leave alone for a guest; the logo’s gear holds nothing but the preferences', () => {
     usePlatformStore.getState().handleServerMessage(welcome('host', playing()));
     const bar = (state: RoomState) =>
       renderToString(
@@ -1435,13 +1454,18 @@ describe('the ways out of a game', () => {
       );
     const html = bar(playing());
     expect(textOf(html, 'end-game')).toBe('End game');
-    expect(tagWith(html, 'end-game')).toContain('gbar-end');
+    // The waiting room's 44px button shape: End game in the danger tint, Leave the room's own.
+    expect(tagWith(html, 'end-game')).toContain('class="room-card__btn gbar-end"');
+    expect(tagWith(html, 'end-game')).toContain('aria-label="End game"');
     expect(textOf(html, 'leave-room')).toBe('Leave');
-    expect(tagWith(html, 'leave-room')).toContain('btn btn--secondary btn--sm gbar-leave');
+    expect(tagWith(html, 'leave-room')).toContain('class="room-card__btn gbar-leave"');
     expect(tagWith(html, 'leave-room')).toContain('aria-haspopup="dialog"');
-    const order = ['end-game', 'leave-room', 'settings-menu'].map((id) => html.indexOf(`data-testid="${id}"`));
+    expect(tagWith(html, 'leave-room')).toContain('aria-label="Leave room"');
+    // The logo and its gear first, the code, then End game and Leave last; no second gear.
+    const order = ['settings-menu', 'game-code', 'end-game', 'leave-room'].map((id) => html.indexOf(`data-testid="${id}"`));
     expect(order.every((i) => i > -1)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
+    expect(html.match(/aria-label="Settings"/g)).toHaveLength(1);
     expect(html).not.toContain('menu-end-game');
     expect(html).not.toContain('menu-leave-room');
     expect(textOf(bar(playing({ endRequested: true })), 'end-game-requested')).toBe('Ending soon');
@@ -1449,20 +1473,26 @@ describe('the ways out of a game', () => {
     const guest = bar(playing());
     expect(guest).not.toContain('data-testid="end-game"');
     expect(textOf(guest, 'leave-room')).toBe('Leave');
-    // The same shape as End game, both 44px targets; on a tablet's full bar the icon alone, a 44px square.
+    expect(guest).toContain('data-testid="game-code"');
+    // Both 44px targets; End game fills solid under the pointer; once asked for, a dashed note in the same place.
     const css = stylesheet('components.css');
-    expect(ruleOf(css, '.gbar-end,\n.gbar-leave')).toContain('min-height: 44px');
+    expect(ruleOf(css, '.room-card__btn')).toContain('min-height: 44px');
+    expect(css).toMatch(/\n\.gbar-end \{[^}]*background: var\(--color-danger-soft\)/);
+    expect(ruleOf(css, '.room-card__btn.gbar-end:hover')).toContain('background: var(--color-danger)');
     expect(ruleOf(css, '.gbar-end--pending')).toContain('min-height: 44px');
-    const tablet = mediaBlock(css, '(max-width: 1023px)');
-    expect(tablet).toMatch(/\.gbar-leave \{[^}]*width: 44px;[^}]*height: 44px/);
-    expect(tablet).toMatch(/\.gbar-leave span \{[^}]*display: none/);
+    expect(ruleOf(css, '.gbar-end--pending')).toContain('dashed');
+    expect(ruleOf(css, '.gbar-end--pending')).toContain('justify-content: center');
+    // A tablet's full bar: Leave its icon alone, a 44px square (a card table's End game button too, never the note), the labels kept for screen readers.
+    const tablet = mediaBlock(stylesheet('gamebar.css'), '(min-width: 761px) and (max-width: 1023px)');
+    expect(tablet).toMatch(/\.gbar:not\(\.gbar--phone\) \.gbar-leave,\n\s*\.gbar--compact:not\(\.gbar--phone\) \.gbar-end:not\(\.gbar-end--pending\) \{[^}]*width: 44px;[^}]*padding: 0/);
+    expect(tablet).toMatch(/\.gbar-leave span,\n\s*\.gbar--compact:not\(\.gbar--phone\) \.gbar-end:not\(\.gbar-end--pending\) span \{[^}]*clip-path: inset\(50%\)/);
   });
 });
 
 describe('GameTopBar', () => {
   const noop = () => undefined;
   const players = [player('host'), player('bob', { joinOrder: 1 }), player('carol', { joinOrder: 2, connected: false }), player('dan', { joinOrder: 3, participating: false })];
-  const bar = (isPhone: boolean) =>
+  const bar = (isPhone: boolean, extra: Record<string, unknown> = {}) =>
     renderToString(
       createElement(GameTopBar, {
         meta: gameById('spygame'),
@@ -1474,39 +1504,99 @@ describe('GameTopBar', () => {
         clock: createElement('span', { 'data-testid': 'clock' }),
         players: { label: 'Scores', open: false, onOpen: noop },
         menu: { open: false, onOpen: noop },
+        ...extra,
       }),
     );
+  /** Renders with the given media queries matching (a tablet's width). */
+  const barAt = (matching: string[], render: () => string): string => {
+    const g = globalThis as { matchMedia: (q: string) => { matches: boolean } };
+    const real = g.matchMedia;
+    g.matchMedia = (media: string) => ({ media, matches: matching.includes(media), addEventListener: () => undefined, removeEventListener: () => undefined });
+    try {
+      return render();
+    } finally {
+      g.matchMedia = real;
+    }
+  };
+  const between = (html: string, from: string, to: string) => html.slice(html.indexOf(from), html.indexOf(to, html.indexOf(from)));
 
-  it('reads back, name and round and options on the first row, then the player chips and the timer ring; there is no chat button', () => {
+  it('reads logo, name with its round, the room code and options on a phone’s first row, then the player chips and the timer ring; there is no back arrow and no chat button', () => {
     const html = bar(true);
     expect(html).toContain('The Spy Game');
     expect(attr(tagWith(html, 'round-indicator'), 'data-round')).toBe('2');
     expect(html).toContain('Round 2/5');
     expect(html).not.toContain('chat-toggle');
-    const order = ['game-back', 'round-indicator', 'game-menu', 'players-toggle', 'clock'].map((id) => html.indexOf(`data-testid="${id}"`));
+    expect(html).not.toContain('game-back');
+    const order = ['game-brand', 'round-indicator', 'game-code', 'game-menu', 'players-toggle', 'clock'].map((id) => html.indexOf(`data-testid="${id}"`));
     expect(order.every((i) => i > -1)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
     expect(tagWith(html, 'players-toggle')).toContain('aria-label="Scores (4)"');
-    expect(tagWith(html, 'game-back')).toContain('aria-label="Leave game"');
-    // Leaving asks first; the confirmation is a sheet that is closed until the arrow is tapped.
+    // The code's tiles, read-only, named a letter at a time.
+    expect(tagWith(html, 'game-code')).toContain('aria-label="Room code A B C D"');
+    expect(html.match(/class="room-card__char"/g)).toHaveLength(4);
+    expect(html).not.toContain('data-testid="copy-code"');
+    // A phone's logo is the two phones alone, a picture and not a control: the options sheet has the preferences and the ways out.
+    const brand = between(html, 'data-testid="game-brand"', 'class="gbar__title"');
+    expect(brand).toContain('class="wordmark wordmark--icon"');
+    expect(brand).not.toMatch(/<(button|a)\b/);
+    expect(html).not.toContain('data-testid="settings-menu"');
     expect(html).not.toContain('data-testid="leave-room"');
+    expect(html).not.toContain('data-testid="end-game"');
+    // Leaving asks first; the confirmation is a sheet that is closed until asked for.
     expect(html).not.toContain('data-testid="leave-sheet"');
   });
 
-  it('puts the round under the name on a phone, so the name, the round and the buttons each keep their own space', () => {
+  it('puts the round under the name on every screen but a tablet, whose players row takes it; a card table on a tablet leaves it out', () => {
     expect(renderToString(createElement(RoundStatus, { round: 1, total: 5 }))).toBe('Round 1/5');
-    const phone = bar(true);
-    const title = phone.slice(phone.indexOf('class="gbar__title"'), phone.indexOf('data-testid="game-menu"'));
-    expect(title.indexOf('The Spy Game')).toBeLessThan(title.indexOf('data-testid="round-indicator"'));
-    // A desktop keeps the round on the right, outside the title.
-    const desk = bar(false);
-    const deskTitle = desk.slice(desk.indexOf('class="gbar__title"'));
-    expect(deskTitle.slice(0, deskTitle.indexOf('</div>'))).not.toContain('round-indicator');
+    for (const phone of [true, false]) {
+      const html = bar(phone);
+      const title = between(html, 'class="gbar__title"', 'class="gbar__code"');
+      expect(title.indexOf('The Spy Game'), String(phone)).toBeLessThan(title.indexOf('data-testid="round-indicator"'));
+    }
+    // A tablet: the round moves to the players row, after the chips and before the clock; the name stands alone.
+    const tablet = barAt([TABLET_QUERY], () => bar(false));
+    const title = between(tablet, 'class="gbar__title"', 'class="gbar__code"');
+    expect(title).not.toContain('round-indicator');
+    const people = tablet.slice(tablet.indexOf('class="gbar__people"'));
+    const order = ['players-toggle', 'round-indicator', 'clock'].map((id) => people.indexOf(`data-testid="${id}"`));
+    expect(order.every((i) => i > -1)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    // A phone on its side is no tablet: the round stays under the name.
+    const sideways = barAt([TABLET_QUERY], () => bar(true));
+    expect(between(sideways, 'class="gbar__title"', 'class="gbar__code"')).toContain('round-indicator');
     const css = stylesheet('gamebar.css');
-    expect(ruleOf(css, '.gbar--phone .gbar__title')).toContain('flex-direction: column');
-    expect(ruleOf(css, '.gbar--phone .gbar__status')).toContain('white-space: nowrap');
-    // The name never gives way to the round any more.
-    expect(css).not.toMatch(/\.gbar__name \{\s*display: none/);
+    expect(ruleOf(css, '.gbar__title')).toContain('flex-direction: column');
+    expect(ruleOf(css, '.gbar__name')).toContain('font-family: var(--font-display)');
+    expect(ruleOf(css, '.gbar__name')).toContain('font-size: 1.375rem');
+    expect(ruleOf(css, '.gbar__name')).toContain('text-overflow: ellipsis');
+    expect(ruleOf(css, '.gbar__status')).toContain('font-size: 0.8125rem');
+    expect(ruleOf(css, '.gbar__status')).toContain('color: var(--color-text-muted)');
+    expect(ruleOf(css, '.gbar__status')).toContain('white-space: nowrap');
+    const tabletCss = mediaBlock(css, '(min-width: 761px) and (max-width: 1023px)');
+    expect(tabletCss).toMatch(/\.gbar--compact:not\(\.gbar--phone\) \.gbar__title \.gbar__status \{\s*display: none/);
+  });
+
+  it('gives way with the name first: the logo, the tiles and the buttons never shrink, the tiles sit centred in the room left over', () => {
+    const css = stylesheet('gamebar.css');
+    expect(ruleOf(css, '.gbar__title')).toContain('flex: 0 1 auto');
+    expect(ruleOf(css, '.gbar__title')).toContain('min-width: 0');
+    expect(ruleOf(css, '.gbar__brand')).toContain('flex: none');
+    expect(ruleOf(css, '.gbar__code')).toContain('flex: 1 0 auto');
+    expect(ruleOf(css, '.gbar__code')).toContain('justify-content: center');
+    expect(ruleOf(css, '.gbar__side')).toContain('flex: none');
+    expect(ruleOf(css, '.gbar__row')).toContain('min-height: 44px');
+    // A phone: the name takes the line, the tiles shrink to fit beside the menu (15 to 18px), a size down again in a one-row bar.
+    expect(ruleOf(css, '.gbar--phone .gbar__title')).toContain('flex: 1 1 auto');
+    expect(ruleOf(css, '.gbar--phone .gbar__code')).toContain('flex: none');
+    expect(ruleOf(css, '.gbar--phone .room-card__value')).toContain('font-size: clamp(0.9375rem, 4.6vw, 1.125rem)');
+    expect(ruleOf(css, '.gbar--compact.gbar--phone .room-card__value')).toContain('font-size: 0.875rem');
+    expect(ruleOf(css, '.gbar .wordmark--icon')).toContain('height: 28px');
+    expect(ruleOf(stylesheet('components.css'), '.wordmark--icon')).toContain('aspect-ratio: 278.81 / 249.91');
+    // A phone's bar in a narrow side column (a phone on its side): the bar answers to its own width, a size down so the name keeps its room.
+    expect(ruleOf(css, '.gbar')).toContain('container: gbar / inline-size');
+    const narrow = css.slice(css.indexOf('@container gbar (max-width: 280px) {'));
+    expect(narrow).toMatch(/\.gbar--phone \.room-card__value \{[^}]*font-size: 0\.8125rem/);
+    expect(narrow).toMatch(/\.gbar--phone \.gbar__name \{[^}]*font-size: 1rem/);
   });
 
   it('draws the players button as a pill with the people icon and the count, in a 44px target', () => {
@@ -1539,13 +1629,13 @@ describe('GameTopBar', () => {
     expect(chips.map((c) => attr(c, 'data-status'))).toEqual(['ready', 'ready', 'muted', 'muted']);
   });
 
-  it('packs into one row when compact (a card table on a phone): a players button with the count and no chips', () => {
-    const compact = (clock?: ReturnType<typeof createElement>) =>
+  it('packs into one row when compact (a card table, The Spy Game on a phone): the code, a players button with the count and no chips', () => {
+    const compact = (isPhone: boolean, clock?: ReturnType<typeof createElement>) =>
       renderToString(
         createElement(GameTopBar, {
           meta: gameById('blackjack'),
           room: room({ gameId: 'blackjack', phase: 'playing', players }),
-          isPhone: true,
+          isPhone,
           testId: 'blackjack-header',
           status: 'Round 2',
           clock,
@@ -1554,33 +1644,123 @@ describe('GameTopBar', () => {
           compact: true,
         }),
       );
-    const html = compact();
+    const html = compact(true);
     expect(tagWith(html, 'blackjack-header')).toContain('gbar--compact');
     expect(tagWith(html, 'players-toggle')).toContain('aria-label="Players (4)"');
     expect(html).toContain('gbar__count-n">4<');
     expect(tagsWith(html, 'player-chip')).toHaveLength(0);
     expect(html).not.toContain('gbar__clock');
-    const order = ['game-back', 'round-indicator', 'players-toggle', 'game-menu'].map((id) => html.indexOf(`data-testid="${id}"`));
+    expect(html).not.toContain('gbar__people');
+    const order = ['game-brand', 'round-indicator', 'game-code', 'players-toggle', 'game-menu'].map((id) => html.indexOf(`data-testid="${id}"`));
+    expect(order.every((i) => i > -1)).toBe(true);
     expect([...order].sort((x, y) => x - y)).toEqual(order);
+    // A desktop table: the players button before End game and Leave, all in the one row.
+    const desk = compact(false);
+    const deskOrder = ['brand-link', 'game-code', 'players-toggle', 'leave-room'].map((id) => desk.indexOf(`data-testid="${id}"`));
+    expect(deskOrder.every((i) => i > -1)).toBe(true);
+    expect([...deskOrder].sort((x, y) => x - y)).toEqual(deskOrder);
     // A clock (The Spy Game's round clock) sits small in the same row, before the players button.
-    const clocked = compact(createElement('span', { 'data-testid': 'clock' }));
+    const clocked = compact(true, createElement('span', { 'data-testid': 'clock' }));
     expect(clocked).toContain('gbar__clock gbar__clock--row');
-    const withClock = ['round-indicator', 'clock', 'players-toggle', 'game-menu'].map((id) => clocked.indexOf(`data-testid="${id}"`));
+    const withClock = ['round-indicator', 'game-code', 'clock', 'players-toggle', 'game-menu'].map((id) => clocked.indexOf(`data-testid="${id}"`));
     expect(withClock.every((i) => i >= 0)).toBe(true);
     expect([...withClock].sort((x, y) => x - y)).toEqual(withClock);
     expect(tagsWith(clocked, 'player-chip')).toHaveLength(0);
+    expect(ruleOf(stylesheet('gamebar.css'), '.gbar .gbar__clock--row .timer--lg')).toContain('width: 44px');
   });
 
-  it('has the gear and no options button on a desktop, and no chat button', () => {
+  it('has the waiting room’s logo on a desktop: its gear “o” the settings button, the logo itself asking before it leaves; no options button, back arrow or chat button', () => {
     const html = bar(false);
-    expect(html).toContain('data-testid="settings-menu"');
-    expect(html).toContain('data-testid="game-back"');
+    const brand = between(html, 'data-testid="game-brand"', 'class="gbar__title"');
+    expect(brand).toContain('data-testid="wordmark"');
+    expect(brand).not.toContain('wordmark--icon');
+    expect(tagWith(brand, 'settings-menu')).toContain('class="settings-menu__logo-gear"');
+    expect(brand).toContain(`--gear-x:${WORDMARK_GEAR_POSITION.left}`);
+    // The logo is never a plain link out of a game: a button that opens the leave confirm.
+    expect(tagWith(brand, 'brand-link')).toMatch(/^<button[^>]*aria-haspopup="dialog"/);
+    expect(brand).not.toContain('href=');
     expect(html).not.toContain('data-testid="game-menu"');
+    expect(html).not.toContain('data-testid="game-back"');
     expect(html).not.toContain('data-testid="chat-toggle"');
+    expect(html).not.toContain('class="icon-btn"');
+    expect(html).toContain('class="gbar__divider" aria-hidden="true"');
+    // The waiting room's own logo is still the link home.
+    expect(tagWith(renderToString(createElement(Logo, {})), 'brand-link')).toMatch(/^<a[^>]*href="\/"/);
     const css = stylesheet('gamebar.css');
     expect(ruleOf(css, '.gbar__btn')).toContain('width: 44px');
+    expect(ruleOf(css, '.gbar .logo .wordmark')).toContain('translateY(2px)');
     // The chips never scroll: what does not fit goes into the "+K" chip.
     expect(ruleOf(css, '.chips')).toContain('overflow: hidden');
+  });
+
+  it('puts the game’s word (Scribble’s) in the players row on a desktop, between the chips and the clock', () => {
+    const html = bar(false, { middle: createElement('span', { 'data-testid': 'word' }) });
+    const row = html.slice(html.indexOf('class="gbar__row"'), html.indexOf('class="gbar__people"'));
+    expect(row).not.toContain('data-testid="word"');
+    const people = html.slice(html.indexOf('class="gbar__people"'));
+    const order = ['players-toggle', 'word', 'clock'].map((id) => people.indexOf(`data-testid="${id}"`));
+    expect(order.every((i) => i > -1)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    // Whatever the word, the strip keeps one player's chip and the "+K" chip: the word gives way, never the last chip.
+    expect(ruleOf(stylesheet('gamebar.css'), '.chips')).toContain('min-width: calc(2 * var(--chip-w) + var(--chip-gap))');
+  });
+
+  it('keeps a phone’s own padding: the players row’s extra room at the bottom is for a desktop or a tablet only', () => {
+    const css = stylesheet('gamebar.css');
+    expect(css).toMatch(/\n\.gbar:not\(\.gbar--phone\):has\(\.gbar__people\) \{[^}]*padding-bottom: 12px/);
+    // No :has() rule outranks the phone rules' padding (a phone, a short one, one on its side, one with the keyboard open).
+    expect(css).not.toMatch(/\n\.gbar:has\(/);
+    expect(ruleOf(css, '.gbar--phone')).toContain('padding: 4px 8px 8px');
+  });
+
+  it('gives way with the name alone on a phone: the title is never narrower than its status, which stays whole', () => {
+    const css = stylesheet('gamebar.css');
+    expect(ruleOf(css, '.gbar--phone .gbar__title')).toContain('min-width: auto');
+    // The name adds nothing to the title's width, so the status sets its least width and the name's ellipsis takes the rest.
+    expect(ruleOf(css, '.gbar--phone .gbar__name')).toContain('contain: inline-size');
+    expect(ruleOf(css, '.gbar__status')).toContain('white-space: nowrap');
+    // The Spy Game's one row on the narrowest phones: the clock a size down, then the logo's two phones make way for "Round 10/10".
+    expect(mediaBlock(css, '(max-width: 360px)')).toMatch(/\.gbar \.gbar__clock--row \.timer--lg \{[^}]*width: 40px/);
+    const narrowest = css.slice(css.indexOf('@container gbar (max-width: 320px) {'));
+    expect(narrowest).toMatch(/\.gbar--compact\.gbar--phone:has\(\.gbar__clock--row\) \.gbar__brand \{\s*display: none/);
+  });
+
+  it('writes a status of several parts (a round and a turn) as parts: one line with a dot between where there is room, stacked where there is not', () => {
+    const html = bar(true, { status: createElement(StatusParts, { parts: ['Round 1/3', 'Turn 2/4'] }) });
+    const status = html.slice(html.indexOf('data-testid="round-indicator"'), html.indexOf('class="gbar__code"'));
+    expect(status).toMatch(/<span class="gbar__part">Round 1\/3<\/span><span class="sr-only"> · <\/span><span class="gbar__part">Turn 2\/4<\/span>/);
+    const css = stylesheet('gamebar.css');
+    expect(ruleOf(css, '.gbar__status:has(> .gbar__part)')).toContain('flex-wrap: wrap');
+    expect(ruleOf(css, '.gbar__part')).toContain('white-space: nowrap');
+    // The dot sits in the gap before a part: a part that starts a line has none.
+    expect(ruleOf(css, '.gbar__part ~ .gbar__part::before')).toContain('right: 100%');
+  });
+
+  it('shows a card table’s “Ending soon” in words on a tablet: under the name, where the note beside the code has no room', () => {
+    usePlatformStore.getState().handleServerMessage(welcome('host', room({ gameId: 'blackjack', phase: 'playing', players, endRequested: true })));
+    const table = (isPhone: boolean) =>
+      renderToString(
+        createElement(GameTopBar, {
+          meta: gameById('blackjack'),
+          room: room({ gameId: 'blackjack', phase: 'playing', players, endRequested: true }),
+          isPhone,
+          testId: 'blackjack-header',
+          players: { open: false, onOpen: noop },
+          menu: { open: false, onOpen: noop },
+          compact: true,
+        }),
+      );
+    const tablet = barAt([TABLET_QUERY], () => table(false));
+    const title = between(tablet, 'class="gbar__title"', 'class="gbar__code"');
+    expect(textOf(title, 'end-game-requested')).toBe('Ending soon');
+    expect(tagWith(title, 'end-game-requested')).toContain('class="gbar-ending"');
+    expect(tablet.match(/data-testid="end-game-requested"/g)).toHaveLength(1);
+    expect(tablet).not.toContain('data-testid="end-game"');
+    // A desktop keeps the dashed note beside the code, in End game's place.
+    const desk = table(false);
+    expect(between(desk, 'class="gbar__title"', 'class="gbar__code"')).not.toContain('end-game-requested');
+    expect(tagWith(desk, 'end-game-requested')).toContain('class="gbar-end gbar-end--pending"');
+    expect(ruleOf(stylesheet('components.css'), '.gbar-ending')).toContain('color: var(--color-danger-text)');
   });
 });
 

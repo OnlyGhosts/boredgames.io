@@ -20,9 +20,9 @@ import { useQuipgame } from './store';
 const meta = gameById('quipgame');
 
 /**
- * The Quip Game screen: a compact top bar (round, the clock, players, options) over one centred
- * column that shows the current phase. Phone-first: the page never scrolls, the column does, and
- * the players live in a bottom sheet.
+ * The Quip Game screen: the top bar (the name and round, the code, the players and the clock) over
+ * one centred column that shows the current phase. Phone-first: the page never scrolls, the column
+ * does, and the players live in a bottom sheet.
  */
 export function QuipGameScreen({ room, meId, isHost }: GameScreenProps<QuipgameView, QuipgameSettings>) {
   const game = useActiveGame();

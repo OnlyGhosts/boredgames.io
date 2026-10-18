@@ -22,10 +22,10 @@ import { useSpygame } from './store';
 const meta = gameById('spygame');
 
 /**
- * The Spy Game screen. Phones: a one-row header (round, clock, players, menu) over one scrolling
- * column. Its first screen holds the notices, the role card, the vote and every candidate place
- * (a portrait phone fits all 24 without scrolling); the players to accuse follow below. Desktop:
- * the same column on the left, the players to accuse on the right.
+ * The Spy Game screen. Phones: a one-row header (the name and round, the code, the clock, players,
+ * menu) over one scrolling column. Its first screen holds the notices, the role card, the vote and
+ * every candidate place (a portrait phone fits all 24 without scrolling); the players to accuse
+ * follow below. Desktop: the same column on the left, the players to accuse on the right.
  */
 export function SpyGameScreen({ room, meId, isHost }: GameScreenProps<SpygameView, SpygameSettings>) {
   const game = useActiveGame();

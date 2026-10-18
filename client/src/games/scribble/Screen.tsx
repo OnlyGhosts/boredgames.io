@@ -2,7 +2,7 @@ import { useLayoutEffect, useRef, useState } from 'react';
 import type { ScribbleSettings, ScribbleView } from '@shared/games/scribble/protocol';
 import { gameById } from '@shared/platform/games';
 import { BottomSheet } from '../../platform/components/BottomSheet';
-import { GameMenuSheet, GameTopBar, RoundStatus } from '../../platform/components/GameTopBar';
+import { GameMenuSheet, GameTopBar, RoundStatus, StatusParts } from '../../platform/components/GameTopBar';
 import { PlayerList } from '../../platform/components/PlayerList';
 import { Timer } from '../../platform/components/Timer';
 import type { GameScreenProps } from '../../platform/game';
@@ -119,11 +119,7 @@ export function ScribbleScreen({ room, meId, isHost }: GameScreenProps<ScribbleV
         isPhone={isPhone}
         testId="game-header"
         className="game__top"
-        status={
-          <>
-            <RoundStatus round={view.round} total={view.totalRounds} /> · Turn {view.turn}/{view.turnsInRound}
-          </>
-        }
+        status={<StatusParts parts={[<RoundStatus key="round" round={view.round} total={view.totalRounds} />, `Turn ${view.turn}/${view.turnsInRound}`]} />}
         statusData={{ 'data-round': view.round, 'data-turn': view.turn }}
         clock={timer || undefined}
         players={{ open: playersOpen, onOpen: () => setPlayersOpen(true) }}

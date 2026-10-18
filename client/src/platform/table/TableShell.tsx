@@ -29,10 +29,10 @@ interface Props {
 }
 
 /**
- * A card table's screen: a top bar in one row (what is being played, the players button, options;
- * every player is on the table, and the round is on its ribbon), the table, and the control panel
- * always in the same place: docked under the table on a phone, in a left column on a desktop
- * (table.css).
+ * A card table's screen: a top bar in one row (what is being played, the room code, the players
+ * button and the ways out; every player is on the table, and the round is on its ribbon), the
+ * table, and the control panel always in the same place: docked under the table on a phone, in a
+ * left column on a desktop (table.css).
  */
 export function TableShell({ meta, className, testId, headerTestId, mainTestId, data, isPhone, room, players, sheet, onSheet, table, panel }: Props) {
   const closeSheet = () => onSheet(null);

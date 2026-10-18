@@ -1,13 +1,15 @@
 import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test';
-import { GAME_LIST, type GameId } from '../shared/platform/games';
-import { closeResults, createParty, endGameAsHost, expectResults, joinByCode, readyAll } from './party';
+import { GAME_LIST, gameById, type GameId } from '../shared/platform/games';
+import { closeResults, createParty, endGameAsHost, expectGameBar, expectResults, gameBarFits, joinByCode, readyAll } from './party';
 
 /**
  * How a game ends and how a player leaves, in every game: the host's End game ends it for
  * everyone at once and everyone lands in the lobby with the results over it; Leave room takes out
  * only the player who leaves while the game goes on; a leave that leaves too few players ends it,
  * the others getting the results; and The Spy Game's away spy is shown on the waiting card the
- * host can act on. Three players: the host on a desktop, Pia on a phone, Quinn on a desktop.
+ * host can act on. Every game's top bar says what is being played and keeps the room's code, and
+ * fits from the narrowest phone to a desktop. Three players: the host on a desktop, Pia on a
+ * phone, Quinn on a desktop.
  * Serial: the tests build on each other.
  */
 test.describe.configure({ mode: 'serial' });
@@ -71,22 +73,50 @@ for (const [index, gameId] of LIVE.entries()) {
     const onPhone = index % 2 === 1;
     if (onPhone) await host.page.setViewportSize(PORTRAIT);
     await startGame(gameId, players);
+    // Everyone's bar says what is being played and keeps the room's code: the host and the guests, on a desktop and on a phone.
+    for (const p of players) await expectGameBar(p.page, gameById(gameId).name, code);
     // The guests have no End game anywhere; a desktop guest's bar has Leave.
     await expect(quinn.page.getByTestId('end-game')).toHaveCount(0);
     await expect(quinn.page.getByTestId('leave-room')).toBeVisible();
+    // A phone's logo is the two phones alone, no control: the options button holds the settings and the ways out.
+    await expect(pia.page.getByTestId('game-brand').locator('.wordmark--icon')).toBeVisible();
+    await expect(pia.page.getByTestId('game-brand').locator('button, a')).toHaveCount(0);
     if (index === 0) {
-      // The bar's ways out are 44px targets. Leave opens the back arrow's confirm step, and only the button pressed reads as open.
+      // The bar's ways out are 44px targets. Leave opens the leave confirm, and only the button pressed reads as open.
       for (const [page, id] of [[host.page, 'end-game'], [quinn.page, 'leave-room']] as const) {
         expect((await page.getByTestId(id).boundingBox())?.height ?? 0, `${id} is a 44px target`).toBeGreaterThanOrEqual(44);
       }
       await quinn.page.getByTestId('leave-room').click();
       await expect(quinn.page.getByTestId('game-leave-confirm')).toContainText('Leave the room?');
       await expect(quinn.page.getByTestId('leave-room')).toHaveAttribute('aria-expanded', 'true');
-      await expect(quinn.page.getByTestId('game-back')).toHaveAttribute('aria-expanded', 'false');
+      await expect(quinn.page.getByTestId('brand-link')).toHaveAttribute('aria-expanded', 'false');
       await quinn.page.getByTestId('game-leave-no').click();
       await expect(quinn.page.getByTestId('game-leave-confirm')).toHaveCount(0);
       await expect(quinn.page.getByTestId('leave-room')).toHaveAttribute('aria-expanded', 'false');
+      // The logo never drops a player out of a game: it asks first, with the same confirm; Stay keeps them playing.
+      await quinn.page.getByTestId('game-brand').getByTestId('brand-link').click();
+      await expect(quinn.page.getByTestId('game-leave-confirm')).toContainText('Leave the room?');
+      await expect(quinn.page.getByTestId('brand-link')).toHaveAttribute('aria-expanded', 'true');
+      await expect(quinn.page.getByTestId('leave-room')).toHaveAttribute('aria-expanded', 'false');
+      await quinn.page.getByTestId('game-leave-no').click();
+      await expect(quinn.page.getByTestId('leave-sheet')).toHaveCount(0);
+      await expect(quinn.page).toHaveURL(new RegExp(`/${code}$`));
+      await expectGameBar(quinn.page, gameById(gameId).name, code);
+      // The logo's gear "o" opens the site's settings in a game as in the waiting room: the theme and the sound, nothing else.
+      const gear = quinn.page.getByTestId('game-brand').getByTestId('settings-menu');
+      expect((await gear.boundingBox())?.height ?? 0, 'the gear is a 44px target').toBeGreaterThanOrEqual(44);
+      await gear.click();
+      const popover = quinn.page.getByTestId('settings-popover');
+      await expect(popover).toBeVisible();
+      await expect(popover.getByTestId('theme-dark')).toBeVisible();
+      await expect(popover.getByTestId('sound-toggle')).toBeVisible();
+      await expect(popover.locator('button')).toHaveCount(3);
+      await quinn.page.keyboard.press('Escape');
+      await expect(popover).toHaveCount(0);
+      await expect(gear).toBeFocused();
     }
+    // The host's bar (End game in it, the fullest) fits at every width; The Spy Game's long name may give way on a phone's one row.
+    await gameBarFits(host.page, { nameMayCutBelow: gameId === 'spygame' ? 768 : 0 });
     await pia.page.getByTestId('game-menu').click();
     await expect(pia.page.getByTestId('leave-room')).toBeVisible();
     await expect(pia.page.getByTestId('end-game')).toHaveCount(0);
@@ -136,7 +166,7 @@ test('a player leaves mid-game from the options sheet: only they go, to the fron
 test('a leave that leaves too few players ends the game, and the others get the results saying why', async () => {
   // The Spy Game needs three.
   await startGame('spygame', players);
-  await quinn.page.getByTestId('game-back').click();
+  await quinn.page.getByTestId('leave-room').click();
   await expect(quinn.page.getByTestId('game-leave-confirm')).toContainText('Too few would be left, so the game ends for everyone.');
   await quinn.page.getByTestId('game-leave-yes').click();
   await expect(quinn.page.getByTestId('home-create')).toBeVisible();

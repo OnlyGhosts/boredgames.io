@@ -1,15 +1,19 @@
-import { useState, type ReactNode } from 'react';
+import { Fragment, useState, type ReactNode } from 'react';
 import type { GameMeta } from '@shared/platform/games';
 import type { RoomState } from '@shared/platform/protocol';
+import { TABLET_QUERY, useMediaQuery } from '../lib/media';
 import { useLive } from '../lib/useLive';
 import { registeredGame } from '../registry';
 import { selectIsHost } from '../store/selectors';
 import { usePlatformStore } from '../store/usePlatformStore';
 import { BottomSheet } from './BottomSheet';
-import { EndGameButton, EndGameConfirm, ExitActions, LeaveButton, LeaveConfirm, canEndGame, type ExitKind } from './GameExit';
-import { BackIcon, MenuIcon, UsersIcon } from './Icons';
+import { EndGameButton, EndGameConfirm, EndingNote, ExitActions, LeaveButton, LeaveConfirm, canEndGame, type ExitKind } from './GameExit';
+import { MenuIcon, UsersIcon } from './Icons';
 import { PlayerChips } from './PlayerChips';
-import { PreferenceRows, SettingsMenu } from './Preferences';
+import { PreferenceRows } from './Preferences';
+import { RoomCode } from './RoomCode';
+import { Logo } from './SiteHeader';
+import { Wordmark } from './Wordmark';
 
 type DataAttrs = Record<`data-${string}`, string | number | boolean | undefined>;
 
@@ -20,13 +24,17 @@ interface Toggle {
 
 interface Props {
   meta: GameMeta;
-  /** The room, for the player chips. */
+  /** The room: its code for the tiles, its players for the chips. */
   room: RoomState;
   isPhone: boolean;
   testId: string;
   /** The game layout's own class for the bar (its grid placement). */
   className?: string;
-  /** Right of the game's name: the round, turn or hand (a card table has none: its round is on the table). */
+  /**
+   * Under the game's name: the round, turn or hand (a card table has none: its round is on the
+   * table). A status of more than one part (a round and a turn) passes StatusParts, so a narrow
+   * bar can stack the parts rather than cut one.
+   */
   status?: ReactNode;
   /** Test id and data attributes of the status ('round-indicator' by default). */
   statusTestId?: string;
@@ -37,36 +45,44 @@ interface Props {
   players: Toggle & { label?: string };
   /** The phone's options sheet (theme, sound, the game's own rows, End game and Leave room). */
   menu: Toggle;
-  /** Desktop: between the name and the round (Scribble's word). */
+  /** A desktop or a tablet: in the players row, before the clock (Scribble's word). */
   middle?: ReactNode;
   /** A last row inside the bar (Scribble's word on a phone). */
   below?: ReactNode;
   /**
-   * One row only (a card table on a phone, whose players are all on the table; The Spy Game on a
-   * phone, which lists its players below): the player chips give way to a players button with the
+   * One row only (a card table, whose players are all on the table; The Spy Game on a phone,
+   * which lists its players below): the player chips give way to a players button with the
    * count, and the clock, if any, sits small in the row.
    */
   compact?: boolean;
 }
 
 /**
- * Every game's top bar, as on the brand board: a back arrow (leaving asks first), the game's name
- * large and the round on the right (under the name on a phone), then a row of player chips with
- * the timer ring at its end.
- * The options button is a small icon button on the first row of a phone; a desktop has the host's
- * End game, Leave and the gear (the device's preferences) there instead of the options sheet.
+ * Every game's top bar: the waiting room's header with the game in it. The logo (its gear "o"
+ * the settings button, the logo itself asking before it leaves), the game's name with its status
+ * under it, the room code's lime tiles, then the host's End game and everyone's Leave; under that
+ * row the player chips, the game's word (Scribble's) and the timer ring.
+ * A phone keeps one line: the logo's two phones alone, the name over its status, smaller tiles
+ * and the options button, whose sheet has the preferences, End game and Leave room. A tablet's
+ * first row is full, so the status moves down to the players row (a card table has none to move),
+ * and a card table's "Ending soon", once the host asked, goes under the name.
  */
 export function GameTopBar({ meta, room, isPhone, testId, className, status, statusTestId = 'round-indicator', statusData, clock, players, menu, middle, below, compact = false }: Props) {
   const game = registeredGame(room.gameId);
   const meId = useLive(usePlatformStore, (s) => s.playerId);
   const isHost = useLive(usePlatformStore, selectIsHost);
-  // The open confirm step, by the button that opened it: the back arrow and the bar's Leave share
-  // the leave sheet, and only the one pressed reads as open.
-  const [exit, setExit] = useState<'back' | 'leave' | 'end' | null>(null);
+  const tablet = useMediaQuery(TABLET_QUERY);
+  // The open confirm step, by the button that opened it: the logo and the bar's Leave share the
+  // leave sheet, and only the one pressed reads as open.
+  const [exit, setExit] = useState<'brand' | 'leave' | 'end' | null>(null);
   const closeExit = () => setExit(null);
-  const leaving = exit === 'back' || exit === 'leave';
+  const leaving = exit === 'brand' || exit === 'leave';
   const hostCanEnd = canEndGame(room, isHost);
-  // A phone puts the round under the game's name, so neither ever squeezes the buttons; a desktop has it on the right.
+  const peopleRow = !compact;
+  // A tablet's first row is full: the status goes to the players row, beside the word and the clock.
+  const statusBelow = tablet && !isPhone && peopleRow;
+  // A card table's tablet bar has no room for the "Ending soon" note beside the code: it goes under the name.
+  const endingUnderName = hostCanEnd && Boolean(room.endRequested) && tablet && !isPhone && compact;
   const statusEl =
     status === undefined ? null : (
       <span className="gbar__status" data-testid={statusTestId} {...statusData}>
@@ -75,25 +91,21 @@ export function GameTopBar({ meta, room, isPhone, testId, className, status, sta
     );
   return (
     <>
-      <header className={`gbar card${isPhone ? ' gbar--phone' : ''}${compact ? ' gbar--compact' : ''}${middle ? ' gbar--middle' : ''}${className ? ` ${className}` : ''}`} data-testid={testId} data-game={meta.id}>
+      <header className={`gbar card${isPhone ? ' gbar--phone' : ''}${compact ? ' gbar--compact' : ''}${className ? ` ${className}` : ''}`} data-testid={testId} data-game={meta.id}>
         <div className="gbar__row">
-          <button
-            type="button"
-            className="icon-btn gbar__btn gbar__back"
-            onClick={() => setExit('back')}
-            aria-haspopup="dialog"
-            aria-expanded={exit === 'back'}
-            aria-label="Leave game"
-            data-testid="game-back"
-          >
-            <BackIcon size={24} />
-          </button>
+          <div className="gbar__brand" data-testid="game-brand">
+            {isPhone ? <Wordmark variant="icon" /> : <Logo leave={{ open: exit === 'brand', onOpen: () => setExit('brand') }} />}
+          </div>
+          {!isPhone && <span className="gbar__divider" aria-hidden="true" />}
           <div className="gbar__title">
             <strong className="gbar__name">{meta.name}</strong>
-            {isPhone && statusEl}
+            {!statusBelow && statusEl}
+            {endingUnderName && <EndingNote />}
           </div>
-          {middle && <div className="gbar__middle">{middle}</div>}
-          {!isPhone && statusEl}
+          {!peopleRow && middle && <div className="gbar__middle">{middle}</div>}
+          <div className="gbar__code">
+            <RoomCode code={room.code} testId="game-code" />
+          </div>
           <div className="gbar__side">
             {compact && clock && <div className="gbar__clock gbar__clock--row">{clock}</div>}
             {compact && (
@@ -118,16 +130,17 @@ export function GameTopBar({ meta, room, isPhone, testId, className, status, sta
               </button>
             ) : (
               <>
-                {hostCanEnd && <EndGameButton room={room} open={exit === 'end'} onOpen={() => setExit('end')} />}
+                {hostCanEnd && !endingUnderName && <EndGameButton room={room} open={exit === 'end'} onOpen={() => setExit('end')} />}
                 <LeaveButton open={exit === 'leave'} onOpen={() => setExit('leave')} />
-                <SettingsMenu />
               </>
             )}
           </div>
         </div>
-        {!compact && (
+        {peopleRow && (
           <div className="gbar__people">
             <PlayerChips room={room} game={game} open={players.open} onOpen={players.onOpen} label={players.label ?? 'Players'} />
+            {statusBelow && statusEl}
+            {middle && <div className="gbar__middle">{middle}</div>}
             {clock && <div className="gbar__clock">{clock}</div>}
           </div>
         )}
@@ -146,6 +159,24 @@ export function GameTopBar({ meta, room, isPhone, testId, className, status, sta
 /** "Round 1/5". */
 export function RoundStatus({ round, total }: { round: number; total: number }) {
   return <>{`Round ${round}/${total}`}</>;
+}
+
+/**
+ * A status of several parts ("Round 1/3", "Turn 2/4"): on one line with a dot between them where
+ * the bar has room, stacked one under the other where it has not (the narrowest phones, a phone on
+ * its side), so no part is ever cut. The stylesheet draws the dot; a screen reader hears " · ".
+ */
+export function StatusParts({ parts }: { parts: ReactNode[] }) {
+  return (
+    <>
+      {parts.map((part, i) => (
+        <Fragment key={i}>
+          {i > 0 && <span className="sr-only"> · </span>}
+          <span className="gbar__part">{part}</span>
+        </Fragment>
+      ))}
+    </>
+  );
 }
 
 /**

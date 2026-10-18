@@ -38,7 +38,7 @@ export function WordDisplay({ word, mask, isDrawer }: Props) {
       <span className="word__label">Guess the word</span>
       <span className="word__tiles" aria-hidden="true">
         {groups.map((slots, w) => (
-          // One group per word so a narrow screen wraps between words, never inside one.
+          // One group per word so a narrow screen wraps between words; only a word wider than all the bar's room (a long custom word) wraps inside itself.
           <span key={w} className="word__group">
             {slots.map((slot, i) =>
               slot.kind === 'sep' ? (

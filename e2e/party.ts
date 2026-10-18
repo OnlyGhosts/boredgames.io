@@ -94,9 +94,11 @@ export async function leaveLobby(page: Page): Promise<void> {
   await page.getByTestId('lobby-leave-yes').click();
 }
 
-/** Leaves from a game screen: the top bar's back arrow, then Leave room in the confirmation. */
+/** Leaves from a game screen: the top bar's Leave (on a phone, Leave room in the options sheet), then Leave room in the confirmation. */
 export async function leaveGame(page: Page): Promise<void> {
-  await page.getByTestId('game-back').click();
+  const menu = page.getByTestId('game-menu');
+  if (await menu.isVisible()) await menu.click();
+  await page.getByTestId('leave-room').click();
   await page.getByTestId('game-leave-yes').click();
 }
 
@@ -126,29 +128,117 @@ export async function closeResults(page: Page): Promise<void> {
 }
 
 /**
- * The game's name in the top bar is shown and never cut short on a phone (390, 360 and 320
- * wide), the round sits on one line under it, and neither runs into the buttons (the players
- * button, the clock, the menu). Back to the page's own size after.
+ * The top bar says what is being played and keeps the room's code in view: the game's name, and
+ * the code's four tiles (read-only, named for screen readers a letter at a time), on whatever
+ * screen the page is at.
  */
-export async function gameNameWhole(page: Page): Promise<void> {
+export async function expectGameBar(page: Page, name: string, code: string): Promise<void> {
+  await expect(page.locator('.gbar__name')).toHaveText(name);
+  await expect(page.locator('.gbar__name')).toBeVisible();
+  const tiles = page.getByTestId('game-code');
+  await expect(tiles).toBeVisible();
+  await expect(tiles).toHaveText(code);
+  await expect(tiles).toHaveAttribute('aria-label', `Room code ${code.split('').join(' ')}`);
+  await expect(tiles.locator('.room-card__char')).toHaveCount(code.length);
+}
+
+/**
+ * The screens the game bar is checked on: the narrowest phones, a common phone, a tablet, a small
+ * and a large desktop, and phones on their side (where Scribble's bar sits in a side column).
+ */
+export const BAR_SIZES = [
+  { width: 320, height: 568 },
+  { width: 360, height: 740 },
+  { width: 390, height: 844 },
+  { width: 768, height: 1024 },
+  { width: 1024, height: 768 },
+  { width: 1440, height: 900 },
+  { width: 844, height: 390 },
+  { width: 667, height: 375 },
+  { width: 568, height: 320 },
+];
+
+/**
+ * The game's top bar fits on every screen in BAR_SIZES: nothing in it overflows the bar or the
+ * screen, nothing on its first line or in its players row overlaps, every button in it is a 44px
+ * target, the code's tiles are whole, the players row keeps at least one player's chip and cuts
+ * none, a game's word stays inside its own room, and the status is whole: one line, or a status in parts
+ * (StatusParts) stacked a part to a line, never cut. The game's name is whole; below
+ * `nameMayCutBelow` (a line too full for a long name, The Spy Game's phone bar) it may give way,
+ * the only thing that does, and only with an ellipsis. Back to the page's own size after.
+ */
+export async function gameBarFits(page: Page, { nameMayCutBelow = 0 }: { nameMayCutBelow?: number } = {}): Promise<void> {
   const own = page.viewportSize();
-  for (const size of [{ width: 390, height: 844 }, { width: 360, height: 740 }, { width: 320, height: 568 }]) {
+  for (const size of BAR_SIZES) {
     await page.setViewportSize(size);
-    const cut = () =>
-      page.evaluate(() => {
-        const name = document.querySelector('.gbar__name');
-        const status = document.querySelector('.gbar__status');
-        const title = document.querySelector('.gbar__title')?.getBoundingClientRect();
-        const side = document.querySelector('.gbar__side')?.getBoundingClientRect();
-        return {
-          // The text's own laid-out width (an ellipsis can hide a fraction of a pixel that scrollWidth rounds away).
-          name: name ? name.clientWidth === 0 || (() => { const r = document.createRange(); r.selectNodeContents(name); return r.getBoundingClientRect().width > name.getBoundingClientRect().width + 0.25; })() : true,
-          overlap: title && side ? title.right > side.left + 0.5 : true,
-          // One line: no taller than the status's own line height allows, and nothing of it hidden ("Round 1/5 · Turn 2/3" whole).
-          status: status ? status.getBoundingClientRect().height > parseFloat(getComputedStyle(status).lineHeight) * 1.5 || status.scrollWidth > status.clientWidth : true,
+    const problems = () =>
+      page.evaluate((mayCut) => {
+        const out: string[] = [];
+        const bar = document.querySelector('.gbar');
+        if (!bar) return ['no bar'];
+        const b = bar.getBoundingClientRect();
+        if (b.left < -0.5 || b.right > window.innerWidth + 0.5) out.push('the bar runs off the screen');
+        if (document.documentElement.scrollWidth > window.innerWidth) out.push('the page scrolls sideways');
+        const shown = (el: Element) => {
+          const r = el.getBoundingClientRect();
+          return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden';
         };
-      });
-    await expect.poll(cut, { message: `the game’s name and status fit at ${size.width}px` }).toEqual({ name: false, overlap: false, status: false });
+        for (const el of bar.querySelectorAll('*')) {
+          if (!shown(el)) continue;
+          const r = el.getBoundingClientRect();
+          // A visually hidden label (a tablet's icon-alone buttons, a status's spoken separator) is a 1px box clipped to nothing.
+          if (r.width <= 1 && r.height <= 1) continue;
+          if (r.left < b.left - 0.5 || r.right > b.right + 0.5) out.push(`${el.getAttribute('data-testid') ?? el.getAttribute('class')} runs out of the bar`);
+        }
+        const row = bar.querySelector('.gbar__row');
+        const parts = row ? [...row.children].filter(shown) : [];
+        for (let i = 1; i < parts.length; i++) {
+          const prev = parts[i - 1].getBoundingClientRect();
+          const next = parts[i].getBoundingClientRect();
+          if (prev.right > next.left + 0.5) out.push(`${parts[i - 1].className} overlaps ${parts[i].className}`);
+        }
+        for (const el of bar.querySelectorAll('button')) {
+          if (!shown(el)) continue;
+          const r = el.getBoundingClientRect();
+          if (r.height < 44 - 0.5 || r.width < 44 - 0.5) out.push(`${el.getAttribute('data-testid')} is ${Math.round(r.width)}x${Math.round(r.height)}`);
+        }
+        const tiles = bar.querySelectorAll('[data-testid="game-code"] .room-card__char');
+        if (tiles.length !== 4 || ![...tiles].every(shown)) out.push('the code is not four whole tiles');
+        // The players row: nothing in it overlaps or runs past its own box (a word too long for its room), and the strip
+        // keeps at least one player's chip, none of them cut.
+        const people = bar.querySelector('.gbar__people');
+        const below = people ? [...people.children].filter(shown) : [];
+        for (let i = 0; i < below.length; i++) {
+          if (below[i].scrollWidth > below[i].clientWidth + 1 && !below[i].matches('.gbar__status')) out.push(`${below[i].className} overflows`);
+          if (i > 0 && below[i - 1].getBoundingClientRect().right > below[i].getBoundingClientRect().left + 0.5) out.push(`${below[i - 1].className} overlaps ${below[i].className}`);
+        }
+        const chips = bar.querySelector('.chips');
+        if (chips && shown(chips)) {
+          if (chips.scrollWidth > chips.clientWidth + 1) out.push('a player chip is cut');
+          if (!chips.querySelector('[data-testid="player-chip"]')) out.push('no player chip shows');
+        }
+        // Cut text: its own laid-out width past its box (an ellipsis can hide a fraction of a pixel that scrollWidth rounds away).
+        const cut = (el: Element) => {
+          const range = document.createRange();
+          range.selectNodeContents(el);
+          return range.getBoundingClientRect().width > el.getBoundingClientRect().width + 0.25;
+        };
+        const oneLine = (el: Element) => el.getBoundingClientRect().height <= parseFloat(getComputedStyle(el).lineHeight) * 1.5;
+        const name = bar.querySelector('.gbar__name');
+        if (!name || !shown(name)) out.push('no name');
+        else if (cut(name)) {
+          if (window.innerWidth >= mayCut) out.push(`the name is cut at ${window.innerWidth}px`);
+          if (getComputedStyle(name).textOverflow !== 'ellipsis') out.push('the name is clipped without an ellipsis');
+        }
+        const status = bar.querySelector('.gbar__status');
+        if (status && shown(status)) {
+          const pieces = [...status.querySelectorAll('.gbar__part')];
+          if (pieces.length === 0 ? !oneLine(status) : pieces.some((piece) => !oneLine(piece))) out.push('the status wraps');
+          if (cut(status) || pieces.some(cut)) out.push(`the status is cut at ${window.innerWidth}px`);
+        }
+        return out;
+      }, nameMayCutBelow);
+    await expect.poll(problems, { message: `the game bar fits at ${size.width}x${size.height}` }).toEqual([]);
   }
   if (own) await page.setViewportSize(own);
 }

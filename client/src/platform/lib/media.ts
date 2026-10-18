@@ -11,6 +11,12 @@ export const PHONE_QUERY = '(max-width: 760px), (min-aspect-ratio: 3/2) and (max
 /** The room's two columns (the lobby stylesheet's 768px breakpoint): players at the left, the host's settings at the right. */
 export const COLUMNS_QUERY = '(min-width: 768px)';
 
+/**
+ * A tablet: wider than a phone, narrower than a desktop (the stylesheets' 761 to 1023px band),
+ * where the game bar's first row is full and the game's status moves down to the players row.
+ */
+export const TABLET_QUERY = '(min-width: 761px) and (max-width: 1023px)';
+
 /** A desktop-sized screen: where a sheet becomes a centred box and How to play a popover (the stylesheets' 1024px breakpoint). */
 export const DESKTOP_QUERY = '(min-width: 1024px)';
 

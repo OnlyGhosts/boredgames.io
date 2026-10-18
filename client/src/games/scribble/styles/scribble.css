@@ -154,6 +154,37 @@
   justify-content: center;
 }
 
+/* The bar's word (a desktop or a tablet): a word wider than all the room it has (a long custom word) wraps inside itself rather than running into the round or the clock. */
+.gbar__middle .word__group {
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+/*
+ * A tablet's players row holds the chips, the round, the word and the clock: the word's tiles a
+ * size down, so most long phrases still fit on one line; a longer one wraps between its words.
+ */
+@media (min-width: 761px) and (max-width: 1023px) {
+  .gbar__middle .game__word .word__tiles {
+    gap: 4px 8px;
+  }
+
+  .gbar__middle .game__word .word__group {
+    gap: 3px;
+  }
+
+  .gbar__middle .game__word .tile {
+    width: 20px;
+    height: 26px;
+    border-radius: 5px;
+    font-size: 0.9375rem;
+  }
+
+  .gbar__middle .game__word .tile--punct {
+    width: 12px;
+  }
+}
+
 .game__players {
   grid-row: 2;
   min-height: 0;

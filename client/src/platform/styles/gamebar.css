@@ -1,38 +1,73 @@
-/* ---------- The game top bar (GameTopBar): back, name, round, options; then the player chips and the timer ring ---------- */
+/*
+ * ---------- The game top bar (GameTopBar): the waiting room's header with the game in it ----------
+ * One surface like the room's own bar (lobby.css .lobby__top): the logo with its gear "o" (the
+ * settings button), the game's name over its status, the room code's lime tiles centred in the
+ * room left over, then the host's End game and Leave, every control 44px tall. Under that row the
+ * player chips, the game's word (Scribble's) and the timer ring.
+ */
 .gbar {
+  --wordmark-height: 30px;
+  /* The bar answers to its own width (a phone on its side puts it in a narrow side column): see the end of this file. */
+  container: gbar / inline-size;
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  padding: var(--space-2) var(--space-3) var(--space-3);
+  padding: 10px 12px 10px 16px;
   min-width: 0;
 }
 
+/* Under a players row, a touch more room at the bottom; never on a phone, whose own padding (smaller still on a short screen, a phone on its side or with the keyboard open) saves height. */
+.gbar:not(.gbar--phone):has(.gbar__people) {
+  padding-bottom: 12px;
+}
+
+/* One line that never wraps: the game's name gives way first (an ellipsis); the logo, the tiles and the buttons keep their size. */
 .gbar__row {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-4);
   min-width: 0;
   min-height: 44px;
 }
 
-.gbar__back {
-  margin-left: -6px;
-  color: var(--color-text);
+.gbar__brand {
+  flex: none;
+  display: flex;
+  align-items: center;
 }
 
-/* The game's name, and on a phone the round under it (the status on the right on a desktop). */
+/* The wordmark's ink sits high in its box (the mascots and ascenders above, only the g's tail below): a nudge down centres it on the bar by eye, as in the waiting room. */
+.gbar .logo .wordmark {
+  transform: translateY(2px);
+}
+
+/* A phone's logo: the two phones alone, as tall as the name and its status. */
+.gbar .wordmark--icon {
+  height: 28px;
+}
+
+.gbar__divider {
+  flex: none;
+  width: 1px;
+  height: 28px;
+  background: var(--color-border);
+}
+
+/* The game's name in the display face, its status (the round, the turn) in small muted type under it. */
 .gbar__title {
   flex: 0 1 auto;
   display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
   min-width: 0;
 }
 
 .gbar__name {
-  flex: 0 1 auto;
   min-width: 0;
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: 1.625rem;
+  font-size: 1.375rem;
   line-height: 1.15;
   letter-spacing: -0.01em;
   white-space: nowrap;
@@ -41,27 +76,53 @@
 }
 
 .gbar__status {
-  flex: 0 1 auto;
   min-width: 0;
-  margin-left: auto;
-  color: var(--color-text);
-  font-weight: 500;
-  font-size: 0.9375rem;
-  line-height: 1.25;
-  text-align: right;
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.2;
   font-variant-numeric: tabular-nums;
-  /* A long status (a card table's "Hand 3 · Flop") takes two lines rather than pushing the buttons out. */
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
+  white-space: nowrap;
   overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-/* With something in the middle, the middle takes the room between the name and the status. */
+/*
+ * A status in parts (StatusParts: Scribble's round and turn): one line with a dot between the parts
+ * where there is room; where there is not (the narrowest phones, a bar in a side column), the parts
+ * stack, each one whole, rather than any of it being cut. The dot sits in the gap before a part,
+ * so a part that starts a line has none (the status clips it).
+ */
+.gbar__status:has(> .gbar__part) {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 0.75em;
+}
 
+.gbar__part {
+  position: relative;
+  white-space: nowrap;
+}
+
+.gbar__part ~ .gbar__part::before {
+  content: '·';
+  content: '·' / '';
+  position: absolute;
+  right: 100%;
+  width: 0.75em;
+  text-align: center;
+}
+
+/* The room code's tiles (the waiting room's own, components.css), centred in the room left over and never squeezed. */
+.gbar__code {
+  flex: 1 0 auto;
+  display: flex;
+  justify-content: center;
+}
+
+/* Something the game puts beside the clock (Scribble's word): it takes the room it needs from the chips. */
 .gbar__middle {
-  flex: 1 1 0;
+  flex: 0 1 auto;
   display: flex;
   justify-content: center;
   min-width: 0;
@@ -70,12 +131,10 @@
 .gbar__side {
   flex: none;
   display: flex;
-  /* With no status before it (a card table), the buttons still keep to the right. */
   margin-left: auto;
   align-items: center;
   justify-content: flex-end;
-  gap: var(--space-1);
-  min-width: 0;
+  gap: var(--space-2);
 }
 
 .gbar__btn {
@@ -91,6 +150,11 @@
   min-width: 0;
 }
 
+/* A tablet's status, moved down from under the name: before the word and the clock. */
+.gbar__people .gbar__status {
+  flex: none;
+}
+
 .gbar__clock {
   flex: none;
   display: grid;
@@ -103,7 +167,8 @@
   --chip-w: 64px;
   --chip-gap: 6px;
   flex: 1 1 auto;
-  min-width: 0;
+  /* Never fewer than one player's chip and the "+K" chip: something long beside them (Scribble's word) gives way instead. */
+  min-width: calc(2 * var(--chip-w) + var(--chip-gap));
   display: flex;
   gap: var(--chip-gap);
   overflow: hidden;
@@ -272,65 +337,17 @@
   outline-offset: 2px;
 }
 
-.gbar--compact.gbar--phone {
-  padding: 2px 6px;
-}
-
-.gbar--compact.gbar--phone .gbar__name {
-  font-size: 1.25rem;
-}
-
-/* A clock in the one-row bar: the ring at the buttons' height. */
+/* A clock in the one-row bar (The Spy Game on a phone, the fullest line there is): the ring at the 44px target's size. */
 .gbar__clock--row {
   margin-left: 2px;
 }
 
 .gbar .gbar__clock--row .timer--lg {
-  width: 48px;
-  height: 48px;
-  font-size: 1rem;
+  width: 44px;
+  height: 44px;
+  font-size: 0.9375rem;
 }
 
-/* A one-row bar with a clock (The Spy Game): the ring, the pill and the name a little smaller on the narrowest phones, so the name stays whole. */
-@media (max-width: 360px) {
-  .gbar .gbar__clock--row .timer--lg {
-    width: 44px;
-    height: 44px;
-    font-size: 0.9375rem;
-  }
-
-  .gbar--compact.gbar--phone .gbar__count-pill {
-    gap: 4px;
-    padding: 0 10px 0 8px;
-  }
-
-  .gbar--compact.gbar--phone:has(.gbar__clock--row) .gbar__name {
-    font-size: 1.0625rem;
-  }
-}
-
-/* The very narrowest (320px): a touch tighter again, so "The Spy Game" still reads whole beside its clock. */
-@media (max-width: 340px) {
-  .gbar .gbar__clock--row .timer--lg {
-    width: 40px;
-    height: 40px;
-    font-size: 0.875rem;
-  }
-
-  .gbar--compact.gbar--phone .gbar__count-pill {
-    gap: 3px;
-    padding: 0 7px 0 6px;
-  }
-
-  .gbar--compact.gbar--phone .gbar__count-pill svg {
-    width: 16px;
-    height: 16px;
-  }
-
-  .gbar--compact.gbar--phone:has(.gbar__clock--row) .gbar__name {
-    font-size: 1rem;
-  }
-}
 
 /* ---------- Timer ring in the bar: the board's large ring ---------- */
 .gbar .timer--lg {
@@ -341,48 +358,121 @@
   font-weight: 700;
 }
 
-/* ---------- Phones: tighter padding; the name gives way first, the controls never shrink below 44px ---------- */
+/*
+ * ---------- Tablets (761 to 1023px): the first row is full ----------
+ * A smaller logo and tighter gaps than a desktop's (a touch more than the waiting room takes, so
+ * the longest name, The Spy Game, stays whole beside the host's End game from 761px). The status
+ * moves down to the players row (GameTopBar renders it there) and Leave keeps its icon alone, a
+ * 44px square. A card table has no players row to take the status, so it gives way, and End game
+ * keeps its icon alone too; once asked for, its "Ending soon" goes under the name, where the words
+ * still show (GameTopBar). The labels stay for screen readers. Never a phone on its side
+ * (.gbar--phone).
+ */
+@media (min-width: 761px) and (max-width: 1023px) {
+  .gbar:not(.gbar--phone) {
+    --wordmark-height: 26px;
+  }
+
+  .gbar:not(.gbar--phone) .gbar__row {
+    gap: 10px;
+  }
+
+  .gbar:not(.gbar--phone) .gbar__side {
+    gap: 6px;
+  }
+
+  .gbar:not(.gbar--phone) .gbar__name {
+    font-size: 1.25rem;
+  }
+
+  /* The players row holds the chips, the status, the game's word and the clock: a little closer together. */
+  .gbar:not(.gbar--phone) .gbar__people {
+    gap: 8px;
+  }
+
+  .gbar:not(.gbar--phone) .gbar-leave,
+  .gbar--compact:not(.gbar--phone) .gbar-end:not(.gbar-end--pending) {
+    width: 44px;
+    padding: 0;
+    gap: 0;
+  }
+
+  .gbar:not(.gbar--phone) .gbar-leave span,
+  .gbar--compact:not(.gbar--phone) .gbar-end:not(.gbar-end--pending) span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .gbar--compact:not(.gbar--phone) .gbar__title .gbar__status {
+    display: none;
+  }
+
+  .gbar--compact:not(.gbar--phone) .gbar__count-pill {
+    gap: 4px;
+    padding: 0 10px 0 8px;
+  }
+}
+
+/*
+ * ---------- Phones: one line ----------
+ * The logo's two phones alone, the name with its status under it (it gives way first), the tiles
+ * smaller and the options button; the players row under it. Every control stays a 44px target.
+ */
 .gbar--phone {
+  gap: 6px;
   padding: 4px 8px 8px;
   border-radius: var(--radius-item);
 }
 
 .gbar--phone .gbar__row {
-  gap: 4px;
+  gap: 8px;
 }
 
-.gbar--phone .gbar__name {
-  font-size: 1.5rem;
-}
-
-/* A phone: the round in small type under the name, each on its own line, so neither squeezes the buttons. */
+/*
+ * The name takes the line and gives way first: it adds nothing to the title's own width (an
+ * ellipsis takes what is left), so the title never gets narrower than its status, which stays whole.
+ */
 .gbar--phone .gbar__title {
   flex: 1 1 auto;
-  flex-direction: column;
-  justify-content: center;
-  gap: 1px;
+  min-width: auto;
 }
 
 .gbar--phone .gbar__name {
+  contain: inline-size;
+  font-size: 1.1875rem;
   line-height: 1.1;
 }
 
 .gbar--phone .gbar__status {
-  display: block;
-  flex: none;
-  margin-left: 0;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  line-height: 1.2;
-  color: var(--color-text-muted);
-  text-align: left;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font-size: 0.75rem;
 }
 
-.gbar--phone:not(.gbar--compact) .gbar__name {
-  font-size: 1.3125rem;
+/* The tiles at the line's height beside the options button: smaller, a lighter stroke and edge. */
+.gbar--phone .gbar__code {
+  flex: none;
+}
+
+.gbar--phone .room-card__value {
+  gap: 3px;
+  font-size: clamp(0.9375rem, 4.6vw, 1.125rem);
+  -webkit-text-stroke: 0.3px currentColor;
+}
+
+.gbar--phone .room-card__char {
+  border-radius: 7px;
+  box-shadow: inset 0 0 0 1px var(--color-primary-edge);
+}
+
+.gbar--phone .gbar__side {
+  gap: 2px;
+}
+
+.gbar--phone .gbar__people {
+  gap: var(--space-2);
 }
 
 .gbar--phone .timer--lg {
@@ -391,15 +481,66 @@
   font-size: 1.375rem;
 }
 
+/* One row with the players button (a card table, The Spy Game): a slimmer bar, the logo, the tiles and the status a size down. */
+.gbar--compact.gbar--phone {
+  padding: 2px 6px;
+}
+
+.gbar--compact.gbar--phone .gbar__row {
+  gap: 6px;
+}
+
+.gbar--compact.gbar--phone .wordmark--icon {
+  height: 26px;
+}
+
+.gbar--compact.gbar--phone .gbar__status {
+  font-size: 0.6875rem;
+}
+
+.gbar--compact.gbar--phone .room-card__value {
+  gap: 2px;
+  font-size: 0.875rem;
+}
+
+.gbar--compact.gbar--phone .gbar__count-pill {
+  gap: 4px;
+  padding: 0 10px 0 8px;
+}
+
+/* Beside a clock (The Spy Game): the pill tighter still, so the name keeps what room it can. */
+.gbar--compact.gbar--phone:has(.gbar__clock--row) .gbar__count-pill {
+  gap: 3px;
+  padding: 0 7px 0 6px;
+}
+
+.gbar--compact.gbar--phone:has(.gbar__clock--row) .gbar__count-pill svg {
+  width: 16px;
+  height: 16px;
+}
+
 @media (max-width: 360px) {
-  .gbar--phone .gbar__name,
-  .gbar--phone:not(.gbar--compact) .gbar__name {
-    font-size: 1.25rem;
+  .gbar--phone .gbar__row {
+    gap: 6px;
   }
 
-  .gbar--phone .gbar__row,
-  .gbar--phone .gbar__side {
-    gap: 2px;
+  /* The one-row bar's clock (The Spy Game) a size down, so the round keeps its room. */
+  .gbar__clock--row {
+    margin-left: 0;
+  }
+
+  .gbar .gbar__clock--row .timer--lg {
+    width: 40px;
+    height: 40px;
+    font-size: 0.875rem;
+  }
+
+  .gbar--phone .gbar__name {
+    font-size: 1.0625rem;
+  }
+
+  .gbar--phone .gbar__status {
+    font-size: 0.6875rem;
   }
 
   .gbar--phone .timer--lg {
@@ -409,9 +550,20 @@
   }
 }
 
+/* The very narrowest (320px): a one-row bar's gaps and players pill a touch tighter again, so the name keeps what it can. */
 @media (max-width: 340px) {
-  .gbar--phone:not(.gbar--compact) .gbar__name {
-    font-size: 1.125rem;
+  .gbar--compact.gbar--phone .gbar__row {
+    gap: 4px;
+  }
+
+  .gbar--compact.gbar--phone .gbar__count-pill {
+    gap: 3px;
+    padding: 0 7px 0 6px;
+  }
+
+  .gbar--compact.gbar--phone .gbar__count-pill svg {
+    width: 16px;
+    height: 16px;
   }
 }
 
@@ -494,8 +646,9 @@
 }
 
 /*
- * Portrait with the keyboard open (or any very short portrait screen): one row of back, chips,
- * the ring and the buttons; the name and the round give way until the keyboard closes.
+ * Portrait with the keyboard open (or any very short portrait screen): one row of the chips, the
+ * ring and the options button; the logo, the name, the round and the code give way until the
+ * keyboard closes.
  */
 @media (max-width: 760px) and (max-height: 440px) and (max-aspect-ratio: 3/2) {
   .gbar--phone {
@@ -510,7 +663,9 @@
     display: contents;
   }
 
+  .gbar--phone .gbar__brand,
   .gbar--phone .gbar__title,
+  .gbar--phone .gbar__code,
   .gbar--phone .gbar__middle {
     display: none;
   }
@@ -528,5 +683,46 @@
   .gbar--phone > :not(.gbar__row, .gbar__people) {
     order: 3;
     flex-basis: 100%;
+  }
+}
+
+/*
+ * A phone's bar in a narrow column (a phone on its side puts Scribble's in a side column 240 to
+ * 280px wide): the logo, the tiles, the name and the gaps a size down, so the game's name and its
+ * status (Scribble's round and turn stacked, StatusParts) keep their room beside the code and the
+ * options button.
+ */
+@container gbar (max-width: 280px) {
+  .gbar--phone .wordmark--icon {
+    height: 24px;
+  }
+
+  .gbar--phone .gbar__row {
+    gap: 4px;
+  }
+
+  .gbar--phone .room-card__value {
+    gap: 2px;
+    font-size: 0.8125rem;
+  }
+
+  .gbar--phone .gbar__name {
+    font-size: 1rem;
+  }
+
+  .gbar--phone .gbar__status {
+    font-size: 0.6875rem;
+  }
+}
+
+/*
+ * The fullest one-row bar (The Spy Game: the clock and the players button beside the code and the
+ * options) on the narrowest phones (the bar's content 320px or less: a phone 350px wide or less):
+ * the logo's two phones give way, so the round ("Round 10/10") stays whole beside the name. On a
+ * 360px phone the logo is back.
+ */
+@container gbar (max-width: 320px) {
+  .gbar--compact.gbar--phone:has(.gbar__clock--row) .gbar__brand {
+    display: none;
   }
 }

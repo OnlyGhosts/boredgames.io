@@ -514,6 +514,16 @@ test('round two: the amount is remembered, Space bets on the desktop, and the ho
     await expect(host.page.getByTestId('end-game-confirm')).toContainText('It ends after the hand in play.');
     await host.page.getByTestId('end-game-yes').click();
     await expect(host.page.getByTestId('end-game-requested')).toBeVisible();
+    await expect(host.page.getByTestId('end-game-requested')).toHaveText('Ending soon');
+    // A tablet's bar has no room for the note beside the code: its words show under the game's name instead, whole.
+    await host.page.setViewportSize({ width: 768, height: 1024 });
+    const note = host.page.locator('.gbar__title').getByTestId('end-game-requested');
+    await expect(note).toBeVisible();
+    await expect(note).toHaveText('Ending soon');
+    expect(await note.evaluate((el) => { const r = document.createRange(); r.selectNodeContents(el); return r.getBoundingClientRect().width - el.getBoundingClientRect().width; })).toBeLessThanOrEqual(0.25);
+    await expect(host.page.locator('.gbar__name')).toHaveText('Blackjack');
+    await host.page.setViewportSize({ width: 1440, height: 900 });
+    await expect(host.page.locator('.gbar__side').getByTestId('end-game-requested')).toHaveText('Ending soon');
     await expect(host.page.getByTestId('table-rule')).toHaveText('Last hand');
     // Nothing else tells the table: everyone gets a toast.
     for (const p of players) await expect(p.page.getByTestId('toast').filter({ hasText: 'The game ends after this hand.' })).toBeVisible();

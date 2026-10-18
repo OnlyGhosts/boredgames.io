@@ -11,6 +11,7 @@ import { LeaveConfirm } from '../components/GameExit';
 import { CopyIcon, EditIcon, LogoutIcon, PlayIcon, ShareIcon } from '../components/Icons';
 import { PlayerList } from '../components/PlayerList';
 import { ReadyControls } from '../components/ReadyControls';
+import { RoomCode } from '../components/RoomCode';
 import { SettingsPanel } from '../components/SettingsPanel';
 import { SiteHeader } from '../components/SiteHeader';
 import type { AnyGameClientModule } from '../game';
@@ -103,13 +104,7 @@ export function Lobby({ room, game }: Props) {
 
           <section className="room-card" aria-label="Room code" data-testid="room-bar">
             <div className="room-card__code">
-              <span className="room-card__value" data-testid="room-code" aria-label={`Room code ${room.code.split('').join(' ')}`}>
-                {room.code.split('').map((ch, i) => (
-                  <span key={i} className="room-card__char">
-                    {ch}
-                  </span>
-                ))}
-              </span>
+              <RoomCode code={room.code} testId="room-code" />
             </div>
             <button type="button" className="room-card__btn" onClick={() => void copy(room.code, 'Code')} aria-label="Copy code" data-testid="copy-code">
               <CopyIcon size={20} />
