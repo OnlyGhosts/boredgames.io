@@ -416,13 +416,21 @@ button.game-tile:active {
   font-size: 0.875rem;
 }
 
-/* The card hangs off the button's left edge (or its right, when the screen ends first), an arrow pointing at it. */
+/*
+ * The card on a desktop: placed by HowToPlay.tsx (placePopover) under the button, over it or beside
+ * it, never over the room bar, an arrow pointing at the button; its left, top, width and max-height
+ * come from there (the values here hold only until it is measured). As wide as two columns where
+ * the window leaves the room, a single column where it does not.
+ */
 .how-to-play__popover {
   position: absolute;
   top: calc(100% + 10px);
   left: 0;
   z-index: 70;
+  display: flex;
+  flex-direction: column;
   width: min(380px, calc(100vw - 2 * var(--gutter)));
+  container: how-to-play / inline-size;
   border-radius: var(--radius-md);
   background: var(--color-surface);
   border: 1px solid var(--color-border);
@@ -430,16 +438,12 @@ button.game-tile:active {
   animation: pop-in 160ms ease-out;
 }
 
-.how-to-play__popover--right {
-  left: auto;
-  right: 0;
-}
-
+/* Under the button: the arrow points up from the card's top edge, at the button's middle (--arrow, from the card's left). */
 .how-to-play__popover::before {
   content: '';
   position: absolute;
   top: -6px;
-  left: calc(var(--anchor-x, 24px) - 6px);
+  left: calc(var(--arrow, 24px) - 6px);
   width: 11px;
   height: 11px;
   background: var(--color-surface);
@@ -448,17 +452,7 @@ button.game-tile:active {
   transform: rotate(45deg);
 }
 
-.how-to-play__popover--right::before {
-  left: auto;
-  right: calc(var(--anchor-x, 24px) - 6px);
-}
-
-/* Over the button when the screen under it is short: the arrow points down from the card's bottom edge. */
-.how-to-play__popover--above {
-  top: auto;
-  bottom: calc(100% + 10px);
-}
-
+/* Over the button: the arrow points down from the card's bottom edge. */
 .how-to-play__popover--above::before {
   top: auto;
   bottom: -6px;
@@ -467,38 +461,134 @@ button.game-tile:active {
   border-bottom: 1px solid var(--color-border);
 }
 
+/* Beside the button, right of it: the arrow points left from the card's left edge, --arrow from its top. */
+.how-to-play__popover--right::before {
+  top: calc(var(--arrow, 24px) - 6px);
+  left: -6px;
+  border: 0;
+  border-left: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+}
+
+/* Left of it: the arrow points right from the card's right edge. */
+.how-to-play__popover--left::before {
+  top: calc(var(--arrow, 24px) - 6px);
+  left: auto;
+  right: -6px;
+  border: 0;
+  border-top: 1px solid var(--color-border);
+  border-right: 1px solid var(--color-border);
+}
+
+/* Over its own button (no side of it holds the whole card and leaves the game tiles): nothing to point at. */
+.how-to-play__popover--over::before {
+  display: none;
+}
+
 /* The card takes the focus when it opens (its name is read out); the ring belongs on its close button, not around the card. */
 .how-to-play__popover:focus {
   outline: none;
 }
 
-.how-to-play__close {
+/* The close button over the card's top right corner, clear of the hero's name and the first section's line. */
+.how-to-play__head {
   position: absolute;
-  top: 8px;
-  right: 8px;
+  top: 6px;
+  right: 6px;
   z-index: 1;
 }
 
-/*
- * The rules scroll inside the card when the screen is short; the arrow and the close button stay put.
- * A shadow at whichever edge has more to read marks the box as scrollable (the surface-coloured
- * covers scroll with the text and hide the shadows at the ends).
- */
+/* A card that scrolls has a head row for the title and the close button, so the button never sits over the rules scrolling under it. */
+.how-to-play__popover--scrolls .how-to-play__head {
+  position: static;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 4px 6px 4px var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.how-to-play__title {
+  font-weight: 700;
+}
+
+/* The rules, scrolling inside the card when the window is short. The box has no padding of its own (the rules carry it), so the fades below reach its edges. */
 .how-to-play__scroll {
-  max-height: var(--popover-max, none);
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+
+.how-to-play__scroll > .rules {
   padding: var(--space-4);
-  background:
-    linear-gradient(var(--color-surface) 40%, transparent) top / 100% 36px no-repeat local,
-    linear-gradient(transparent, var(--color-surface) 60%) bottom / 100% 36px no-repeat local,
-    radial-gradient(farthest-side at top, var(--color-scroll-shadow) 0%, transparent) top / 100% 12px no-repeat scroll,
-    radial-gradient(farthest-side at bottom, var(--color-scroll-shadow) 0%, transparent) bottom / 100% 12px no-repeat scroll;
+}
+
+/*
+ * Each end with more to read fades into the card (data-fade, set as it scrolls), so a cut line
+ * reads as a scroll: a band of the card's surface stuck to that edge of the box, over the rules.
+ * The bands sit inside the box, beside its scrollbar, which keeps its full strength.
+ */
+.how-to-play__scroll::before,
+.how-to-play__scroll::after {
+  content: '';
+  position: sticky;
+  z-index: 1;
+  display: block;
+  pointer-events: none;
+  opacity: 0;
+}
+
+.how-to-play__scroll::before {
+  top: 0;
+  height: 32px;
+  margin-bottom: -32px;
+  background: linear-gradient(var(--color-surface), transparent);
+}
+
+.how-to-play__scroll::after {
+  bottom: 0;
+  height: 48px;
+  margin-top: -48px;
+  background: linear-gradient(transparent, var(--color-surface));
+}
+
+.how-to-play__scroll[data-fade~='top']::before,
+.how-to-play__scroll[data-fade~='bottom']::after {
+  opacity: 1;
 }
 
 /* The close button sits over the hero's top right corner: the name stops short of it. */
 .how-to-play__popover .rules__name {
   padding-right: 24px;
+}
+
+/*
+ * A card wide enough for two columns: the hero and the key facts at the left, the sections beside
+ * them (starting a little lower, clear of the close button). A tile there has about 132px inside,
+ * so the facts' values take the step down that keeps "Stands on 17" (about 123px) on its line.
+ */
+@container how-to-play (min-width: 640px) {
+  .how-to-play__popover .rules {
+    display: grid;
+    grid-template-columns: 324px minmax(0, 1fr);
+    column-gap: var(--space-5);
+    align-items: start;
+  }
+
+  .how-to-play__popover .rules-fact__value {
+    font-size: 1.25rem;
+  }
+
+  .how-to-play__popover .rules__name {
+    padding-right: 0;
+  }
+
+  .how-to-play__popover:not(.how-to-play__popover--scrolls) .rules__body {
+    padding-top: 6px;
+  }
 }
 
 /* ---------- The rules card: an illustrated hero with the name and summary, four key facts in tiles, then five sections under coloured tab pills ---------- */
@@ -508,6 +598,15 @@ button.game-tile:active {
   flex-direction: column;
   gap: var(--space-4);
   text-wrap: pretty;
+}
+
+/* The hero and the facts, then the sections: each a column with the card's own rhythm, so one column reads as if they were not there. */
+.rules__aside,
+.rules__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
 }
 
 /* The hero: the illustration on a wash of the accent fading into the raised surface, the name and summary beside it. */
@@ -885,10 +984,27 @@ button.game-tile:active {
 }
 
 /* ---------- Content mode: two choice cards ---------- */
+/* The setting's own width decides the layout (the settings column narrows on a tablet), not the screen's. */
+.content-setting {
+  container: content-modes / inline-size;
+}
+
 .content-modes {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-2);
+}
+
+/*
+ * Side by side, a card needs about 166px: the label, the 18+ tag and the picked tick on one line
+ * (about 140px inside the padding), and the blurb in two lines with no word alone on one. Narrower
+ * than two of those (a phone, the column beside the players on a tablet), the cards stack, each
+ * the column's width, the blurb on one line.
+ */
+@container content-modes (max-width: 339.98px) {
+  .content-modes {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .content-mode {
@@ -905,17 +1021,6 @@ button.game-tile:active {
   transition:
     border-color 100ms ease-out,
     background-color 100ms ease-out;
-}
-
-/* The narrowest phones: a little less padding, so "Crude and filthy." keeps to one line under its label. */
-@media (max-width: 340px) {
-  .content-mode {
-    padding: 8px;
-  }
-
-  .content-mode.is-selected {
-    padding: 7px;
-  }
 }
 
 button.content-mode:not(:disabled):hover {

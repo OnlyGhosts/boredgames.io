@@ -8,14 +8,15 @@ interface Props {
 }
 
 /**
- * The room's content mode: two cards the host taps (a radio group). The games that read it draw
- * their words, prompts and locations from the chosen mode.
+ * The room's content mode: two cards the host taps (a radio group), side by side where the settings
+ * column is wide enough for both, one over the other where it is not (lobby.css). The games that
+ * read it draw their words, prompts and locations from the chosen mode.
  */
 export function ContentModeSetting({ value: stored, onChange }: Props) {
   // A snapshot from an older server could still say 'cheeky'; it plays as Family.
   const value = upgradeContentMode(stored);
   return (
-    <div className="setting" data-testid="settings-row-contentMode">
+    <div className="setting content-setting" data-testid="settings-row-contentMode">
       <span className="setting__label" id="content-mode-label">
         Content
       </span>

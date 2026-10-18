@@ -710,6 +710,20 @@ describe('platform settings', () => {
     expect(tag).not.toContain('#fff');
   });
 
+  it('sets the two content cards side by side only where both fit, so the 18+ tag and the tick stay inside their card', () => {
+    const unhinged = room({ settings: { ...room().settings, contentMode: 'unhinged' } });
+    const html = renderToString(createElement(SettingsPanel, { room: unhinged, game: null }));
+    expect(tagWith(html, 'settings-row-contentMode')).toContain('class="setting content-setting"');
+    const css = stylesheet('lobby.css');
+    // The setting's own width decides (the settings column narrows on a tablet), not the screen's.
+    expect(ruleOf(css, '.content-setting')).toContain('container: content-modes / inline-size');
+    expect(ruleOf(css, '.content-modes')).toContain('grid-template-columns: repeat(2, minmax(0, 1fr))');
+    // Under two cards' worth (each holding its label, tag and tick on a line and its blurb in two full lines), they stack.
+    expect(css).toMatch(/@container content-modes \(max-width: 339\.98px\) \{\s*\.content-modes \{\s*grid-template-columns: minmax\(0, 1fr\);\s*\}/);
+    // No phone-only squeeze any more: the narrowest phones stack the cards like any narrow column.
+    expect(css).not.toContain('@media (max-width: 340px)');
+  });
+
   it('echoes no chosen value beside a title (the picked card says it) and gives every setting the same rhythm', () => {
     const unhinged = room({ settings: { ...room().settings, contentMode: 'unhinged' } });
     const html = renderToString(createElement(SettingsPanel, { room: unhinged, game: null }));

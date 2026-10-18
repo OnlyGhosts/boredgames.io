@@ -24,6 +24,17 @@ const MID = { width: 360, height: 740 };
 const DESKTOP = { width: 1280, height: 800 };
 /** The smallest desktop-sized screen, where How to play is a popover with little room under its button. */
 const LANDSCAPE_TABLET = { width: 1024, height: 768 };
+/** A roomy desktop, where How to play once opened upwards over the room code. */
+const WIDE = { width: 1440, height: 900 };
+/** A short desktop window: too short for the whole How to play card anywhere. */
+const SHORT = { width: 1280, height: 600 };
+/** The common laptop and a 720p window: no side of the host's How to play button holds the whole card. */
+const LAPTOP = { width: 1366, height: 768 };
+const HD = { width: 1280, height: 720 };
+/** A desktop window short enough for the phone's layout: Start and Ready in a footer pinned to its foot, How to play still a popover. */
+const LETTERBOX = { width: 1280, height: 500 };
+/** A tablet held upright: the room's two columns, the settings column at its narrowest. */
+const PORTRAIT_TABLET = { width: 768, height: 1024 };
 const MIN_TARGET = 44;
 
 interface Player {
@@ -66,6 +77,112 @@ async function expectInsideViewport(page: Page, testId: string, size: { width: n
   expect(box?.x ?? -1).toBeGreaterThanOrEqual(-0.5);
   expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(size.width + 0.5);
   expect((box?.y ?? 0) + (box?.height ?? 0)).toBeLessThanOrEqual(size.height + 0.5);
+}
+
+/**
+ * The open How to play card on a desktop window: inside the window, clear of the room bar (the room code shows), and the
+ * whole card (no scrolling inside it) wherever the window has the room. When it must scroll, its close button sits in a
+ * head above the rules, never over them, and the cut edge fades.
+ */
+async function expectRulesCardPlaced(page: Page, size: { width: number; height: number }, whole: boolean): Promise<void> {
+  const label = `${size.width}x${size.height}`;
+  await expect(page.getByTestId('how-to-play-popover')).toBeVisible();
+  await expectInsideViewport(page, 'how-to-play-popover', size);
+  const at = await page.evaluate(() => {
+    const box = (sel: string) => {
+      const r = document.querySelector(sel)?.getBoundingClientRect();
+      return r ? { left: r.left, top: r.top, right: r.right, bottom: r.bottom } : null;
+    };
+    const scroll = document.querySelector('.how-to-play__scroll') as HTMLElement;
+    const band = getComputedStyle(scroll, '::after');
+    return {
+      card: box('[data-testid="how-to-play-popover"]'),
+      code: box('[data-testid="room-code"]'),
+      bar: box('.lobby__top'),
+      close: box('[data-testid="how-to-play-close"]'),
+      rules: box('.how-to-play__scroll'),
+      scrolls: scroll.scrollHeight > scroll.clientHeight + 1,
+      fade: scroll.getAttribute('data-fade'),
+      band: { opacity: band.opacity, width: parseFloat(band.width), inside: scroll.clientWidth },
+    };
+  });
+  const { card, code, bar, close, rules } = at;
+  if (!card || !code || !bar || !close || !rules) throw new Error(`${label}: the card, the code or the room bar has no box`);
+  expect(card.top, `${label}: the card stays under the room bar`).toBeGreaterThanOrEqual(bar.bottom - 0.5);
+  const overCode = card.left < code.right && code.left < card.right && card.top < code.bottom && code.top < card.bottom;
+  expect(overCode, `${label}: the card leaves the room code showing`).toBe(false);
+  if (whole) {
+    expect(at.scrolls, `${label}: the whole card shows, nothing to scroll`).toBe(false);
+    await expect(page.getByTestId('how-to-play-popover')).toHaveAttribute('data-scrolls', 'false');
+    const last = await page.getByTestId('rules-section').last().boundingBox();
+    expect((last?.y ?? 0) + (last?.height ?? 0), `${label}: the last section shows inside the card`).toBeLessThanOrEqual(card.bottom + 0.5);
+  } else if (at.scrolls) {
+    expect(close.bottom, `${label}: the close button sits over the rules' box, never over the rules`).toBeLessThanOrEqual(rules.top + 0.5);
+    expect(at.fade ?? '', `${label}: the cut edge fades`).toContain('bottom');
+    // The fade is a band of the card's surface inside the scroll box, beside its scrollbar, never over it.
+    expect(at.band.opacity, `${label}: the bottom band shows`).toBe('1');
+    expect(at.band.width, `${label}: the band keeps inside the box, clear of its scrollbar`).toBeLessThanOrEqual(at.band.inside + 0.5);
+  }
+}
+
+/**
+ * With the host's card open: a point on each game tile that a press reaches (the card is not over it), nearest the tile's
+ * middle, or null where the card hides the tile whole.
+ */
+async function tilePoints(page: Page): Promise<Record<string, { x: number; y: number } | null>> {
+  return page.evaluate(() => {
+    const out: Record<string, { x: number; y: number } | null> = {};
+    for (const tile of document.querySelectorAll<HTMLElement>('[data-testid="game-picker"] [data-testid="game-tile"]')) {
+      const r = tile.getBoundingClientRect();
+      let best: { x: number; y: number; d: number } | null = null;
+      for (let i = 1; i < 20; i++) {
+        for (let j = 1; j < 20; j++) {
+          const x = r.left + (r.width * i) / 20;
+          const y = r.top + (r.height * j) / 20;
+          const el = document.elementFromPoint(x, y);
+          if (!el || !tile.contains(el)) continue;
+          const d = Math.hypot(x - (r.left + r.width / 2), y - (r.top + r.height / 2));
+          if (!best || d < best.d) best = { x, y, d };
+        }
+      }
+      out[tile.getAttribute('data-game') ?? ''] = best && { x: best.x, y: best.y };
+    }
+    return out;
+  });
+}
+
+/** Each content card's label, 18+ tag and tick sit inside its padding (clear of its border), and no blurb leaves a word alone on a line. */
+async function expectContentCardsFit(page: Page, label: string): Promise<void> {
+  const problems = await page.evaluate(() => {
+    const out: string[] = [];
+    for (const card of document.querySelectorAll<HTMLElement>('.content-mode')) {
+      const name = card.getAttribute('data-testid') ?? '';
+      const c = card.getBoundingClientRect();
+      const cs = getComputedStyle(card);
+      const px = (v: string) => parseFloat(v) || 0;
+      const left = c.left + px(cs.borderLeftWidth) + px(cs.paddingLeft);
+      const right = c.right - px(cs.borderRightWidth) - px(cs.paddingRight);
+      for (const sel of ['.content-mode__label', '.content-mode__age', '.content-mode__check']) {
+        const b = card.querySelector(sel)?.getBoundingClientRect();
+        if (b && (b.left < left - 0.5 || b.right > right + 0.5)) out.push(`${name} ${sel} runs past the card's edge`);
+      }
+      // The blurb's lines, word by word (a no-break space keeps two words as one piece, so count the words in it).
+      const text = card.querySelector('.content-mode__blurb')?.firstChild;
+      if (!text || text.nodeType !== Node.TEXT_NODE) continue;
+      const lines = new Map<number, number>();
+      for (const m of (text.textContent ?? '').matchAll(/\S+/g)) {
+        const range = document.createRange();
+        range.setStart(text, m.index ?? 0);
+        range.setEnd(text, (m.index ?? 0) + m[0].length);
+        const top = Math.round(range.getClientRects()[0]?.top ?? 0);
+        const line = [...lines.keys()].find((t) => Math.abs(t - top) < 3) ?? top;
+        lines.set(line, (lines.get(line) ?? 0) + m[0].split('\u00a0').length);
+      }
+      if ([...lines.values()].some((words) => words < 2)) out.push(`${name}'s blurb leaves a word alone on a line`);
+    }
+    return out;
+  });
+  expect(problems, label).toEqual([]);
 }
 
 /** The session the client keeps for its seat: the proof a page is still in the room. */
@@ -541,14 +658,16 @@ test('How to play shows the rules of the game picked, follows the host’s switc
   await expect(card.getByTestId('rules-fact')).toHaveCount(4);
   await expect(card.getByTestId('rules-fact').first()).toContainText(`${SPYGAME_ROUND_MINUTES} min`);
   await expect(card).toContainText('Watching');
-  // Attached to the button: right under it, inside the screen, and nothing dims the room (the players stay reachable).
+  // A guest's button sits high in the column: the whole card hangs right under it, from its left edge, inside the screen and
+  // clear of the room bar, and nothing dims the room (the players stay reachable).
+  await expect(popover).toHaveAttribute('data-side', 'below');
   const anchor = await button.boundingBox();
   const panel = await popover.boundingBox();
   const gapBelow = (panel?.y ?? 0) - ((anchor?.y ?? 0) + (anchor?.height ?? 0));
-  const gapAbove = (anchor?.y ?? 0) - ((panel?.y ?? 0) + (panel?.height ?? 0));
-  expect(Math.min(...[gapBelow, gapAbove].filter((g) => g >= 0)), 'right under or over the button').toBeLessThanOrEqual(16);
-  expect(Math.abs((panel?.x ?? 0) - (anchor?.x ?? 0)) <= 1 || Math.abs((panel?.x ?? 0) + (panel?.width ?? 0) - ((anchor?.x ?? 0) + (anchor?.width ?? 0))) <= 1, 'lined up with one of its edges').toBe(true);
-  await expectInsideViewport(page, 'how-to-play-popover', DESKTOP);
+  expect(gapBelow, 'right under the button').toBeGreaterThanOrEqual(0);
+  expect(gapBelow, 'right under the button').toBeLessThanOrEqual(16);
+  expect(Math.abs((panel?.x ?? 0) - (anchor?.x ?? 0)), 'lined up with its left edge').toBeLessThanOrEqual(1);
+  await expectRulesCardPlaced(page, DESKTOP, true);
   await expect(page.locator('.sheet__backdrop')).toHaveCount(0);
   const firstRow = page.getByTestId('player-item').first();
   const rowBox = await firstRow.boundingBox();
@@ -583,21 +702,107 @@ test('How to play shows the rules of the game picked, follows the host’s switc
   await host.page.keyboard.press('Escape');
   await expect(host.page.getByTestId('how-to-play-popover')).toHaveCount(0);
 
-  // On a 1024x768 desktop the host's button sits low: the card opens over it rather than cover Start under the player list.
-  await host.page.setViewportSize(LANDSCAPE_TABLET);
+  // The host's button sits low, under the tiles. On a 1440x900 window the whole card stands beside it, over the settings,
+  // clear of the room code, of the button and of Start (it once opened upwards over the code, cut off mid-row).
+  await host.page.setViewportSize(WIDE);
   await hostButton.click();
-  const lowPanel = await host.page.getByTestId('how-to-play-popover').boundingBox();
-  const block = await host.page.getByTestId('lobby-actions').boundingBox();
-  expect((lowPanel?.y ?? 0) + (lowPanel?.height ?? 0), 'the card ends above Start').toBeLessThanOrEqual((block?.y ?? 0) + 0.5);
-  await expectInsideViewport(host.page, 'how-to-play-popover', LANDSCAPE_TABLET);
+  await expect(host.page.getByTestId('how-to-play-popover')).toHaveAttribute('data-side', 'right');
+  await expectRulesCardPlaced(host.page, WIDE, true);
   await expect(host.page.getByTestId('rules-section')).toHaveCount(5);
-  // The hero and the facts fill the top of a short card: the sections are a scroll away, inside the card, never off the screen.
-  await host.page.locator('.how-to-play__scroll').evaluate((el) => el.scrollTo(0, el.scrollHeight));
-  const lastSection = await host.page.getByTestId('rules-section').last().boundingBox();
-  expect((lastSection?.y ?? 0) + (lastSection?.height ?? 0), 'the last section scrolls into view inside the card').toBeLessThanOrEqual((lowPanel?.y ?? 0) + (lowPanel?.height ?? 0) + 0.5);
-  expect(lastSection?.y ?? -1, 'the last section scrolls into view inside the card').toBeGreaterThanOrEqual((lowPanel?.y ?? 0) - 0.5);
+  const beside = await host.page.getByTestId('how-to-play-popover').boundingBox();
+  const start = await host.page.getByTestId('lobby-actions').boundingBox();
+  const own = await hostButton.boundingBox();
+  expect(beside?.x ?? 0, 'beside the button, clear of it and of Start').toBeGreaterThanOrEqual(Math.max((own?.x ?? 0) + (own?.width ?? 0), (start?.x ?? 0) + (start?.width ?? 0)));
   await host.page.keyboard.press('Escape');
   await expect(host.page.getByTestId('how-to-play-popover')).toHaveCount(0);
+
+  // Smaller windows: no side of the button holds the whole card. On 1366x768 and 1280x720 it slides over the button to the
+  // window's right edge, whole; on 1024x768 no whole card leaves every game's tile showing, so it scrolls beside the button,
+  // clear of the tiles and of Start. Either way every other game keeps a part to press while the card is open: a press there
+  // switches the game, and the card follows, placed again for the new rules.
+  for (const [size, whole] of [[LAPTOP, true], [HD, true], [LANDSCAPE_TABLET, false]] as const) {
+    const label = `${size.width}x${size.height}`;
+    await host.page.setViewportSize(size);
+    await host.page.evaluate(() => window.scrollTo(0, 0));
+    await hostButton.click();
+    const popover = host.page.getByTestId('how-to-play-popover');
+    await expect(popover).toHaveAttribute('data-side', whole ? 'over' : 'right');
+    await expectRulesCardPlaced(host.page, size, whole);
+    if (!whole) {
+      await expect(popover).toHaveAttribute('data-scrolls', 'true');
+      const card = await popover.boundingBox();
+      const button = await hostButton.boundingBox();
+      const actions = await host.page.getByTestId('lobby-actions').boundingBox();
+      expect(card?.x ?? 0, `${label}: beside the button, clear of it, of the tiles and of Start`).toBeGreaterThanOrEqual(Math.max((button?.x ?? 0) + (button?.width ?? 0), (actions?.x ?? 0) + (actions?.width ?? 0)));
+    }
+    let picked = 'spygame';
+    for (const game of ['scribble', 'quipgame', 'blackjack', 'poker', 'spygame']) {
+      const points = await tilePoints(host.page);
+      for (const [other, point] of Object.entries(points)) if (other !== picked) expect(point, `${label}, ${picked} picked: the ${other} tile keeps a part to press`).not.toBeNull();
+      const point = points[game];
+      if (!point) throw new Error(`${label}: no part of the ${game} tile to press`);
+      await host.page.mouse.click(point.x, point.y);
+      await expect(host.page.getByTestId('game-picker')).toHaveAttribute('data-game', game);
+      picked = game;
+      await expect(host.page.getByTestId('how-to-play-card')).toHaveAttribute('data-game', game);
+      await expect(hostButton).toHaveAttribute('aria-expanded', 'true');
+      await expectRulesCardPlaced(host.page, size, whole);
+    }
+    await host.page.keyboard.press('Escape');
+    await expect(host.page.getByTestId('how-to-play-popover')).toHaveCount(0);
+  }
+  for (const p of players) await expect(p.page.getByTestId('game-picker')).toHaveAttribute('data-game', 'spygame');
+  // A 1280x600 window is too short for the whole card anywhere: it scrolls beside the button, inside the window, under the room
+  // bar, its close button in a head above the rules and the cut edge fading; scrolled to the end, the last section shows.
+  for (const p of [host, quinn]) {
+    await p.page.setViewportSize(SHORT);
+    await p.page.evaluate(() => window.scrollTo(0, 0));
+    await p.page.getByTestId('how-to-play').click();
+    await expect(p.page.getByTestId('how-to-play-popover')).toHaveAttribute('data-scrolls', 'true');
+    await expectRulesCardPlaced(p.page, SHORT, false);
+    const shortPanel = await p.page.getByTestId('how-to-play-popover').boundingBox();
+    await p.page.locator('.how-to-play__scroll').evaluate((el) => el.scrollTo(0, el.scrollHeight));
+    const lastSection = await p.page.getByTestId('rules-section').last().boundingBox();
+    expect((lastSection?.y ?? 0) + (lastSection?.height ?? 0), 'the last section scrolls into view inside the card').toBeLessThanOrEqual((shortPanel?.y ?? 0) + (shortPanel?.height ?? 0) + 0.5);
+    await expect(p.page.locator('.how-to-play__scroll')).toHaveAttribute('data-fade', 'top');
+    await p.page.keyboard.press('Escape');
+    await expect(p.page.getByTestId('how-to-play-popover')).toHaveCount(0);
+    // And the guest's card on a 1440x900 window: whole, under its button.
+    if (p === quinn) {
+      await p.page.setViewportSize(WIDE);
+      await p.page.getByTestId('how-to-play').click();
+      await expect(p.page.getByTestId('how-to-play-popover')).toHaveAttribute('data-side', 'below');
+      await expectRulesCardPlaced(p.page, WIDE, true);
+      await p.page.keyboard.press('Escape');
+      await expect(p.page.getByTestId('how-to-play-popover')).toHaveCount(0);
+    }
+    await p.page.setViewportSize(DESKTOP);
+  }
+  // A 1280x500 window takes the phone's layout, Start and Ready in the footer pinned to its foot. The host's card, opened from
+  // the button scrolled into view, scrolls beside it and stops 16px over the footer, so Start takes a press all along. A guest's
+  // has under 200px between the room bar and the footer: it runs over the footer rather than squeeze, and never over the code.
+  for (const p of [host, quinn]) {
+    await p.page.setViewportSize(LETTERBOX);
+    const openButton = p.page.getByTestId('how-to-play');
+    await openButton.evaluate((el) => el.scrollIntoView({ block: 'center' }));
+    await openButton.click();
+    await expect(p.page.getByTestId('how-to-play-popover')).toHaveAttribute('data-scrolls', 'true');
+    await expectRulesCardPlaced(p.page, LETTERBOX, false);
+    if (p === host) {
+      const card = await p.page.getByTestId('how-to-play-popover').boundingBox();
+      const footer = await p.page.getByTestId('lobby-footer').boundingBox();
+      expect((card?.y ?? 0) + (card?.height ?? 0), 'the card stops short of the pinned footer').toBeLessThanOrEqual((footer?.y ?? 0) - 16 + 0.5);
+      const pressable = await p.page.getByTestId('start-game').evaluate((el) => {
+        const r = el.getBoundingClientRect();
+        return [0.1, 0.5, 0.9].map((f) => el.contains(document.elementFromPoint(r.left + r.width * f, r.top + r.height / 2)));
+      });
+      expect(pressable, 'Start takes a press at its left end, its middle and its right end').toEqual([true, true, true]);
+    }
+    await p.page.keyboard.press('Escape');
+    await expect(p.page.getByTestId('how-to-play-popover')).toHaveCount(0);
+    await p.page.setViewportSize(DESKTOP);
+    await p.page.evaluate(() => window.scrollTo(0, 0));
+  }
   await host.page.setViewportSize(DESKTOP);
 
   // On a phone the rules come up in the sheet; the button is a 44px target that fits beside the picker at 390, 360 and 320.
@@ -667,10 +872,27 @@ test('one player sits out, the host sets Unhinged, three play a one-round Spy Ga
   for (const p of players) await expect(p.page.locator(`[data-testid="player-item"][data-name="${rae.name}"]`)).toHaveAttribute('data-status', 'sittingOut');
   await expect(host.page.getByTestId('player-count')).toHaveText('3 of 3 ready');
 
+  // The content cards fit their column at every width, the narrow tablet column too: on a 768px tablet (the settings column
+  // beside the players) they stack, each tag and tick inside its card; at 1024 they sit side by side. Family picked, then Unhinged.
+  const contentSizes = [PORTRAIT_TABLET, LANDSCAPE_TABLET];
+  for (const size of contentSizes) {
+    await host.page.setViewportSize(size);
+    await expectContentCardsFit(host.page, `${size.width}px, Family picked`);
+  }
   await host.page.getByTestId('content-mode-unhinged').click();
   await expect(host.page.getByTestId('settings-contentMode')).toHaveAttribute('data-value', 'unhinged');
   await expect(host.page.getByTestId('content-mode-unhinged')).toHaveAttribute('aria-checked', 'true');
   await expect(host.page.getByTestId('content-mode-unhinged')).toContainText('18+');
+  for (const size of contentSizes) {
+    await host.page.setViewportSize(size);
+    await expectContentCardsFit(host.page, `${size.width}px, Unhinged picked`);
+  }
+  const [family, unhinged] = await Promise.all(['family', 'unhinged'].map((m) => host.page.getByTestId(`content-mode-${m}`).boundingBox()));
+  expect(unhinged?.x ?? 0, '1024px: side by side').toBeGreaterThan((family?.x ?? 0) + (family?.width ?? 0) - 0.5);
+  await host.page.setViewportSize(PORTRAIT_TABLET);
+  const [familyTall, unhingedTall] = await Promise.all(['family', 'unhinged'].map((m) => host.page.getByTestId(`content-mode-${m}`).boundingBox()));
+  expect(unhingedTall?.y ?? 0, '768px: stacked').toBeGreaterThan((familyTall?.y ?? 0) + (familyTall?.height ?? 0) - 0.5);
+  await host.page.setViewportSize(DESKTOP);
 
   await host.page.getByTestId('settings-rounds').fill('1');
   await expect(host.page.getByTestId('settings-value-rounds')).toHaveText('1');
