@@ -1498,11 +1498,13 @@ describe('the ways out of a game', () => {
     expect(guest).not.toContain('data-testid="end-game"');
     expect(textOf(guest, 'leave-room')).toBe('Leave');
     expect(guest).toContain('data-testid="game-code"');
-    // Both 44px targets; End game fills solid under the pointer; once asked for, a dashed note in the same place.
+    // Both 44px targets; End game is Leave's quiet twin (the same surface and edge, only its word in the danger colour), a soft danger tint under the pointer; once asked for, a dashed note in the same place.
     const css = stylesheet('components.css');
     expect(ruleOf(css, '.room-card__btn')).toContain('min-height: 44px');
-    expect(css).toMatch(/\n\.gbar-end \{[^}]*background: var\(--color-danger-soft\)/);
-    expect(ruleOf(css, '.room-card__btn.gbar-end:hover')).toContain('background: var(--color-danger)');
+    expect(ruleOf(css, '.gbar-end')).toContain('color: var(--color-danger-text)');
+    expect(ruleOf(css, '.gbar-end')).not.toMatch(/background|border|font-weight/);
+    expect(ruleOf(css, '.room-card__btn.gbar-end:hover')).toContain('background: var(--color-danger-soft)');
+    expect(ruleOf(css, '.room-card__btn.gbar-end:hover')).not.toContain('background: var(--color-danger);');
     expect(ruleOf(css, '.gbar-end--pending')).toContain('min-height: 44px');
     expect(ruleOf(css, '.gbar-end--pending')).toContain('dashed');
     expect(ruleOf(css, '.gbar-end--pending')).toContain('justify-content: center');

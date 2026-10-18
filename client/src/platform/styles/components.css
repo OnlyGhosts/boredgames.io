@@ -1681,22 +1681,18 @@ button.exit-action--end:hover {
  */
 .gbar-end {
   gap: 8px;
-  border-color: var(--color-danger);
-  background: var(--color-danger-soft);
   color: var(--color-danger-text);
-  font-weight: 700;
 }
 
+/* End game sits beside Leave as its quiet twin: the same surface and edge, only its word and icon in the danger colour; the pointer brings up a soft danger tint, and the confirm step carries the solid red. */
 .room-card__btn.gbar-end:hover {
-  background: var(--color-danger);
+  background: var(--color-danger-soft);
   border-color: var(--color-danger);
-  color: var(--color-bg);
 }
 
 .room-card__btn.gbar-end:active {
-  background: var(--color-danger-text);
-  border-color: var(--color-danger-text);
-  color: var(--color-bg);
+  background: color-mix(in srgb, var(--color-danger) 18%, var(--color-danger-soft));
+  border-color: var(--color-danger);
 }
 
 /* Once asked for, End game is a note in the same place: "Ending soon" on a dashed edge. */

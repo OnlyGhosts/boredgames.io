@@ -129,8 +129,9 @@ export function ExitActions({ room, isHost, onPick }: { room: RoomState | null; 
 }
 
 /**
- * The game bar's End game, for the host (a desktop or a tablet): the waiting room's 44px button
- * shape in the danger tint; it opens the confirm step and reads as a note once asked for. A card
+ * The game bar's End game, for the host (a desktop or a tablet): Leave's quiet twin, the waiting
+ * room's 44px button with only its word and icon in the danger colour; it opens the confirm step
+ * (where the solid red lives) and reads as a note once asked for. A card
  * table's full tablet bar keeps the button's icon alone (it keeps its name for screen readers) and
  * shows the note under the game's name instead (EndingNote).
  */
