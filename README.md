@@ -57,8 +57,9 @@ called Scribble), the owner's decisions win. The short version:
   (`branding/mascots/boredgames-mascots.svg`), as the logo's icon and on celebrations only,
   never above or between controls.
 - **Game pictures and glyphs.** Each game has a small flat picture in the mascots' style
-  (`GameClientModule.Art`, inline SVG in `client/src/games/<id>/art.tsx`) on its lobby tile, each
-  shape edged in deep lime or deep lilac, never ink or grey, so it reads on the dark tile (a white
+  (`GameClientModule.Art`, inline SVG in `client/src/games/<id>/art.tsx`) on its lobby tile, over
+  the game's name on the same surface, each shape edged in deep lime or deep lilac (each as firm
+  round its own colour as the other), never ink or grey, so it reads on the dark tile (a white
   shape borrows the deep edge of its neighbour; the picked lilac tile cuts both edges deeper), and
   a 24px line icon (`GameMeta.glyph`) on its accent, which the How to play card draws on the plate
   of a game with no illustration of its own and as Scribble's pencil. The app icon is the lime smile (`node scripts/brand-icons.mjs`

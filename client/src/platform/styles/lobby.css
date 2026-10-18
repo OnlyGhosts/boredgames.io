@@ -318,10 +318,10 @@ button.game-tile:active {
 }
 
 /*
- * Selected: the whole panel fills lilac with the picture on top and the strip turns lilac with the
- * name in bold ink; the fill alone marks it, no badge and no line. On the lilac the picture’s edges
- * (and the sticker shadow drawn in them) take the deeper cuts of the same two hues (tokens.css), so
- * a lilac shape still stands off the tile.
+ * Selected: the whole panel fills lilac, the picture and the name in bold ink on it; the fill alone
+ * marks it, no badge and no line. On the lilac the picture’s edges (and the sticker shadow drawn
+ * in them) take the deeper cuts of the same two hues (tokens.css), so a lilac shape still stands
+ * off the tile.
  */
 .game-tile.is-selected {
   --game-edge-lime: var(--game-edge-lime-picked);
@@ -344,11 +344,13 @@ button.game-tile:active {
   height: auto;
 }
 
-/* The name on its footer strip, straight under the picture with no line between: the panel’s graphite on dark, solid ink on light (tokens.css). */
+/*
+ * The name sits on the tile itself, straight under the picture: no background and no colour of its
+ * own, so the picture and the name are one surface (the panel, its hover, the picked lilac) with
+ * nothing between them, in both themes.
+ */
 .game-tile__name {
   padding: 7px 4px 8px;
-  background: var(--tile-foot-bg);
-  color: var(--tile-foot-fg);
   font-family: var(--font-display);
   font-weight: 600;
   font-size: 0.8125rem;
@@ -357,8 +359,6 @@ button.game-tile:active {
 }
 
 .game-tile.is-selected .game-tile__name {
-  background: var(--color-secondary);
-  color: var(--color-secondary-contrast);
   font-weight: 700;
 }
 

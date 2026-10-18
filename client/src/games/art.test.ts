@@ -53,6 +53,21 @@ function hueSat(hex: string): { hue: number; sat: number } {
   return { hue: (h * 60 + 360) % 360, sat: d / (1 - Math.abs(2 * l - 1)) };
 }
 
+/** CIELAB (D65) of a #rrggbb colour: L* is how light it looks (0 black, 100 white), C* how colourful (0 grey). */
+function lab(hex: string): { L: number; a: number; b: number; C: number } {
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
+  const f = (t: number) => (t > 216 / 24389 ? Math.cbrt(t) : ((24389 / 27) * t + 16) / 116);
+  const [x, y, z] = [(0.4124 * r + 0.3576 * g + 0.1805 * b) / 0.95047, 0.2126 * r + 0.7152 * g + 0.0722 * b, (0.0193 * r + 0.1192 * g + 0.9505 * b) / 1.08883].map(f);
+  const [L, A, B] = [116 * y - 16, 500 * (x - y), 200 * (y - z)];
+  return { L, a: A, b: B, C: Math.hypot(A, B) };
+}
+
+/** How far apart two colours look (CIE76 delta E): about 2 is a just-visible difference, 50 two plainly different colours. */
+function deltaE(x: string, y: string): number {
+  const [p, q] = [lab(x), lab(y)];
+  return Math.hypot(p.L - q.L, p.a - q.a, p.b - q.b);
+}
+
 /** tokens.css, and every value it gives a custom property. */
 const tokens = readFileSync(fileURLToPath(new URL('../platform/styles/tokens.css', import.meta.url)), 'utf8');
 const values = (name: string): string[] => [...tokens.matchAll(new RegExp(`--${name}: (#[0-9a-f]{6});`, 'g'))].map((m) => m[1]);
@@ -96,6 +111,9 @@ describe('every game’s picture', () => {
       const edge = hueSat(hex(name));
       expect(Math.abs(edge.hue - fill.hue), `${name} hue`).toBeLessThanOrEqual(3);
       expect(edge.sat, `${name} saturation`).toBeGreaterThanOrEqual(0.25);
+      // However deep the cut, it stays a colour: vivid (C* 35 or more; a grey is near 0) and never black (L* 20 or more; ink is 6.6).
+      expect(lab(hex(name)).C, `${name} chroma`).toBeGreaterThanOrEqual(35);
+      expect(lab(hex(name)).L, `${name} lightness`).toBeGreaterThanOrEqual(20);
     }
   });
 
@@ -143,25 +161,49 @@ describe('every game’s picture', () => {
     }
   });
 
-  it('draws its edges in tokens that read on the dark tile, the white one, the paper and their own fills, and deeper ones on the picked lilac tile', () => {
+  it('draws its edges in tokens that rim their own fills as firmly as the lime does, read on the white tile and the paper, stand off the dark tile by their colour, and cut deeper on the picked lilac tile', () => {
     // A tile is the panel: graphite on dark, white on light; the picked tile is the lilac fill.
     const tiles = values('color-surface');
     expect(tiles).toEqual(['#20221f', '#ffffff']);
+    const [dark, white] = tiles;
     const lilacTile = hex('color-secondary');
     expect(lilacTile).toBe('#a699d5');
-    for (const [colour, fill] of [['lime', hex('color-primary')], ['lilac', hex('color-secondary')]]) {
+    const paper = hex('game-paper');
+    const fills = { lime: hex('color-primary'), lilac: hex('color-secondary') };
+    // The lilac edge was #7466ad: 1.92:1 on its fill and only 19 L* under it, a soft rim beside the lime's firm one, so it is cut
+    // to #4e3d94, the lime edge's step (34 L* under its fill); the picked tile's lilac cut goes deeper with it, #4f408c to #3d2f74.
+    expect({ lime: hex('game-edge-lime'), lilac: hex('game-edge-lilac'), limePicked: hex('game-edge-lime-picked'), lilacPicked: hex('game-edge-lilac-picked') }).toEqual({
+      lime: '#6b8a1e',
+      lilac: '#4e3d94',
+      limePicked: '#405311',
+      lilacPicked: '#3d2f74',
+    });
+    const step = (colour: 'lime' | 'lilac') => lab(fills[colour]).L - lab(hex(`game-edge-${colour}`)).L;
+    for (const colour of ['lime', 'lilac'] as const) {
+      const fill = fills[colour];
       const edge = hex(`game-edge-${colour}`);
-      for (const tile of tiles) expect(contrast(edge, tile), `${colour} edge on ${tile}`).toBeGreaterThanOrEqual(3);
-      expect(contrast(edge, fill), `${colour} edge on its fill`).toBeGreaterThanOrEqual(1.6);
-      // A white shape borrows either edge, so both rim the paper clearly too.
-      expect(contrast(edge, hex('game-paper')), `${colour} edge on paper`).toBeGreaterThanOrEqual(3);
-      // On the picked tile the deeper cut parts every shape, and every shadow drawn in it, from the lilac.
+      // A firm outline round its own fill, the lime edge’s (2.91:1, 34.5 L* under #c7e976) the measure.
+      expect(contrast(edge, fill), `${colour} edge on its fill`).toBeGreaterThanOrEqual(2.9);
+      expect(step(colour), `${colour} edge's step under its fill`).toBeGreaterThanOrEqual(34);
+      // On the white tile, and on the paper: a white shape borrows either edge, so both rim it clearly.
+      expect(contrast(edge, white), `${colour} edge on white`).toBeGreaterThanOrEqual(3);
+      expect(contrast(edge, paper), `${colour} edge on paper`).toBeGreaterThanOrEqual(3);
+      // On the dark tile the shape’s fill draws its outline against the graphite, and the edge round it reads by its colour: a deep
+      // lilac cannot keep 3:1 on the graphite (1.85:1), but it is a vivid purple far from it (the lilac edge 60, the lime 68 delta E;
+      // the ink that sank into it was 6.5) and lighter than it, never a dark line.
+      expect(contrast(fill, dark), `${colour} fill on the dark tile`).toBeGreaterThanOrEqual(3);
+      expect(deltaE(edge, dark), `${colour} edge apart from the dark tile`).toBeGreaterThanOrEqual(50);
+      expect(lab(edge).L - lab(dark).L, `${colour} edge lighter than the dark tile`).toBeGreaterThanOrEqual(15);
+      // On the picked tile the deeper cut parts every shape, and every shadow drawn in it, from the lilac, and still rims its own fill and the paper.
       const picked = hex(`game-edge-${colour}-picked`);
       expect(contrast(picked, lilacTile), `picked ${colour} edge on the lilac tile`).toBeGreaterThanOrEqual(3);
-      expect(contrast(picked, fill), `picked ${colour} edge on its fill`).toBeGreaterThanOrEqual(1.6);
-      expect(contrast(picked, hex('game-paper')), `picked ${colour} edge on paper`).toBeGreaterThanOrEqual(3);
+      expect(contrast(picked, fill), `picked ${colour} edge on its fill`).toBeGreaterThanOrEqual(3);
+      expect(contrast(picked, paper), `picked ${colour} edge on paper`).toBeGreaterThanOrEqual(3);
       expect(contrast(picked, lilacTile), `picked ${colour} edge is deeper`).toBeGreaterThan(contrast(edge, lilacTile));
     }
+    // The lilac rim is as firm as the lime one, not the faded one it was.
+    expect(step('lilac')).toBeGreaterThanOrEqual(step('lime') - 0.5);
+    expect(contrast(hex('game-edge-lilac'), fills.lilac)).toBeGreaterThanOrEqual(contrast(hex('game-edge-lime'), fills.lime));
     // The shadow fills each shape in its own edge colour (a white one in the edge it borrows) and each line’s fill in its edge; the details (filled, no edge) stay out of it.
     const components = readFileSync(fileURLToPath(new URL('../platform/styles/components.css', import.meta.url)), 'utf8');
     const shadow = components.slice(components.indexOf('.game-art {'), components.indexOf('/* ---------- Buttons'));

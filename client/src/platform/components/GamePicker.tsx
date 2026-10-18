@@ -69,9 +69,9 @@ export function GamePicker({ room, isHost, game }: Props) {
 }
 
 /**
- * One game on the grid: its picture (the module's Art, in the mascots' style) on a neutral panel
- * over the name on a footer strip. The picked one fills lilac with its name in bold: no badge, no
- * line; `aria-checked` carries the state.
+ * One game on the grid: its picture (the module's Art, in the mascots' style) and its name under
+ * it, both on the one neutral panel (no strip of their own). The picked one fills lilac with its
+ * name in bold: no badge, no line; `aria-checked` carries the state.
  */
 function GameTile({ game, selected, readonly = false, onSelect }: { game: GameMeta; selected: boolean; readonly?: boolean; onSelect?(): void }) {
   const Art = registeredGame(game.id)?.Art;

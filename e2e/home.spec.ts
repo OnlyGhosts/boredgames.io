@@ -277,6 +277,41 @@ test('create → "Who’s playing?" → the lobby, where picking a game comes fi
   await expect(picked).toHaveCSS('border-color', lilac);
   await picker.locator('[data-testid="game-tile"][data-game="spygame"]').hover();
   await expect(picker.locator('[data-testid="game-tile"][data-game="spygame"]')).not.toHaveCSS('background-color', spyIdle);
+  // One surface: a tile's picture area and its name have the same computed background, none of their own, so both show the tile's
+  // (no strip under the picture), under the pointer, at rest and picked, in both themes.
+  const surfaces = (game: string) =>
+    picker.locator(`[data-testid="game-tile"][data-game="${game}"]`).evaluate((tile) => {
+      /** The colour showing behind an element: its own background, or the nearest ancestor's that has one. */
+      const shown = (el: Element) => {
+        for (let n: Element | null = el; n; n = n.parentElement) {
+          const bg = getComputedStyle(n).backgroundColor;
+          if (bg !== 'rgba(0, 0, 0, 0)') return { bg, from: n === el ? 'itself' : n === tile ? 'tile' : n.className };
+        }
+        return null;
+      };
+      const art = tile.querySelector('.game-tile__art')!;
+      const name = tile.querySelector('.game-tile__name')!;
+      return {
+        own: { art: getComputedStyle(art).backgroundColor, name: getComputedStyle(name).backgroundColor },
+        shown: { art: shown(art), name: shown(name) },
+        tile: getComputedStyle(tile).backgroundColor,
+      };
+    });
+  const expectOneSurface = async (game: string, label: string) => {
+    const s = await surfaces(game);
+    expect(s.own, `${label}: no background of their own`).toEqual({ art: 'rgba(0, 0, 0, 0)', name: 'rgba(0, 0, 0, 0)' });
+    expect(s.shown.name, `${label}: the name shows what the picture shows`).toEqual(s.shown.art);
+    expect(s.shown.art, `${label}: and that is the tile`).toEqual({ bg: s.tile, from: 'tile' });
+  };
+  for (const theme of ['dark', 'light']) {
+    await host.page.evaluate((t) => (document.documentElement.dataset.theme = t), theme);
+    await expectOneSurface('spygame', `${theme}, under the pointer`);
+    await expectOneSurface('scribble', `${theme}, picked`);
+    await host.page.mouse.move(0, 0);
+    await expectOneSurface('spygame', `${theme}, at rest`);
+    await picker.locator('[data-testid="game-tile"][data-game="spygame"]').hover();
+  }
+  await host.page.evaluate(() => (document.documentElement.dataset.theme = 'dark'));
   await host.page.mouse.move(0, 0);
   expect(await (await host.page.request.get(`/api/rooms/${scribbleCode}`)).json()).toMatchObject({ exists: true, players: 1, gameId: 'scribble' });
   await expect(host.page.locator(`[data-testid="player-item"][data-name="${host.name}"]`)).toBeVisible();

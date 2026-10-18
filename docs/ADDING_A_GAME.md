@@ -1066,10 +1066,11 @@ where `rules` is your `rules.ts` (section 6.4): the How to play card in the lobb
 your `art.tsx` (section 6.5): the picture on the game's lobby tile.
 
 **Drawing the picture.** Every tile is one neutral panel with the game’s picture on top and its
-name on the footer strip, so the pictures carry all the colour and must share one style: the
-mascots’ flat fills. A picture sits on three backgrounds, the dark theme’s graphite panel
-(#20221F), the light theme’s white one and the picked tile’s lilac, so it is drawn with no black
-and no grey outlines at all: black vanishes into the dark panel and grey looks dull on all three.
+name under it on the same surface (no strip or band of its own), so the pictures carry all the
+colour and must share one style: the mascots’ flat fills. A picture sits on three backgrounds,
+the dark theme’s graphite panel (#20221F), the light theme’s white one and the picked tile’s
+lilac, so it is drawn with no black and no grey outlines at all: black vanishes into the dark
+panel and grey looks dull on all three.
 Every edge is deep lime or deep lilac. The frame does most of it:
 
 - Draw inside [`GameArt`](../client/src/platform/components/GameArt.tsx) with `game` set to your
@@ -1100,6 +1101,11 @@ Every edge is deep lime or deep lilac. The frame does most of it:
   shadow that reads on all three tiles. A translucent ink shadow vanishes on the graphite panel,
   and none at all loses the mascots’ hard shadow and leaves a lilac shape on the picked tile with
   only its edge.
+- The two edges are equally firm: deep lilac sits as far under lilac as deep lime under lime (34
+  points of CIELAB lightness, about 3:1), so a lilac shape is as clearly outlined as a lime one. On
+  the dark tile the deep lilac is too dark for 3:1 on the graphite; there the lilac fill draws the
+  outline (6.2:1) and the edge reads by its colour, a vivid purple far from the graphite, never a
+  dark line that sinks into it.
 - The picked tile is lilac, so there (and only there) `lobby.css` swaps both edges for deeper cuts
   of the same hues (`--game-edge-lime-picked`, `--game-edge-lilac-picked`): the drawing keeps its
   character and every edge and shadow still parts its shape from the tile. You draw nothing extra.
@@ -1111,13 +1117,15 @@ Every edge is deep lime or deep lilac. The frame does most of it:
   [`client/src/games/art.test.ts`](../client/src/games/art.test.ts) checks every game’s picture
   renders that way in tokens only, that every lime or lilac shape carries its own deep edge and
   every white one the deep edge of a colour in the same picture, that ink is never a stroke, that
-  the palette and tokens hold no grey and every edge is a deeper cut of lime or lilac, that the
-  edges read on both tiles and the picked ones on the lilac, and that the picture shows on the tile.
+  the palette and tokens hold no grey and every edge is a deeper cut of lime or lilac (vivid, never
+  black), that each edge rims its own fill as firmly as the lime one does, reads on the white tile
+  and the paper and stands off the dark one by its colour, that the picked ones read on the lilac,
+  and that the picture shows on the tile.
 
-| Edge (`ART`, token) | Rims | On #20221F | On #FFFFFF | On its own fill | On paper | On the picked tile: token, on #A699D5 |
+| Edge (`ART`, token) | Rims | On its own fill (L* under it) | On #FFFFFF | On paper | On #20221F (delta E) | On the picked tile: token, on #A699D5 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `edgeLime`, `--game-edge-lime` #6B8A1E | lime shapes and lines (#C7E976), a white shape that belongs with lime | 4.03:1 | 3.98:1 | 2.91:1 | 3.64:1 | `--game-edge-lime-picked` #405311, 3.30:1 |
-| `edgeLilac`, `--game-edge-lilac` #7466AD | lilac shapes and lines (#A699D5), a white shape beside lilac | 3.24:1 | 4.95:1 | 1.92:1 | 4.53:1 | `--game-edge-lilac-picked` #4F408C, 3.33:1 |
+| `edgeLime`, `--game-edge-lime` #6B8A1E | lime shapes and lines (#C7E976), a white shape that belongs with lime | 2.91:1 (34.5) | 3.98:1 | 3.64:1 | 4.03:1 (68) | `--game-edge-lime-picked` #405311, 3.30:1 |
+| `edgeLilac`, `--game-edge-lilac` #4E3D94 | lilac shapes and lines (#A699D5), a white shape beside lilac | 3.36:1 (34.3) | 8.68:1 | 7.95:1 | 1.85:1 (60) | `--game-edge-lilac-picked` #3D2F74, 4.38:1 |
 
 Style rules that keep the look consistent (details in section 8):
 
@@ -1185,8 +1193,8 @@ about 2 s), `settings-menu`, `site-header`, `brand-link`, `wordmark`.
 
 ### Step 6: ship it
 
-Set `status: 'live'` in `GameMeta`. The game tile (your picture on a neutral panel, the name on
-its footer strip, the whole tile lilac when picked) appears in the lobby picker from `GAME_LIST`; `/wordle/CODE` already routes;
+Set `status: 'live'` in `GameMeta`. The game tile (your picture and its name under it on one
+neutral panel, the whole tile lilac when picked) appears in the lobby picker from `GAME_LIST`; `/wordle/CODE` already routes;
 the PWA, Vercel function and Redis driver need no change.
 
 ---
@@ -2122,7 +2130,7 @@ operating system preference is not consulted).
 | Shadows | `--shadow-sm` and `--shadow-md` are `none` (flat surfaces sit on their border); `--shadow-lg` is a soft drop for floating layers only (sheets, toasts); `--shadow-piece` and `--shadow-pencil` lift the pieces of the How to play hero (a fanned card, the spy's card, the pencil over the canvas) |
 | Surfaces | `--color-bg` #141514, `--color-surface` #20221F, `--color-surface-2` #2B2E29 (raised), `--color-surface-3` #191C19 (inset wells: inputs, lists), `--color-border` #454A43, `--color-border-strong` #747D6F (control borders) |
 | Text | `--color-text` #F1F0E8, `--color-text-muted` #B9C0B3, `--color-text-faint` (small text, AA on the panels) |
-| Games | `--game-<id>` per game (the same hex as `GameMeta.accent`), `--game-ink` for the glyph on top and `--game-paper`, the off-white in a game’s picture; `--game-edge-lime` and `--game-edge-lilac`, the picture’s only two edges (a white shape borrows one), the same in both themes and at least 3:1 on both tiles, with `--game-edge-lime-picked` and `--game-edge-lilac-picked`, the deeper cuts the picked lilac tile swaps in (section 5, step 4); `--tile-foot-bg/fg` are the lobby tile’s footer strip (the panel’s graphite on dark, solid ink on light), with no line over it; `--game-<id>-text` and `--game-<id>-soft` are the accent as text (the How to play card's key facts) and as the wash under its hero, one pair per theme, AA on the panels |
+| Games | `--game-<id>` per game (the same hex as `GameMeta.accent`), `--game-ink` for the glyph on top and `--game-paper`, the off-white in a game’s picture; `--game-edge-lime` and `--game-edge-lilac`, the picture’s only two edges (a white shape borrows one), the same in both themes, each as firm round its own fill as the other, at least 3:1 on the white tile and standing off the dark one by its colour, with `--game-edge-lime-picked` and `--game-edge-lilac-picked`, the deeper cuts the picked lilac tile swaps in (section 5, step 4); `--game-<id>-text` and `--game-<id>-soft` are the accent as text (the How to play card's key facts) and as the wash under its hero, one pair per theme, AA on the panels |
 | Brand | `--color-primary` (lime #C7E976, a FILL that always carries `--color-primary-contrast` ink text), `--color-primary-hover`, `--color-primary-soft`, `--color-primary-text` (lime as text/border/stroke on dark, a dark olive on white); `--color-secondary*` (lilac #A699D5) with the same five |
 | Status | `--color-success`, `-soft`, `-text`; `--color-warning*`; `--color-danger*`; `--color-info-soft`; `--color-focus` (flat, restrained, AA on the panels) |
 | Chat | `--chat-correct-bg/fg`, `--chat-close-bg/fg`, `--chat-guessed-bg/fg` |

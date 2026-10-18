@@ -117,22 +117,21 @@
    * A picture’s edges, the same in both themes, and the only two: deep lime and deep lilac, never
    * grey and never ink. A lime or lilac shape is rimmed in the deep shade of its own colour; a white
    * (paper) shape borrows the deep lime or deep lilac of the shape it sits beside or belongs with.
-   * Each is at least 3:1 on #20221f and on #ffffff, at least 3:1 on the paper and at least 1.6:1
-   * on its own fill.
+   * Each is a firm outline round its own fill, the lilac one as firm as the lime one (3.36:1 and
+   * 34 points of CIELAB lightness under #a699d5; the lime's 2.91:1 and 34.5 under #c7e976), and at
+   * least 3:1 on #ffffff and on the paper. On #20221f the shape's fill draws its outline and the
+   * edge reads by its colour: deep lilac is too dark for 3:1 on the graphite (1.85:1), but it is a
+   * vivid purple far from it (delta E 60), never an ink line that sinks into it.
    */
   --game-edge-lime: #6b8a1e;
-  --game-edge-lilac: #7466ad;
+  --game-edge-lilac: #4e3d94;
   /*
    * The same two hues cut deeper for the picked tile, which is lilac: lobby.css swaps them in there
    * and only there, so every edge and sticker shadow still parts its shape from the tile (3.30:1
-   * and 3.33:1 on #a699d5).
+   * and 4.38:1 on #a699d5), still lime and still purple, never black.
    */
   --game-edge-lime-picked: #405311;
-  --game-edge-lilac-picked: #4f408c;
-
-  /* A game tile’s footer strip and the name on it: the panel’s own graphite on dark, solid ink on light. */
-  --tile-foot-bg: #20221f;
-  --tile-foot-fg: #f1f0e8;
+  --game-edge-lilac-picked: #3d2f74;
   /*
    * Each accent as text (the How to play card's key facts) and as a soft wash (its hero): on dark
    * the accent itself or a lighter cut, every text cut AA (4.5:1) on the panel and the raised surface.
@@ -216,7 +215,6 @@
   --chat-guessed-bg: #ece7f7;
   --chat-guessed-fg: #5e468c;
 
-  --tile-foot-bg: #141514;
   /* The game accents cut dark for text (AA on white and on the pale lime), their washes pale. */
   --game-scribble-text: #5e468c;
   --game-scribble-soft: #ece7f7;

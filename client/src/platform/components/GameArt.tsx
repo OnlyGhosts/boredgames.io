@@ -20,6 +20,8 @@ import type { GameId } from '@shared/platform/games';
  *   in its own edge colour (a white shape in the one it borrows) and the details left out
  *   (components.css recolours it): a flat sticker shadow that reads on graphite, on white and on
  *   lilac alike. A game draws its picture once and gets the shadow for free.
+ * - Deep lilac rims a lilac shape as firmly as deep lime rims a lime one (tokens.css has the
+ *   numbers), so neither colour's outline looks faded beside the other's.
  * - The picked tile is lilac, so there (and only there) lobby.css swaps both edges for deeper cuts
  *   of the same hues (at least 3:1 on the lilac), and every edge and shadow still parts its shape
  *   from the tile.
