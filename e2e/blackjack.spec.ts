@@ -459,9 +459,14 @@ test('round one: the phone layout fits, and bets go in through the panel', async
     await expect(p.page.getByTestId('my-hand')).toHaveCount(1);
     await expect(p.page.getByTestId('seat')).toHaveCount(2);
   }
-  expect(await chipsOf(host)).toBe(STARTING_CHIPS - 75);
-  expect(await chipsOf(pia)).toBe(STARTING_CHIPS - PIA_BET);
-  expect(await chipsOf(quinn)).toBe(STARTING_CHIPS - QUINN_BET);
+  // The deal takes every stake from its stack. A dealer's blackjack settles the round as it is
+  // dealt (a push hands a stake straight back), and then the next test's checkSettlement accounts
+  // for every stake instead.
+  if ((await screen(host).getAttribute('data-phase')) === 'acting') {
+    expect(await chipsOf(host)).toBe(STARTING_CHIPS - 75);
+    expect(await chipsOf(pia)).toBe(STARTING_CHIPS - PIA_BET);
+    expect(await chipsOf(quinn)).toBe(STARTING_CHIPS - QUINN_BET);
+  }
 });
 
 test('round one: hands are played one at a time in seat order, then the dealer settles and the table stays up', async () => {
