@@ -2,7 +2,7 @@
 import { drawCandidates, locationById, locationsForMode, pickLocation } from '../../../shared/games/spygame/locations.js';
 import { SPYGAME_CANDIDATES, SPYGAME_GUESSES, SPYGAME_POINTS, SPYGAME_REVEAL_SECONDS, SPYGAME_ROUND_MINUTES, SPYGAME_SPY_AWAY_SECONDS, type SpygameOutcome } from '../../../shared/games/spygame/protocol.js';
 import { RESUME_SETTLE_MS, holdEffects, resumeEffect } from '../waiting.js';
-import { MIN_PLAYERS, agentIds, connectedCount, fail, findPlayer, nameOf, snapshot, systemMessage, type Gx, type RoundData, type SpygameData } from './state.js';
+import { MIN_PLAYERS, agentIds, connectedCount, fail, findPlayer, nameOf, noticeMessage, snapshot, systemMessage, type Gx, type RoundData, type SpygameData } from './state.js';
 
 /** Uniform pick from a non-empty list. */
 function pickOne<T>(items: readonly T[], rng: () => number): T {
@@ -163,10 +163,15 @@ export function resumeClock(gx: Gx): void {
   current.clock = { kind: 'running', endsAt: ctx.now + current.clock.remainingMs };
 }
 
+/**
+ * The spy names a place, while the round clock runs or while a vote holds it. Right wins the round,
+ * a wrong last guess loses it, any other wrong guess costs a guess. A guess made during a vote also
+ * ends the vote, undecided: its votes are dropped and the accuser may accuse again.
+ */
 export function guess(gx: Gx, playerId: string, locationId: string): void {
   const { data } = gx;
   const { current } = data;
-  if (data.phase !== 'playing') return fail(gx, playerId, 'You can only guess while the round clock runs.');
+  if (data.phase !== 'playing' && data.phase !== 'voting') return fail(gx, playerId, 'The round is over.');
   if (playerId !== current.spyId) return fail(gx, playerId, 'Only the spy guesses the location.');
   if (!current.candidates.includes(locationId)) return fail(gx, playerId, 'That is not one of the candidates.');
   if (current.guessed.includes(locationId)) return fail(gx, playerId, 'You already ruled that one out.');
@@ -175,7 +180,17 @@ export function guess(gx: Gx, playerId: string, locationId: string): void {
   current.guessed.push(locationId);
   if (current.guessesLeft <= 0) return endRound(gx, 'spyWrong');
   systemMessage(gx, `The spy guessed wrong! ${current.guessesLeft} guess${current.guessesLeft === 1 ? '' : 'es'} left`);
+  if (data.phase === 'voting') callOffVote(gx);
   snapshot(gx);
+}
+
+/** A wrong guess ended the vote before it decided: no votes count, the accuser gets their accusation back and play goes on. */
+function callOffVote(gx: Gx): void {
+  const { data } = gx;
+  const accuserId = data.vote?.accuserId;
+  data.current.accusers = data.current.accusers.filter((id) => id !== accuserId);
+  noticeMessage(gx, 'The spy’s guess ends the vote. Play on.');
+  playOn(gx);
 }
 
 /** Points earned this round by player id; zero entries are left out. */

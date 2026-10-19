@@ -161,7 +161,8 @@ const FAMILY_PLACES = locationsForMode('family').map((l) => l.name);
  * no word cut at its side or broken inside itself (a line of "Kindergarte"), no line clamped away,
  * and none of it under the tile's mark (the agents' tick on the real place). The round's places
  * first, then every place of the family pack written into every tile (and put back), so no draw
- * misses a long name.
+ * misses a long name. Every tile shows its picture too: beside the name, or behind it where the tile
+ * is too small for both.
  */
 async function everyNameWhole(p: Player, testId: string): Promise<void> {
   const before = p.page.viewportSize() ?? DESKTOP;
@@ -205,7 +206,11 @@ async function everyNameWhole(p: Player, testId: string): Promise<void> {
             const tiles = [...document.querySelectorAll<HTMLElement>(`[data-testid="${id}"]`)].map((tile) => ({ tile, name: tile.querySelector<HTMLElement>('.spy-tile__name') }));
             if (tiles.some(({ name }) => !name)) return ['a tile with no name'];
             const named = tiles as { tile: HTMLElement; name: HTMLElement }[];
-            for (const { tile, name } of named) check(tile, name);
+            for (const { tile, name } of named) {
+              const picture = tile.querySelector('.spy-tile__picture')?.getBoundingClientRect();
+              if (!picture || picture.width < 24 || picture.height < 18) out.add(`${name.textContent} has no picture`);
+              check(tile, name);
+            }
             const own = named.map(({ name }) => name.textContent);
             for (const place of places) {
               for (const { name } of named) name.textContent = place;
@@ -465,7 +470,7 @@ test('the other agent accuses the spy, the vote passes and the reveal shows spyC
   await expect(host.page.getByTestId('spygame-reveal')).toContainText(spy.name);
 });
 
-test('the host starts round two; the spy guesses right for +4; the results list three players', async () => {
+test('the host starts round two; an agent accuses the spy, who guesses right during the vote for +4; the results list three players', async () => {
   await host.page.getByTestId('spygame-next-round').click();
   for (const p of players) {
     await expect(p.page.locator('[data-testid="spygame-screen"][data-phase="playing"]')).toBeVisible();
@@ -479,20 +484,34 @@ test('the host starts round two; the spy guesses right for +4; the results list 
 
   const cast = await castOf();
   expect(cast.spy).not.toBe(spy); // the spy rotates
-  const agent = cast.agents[0];
-  const location = (await agent.page.getByTestId('spygame-location').getAttribute('data-location-id')) ?? '';
+  const [accuser, voter] = cast.agents;
+  const location = (await accuser.page.getByTestId('spygame-location').getAttribute('data-location-id')) ?? '';
   expect(location).toBeTruthy();
   await expect(cast.spy.page.getByTestId('guess-tile')).toHaveCount(24);
+  // An accusation of the spy: the other agent's vote is still out, and the spy may still guess (told so on their screen alone).
+  await accuseRow(accuser, cast.spy.name).click();
+  await accuseRow(accuser, cast.spy.name).click();
+  await expect(voter.page.getByTestId('vote-sheet')).toBeVisible();
+  await expect(cast.spy.page.getByTestId('vote-panel')).toHaveAttribute('data-role', 'accused');
+  await expect(cast.spy.page.getByTestId('vote-spy-guess')).toContainText('You can still guess the location');
+  for (const a of cast.agents) await expect(a.page.getByTestId('vote-spy-guess')).toHaveCount(0);
+  await expect(cast.spy.page.getByTestId('guess-hint')).toHaveText('Tap a place, then tap it again to guess.');
   const tile = guessTile(cast.spy, location);
+  await expect(tile).toBeEnabled();
   await tile.click();
+  await expect(tile).toHaveAttribute('data-state', 'highlighted');
   await tile.click();
 
+  // The guess settles the round and ends the vote: spyGuessed, nothing for the accuser, the voter's sheet gone.
   for (const p of players) {
     const reveal = p.page.getByTestId('spygame-reveal');
     await expect(reveal).toHaveAttribute('data-outcome', 'spyGuessed');
     await expect(reveal.getByTestId('reveal-spy')).toContainText(cast.spy.name);
     await expect(reveal.locator(`[data-testid="reveal-points-row"][data-name="${cast.spy.name}"]`)).toHaveAttribute('data-points', '4');
+    await expect(reveal.locator(`[data-testid="reveal-points-row"][data-name="${accuser.name}"]`)).toHaveCount(0);
+    await expect(p.page.getByTestId('vote-panel')).toHaveCount(0);
   }
+  await expect(voter.page.getByTestId('vote-sheet')).toHaveCount(0);
   await expect(host.page.getByTestId('spygame-next-round')).toContainText('Show results');
   await host.page.getByTestId('spygame-next-round').click();
 

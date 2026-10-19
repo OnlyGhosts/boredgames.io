@@ -398,9 +398,15 @@ button.spy-tile:disabled {
  * reads whole on at most two lines, whatever the pack (the longest, two lines of about 101px at
  * 0.8rem): the mark inside the tile's end while there is room for it, then on the tile's corner
  * (16px at -6px, reaching no further into the tile than its border and right padding, so never
- * over the name); a guess tile's picture and name a size down; then the picture gives way and the
- * name takes the tile.
+ * over the name); a guess tile's picture and name a size down; then the picture moves behind the
+ * name (the backdrop, below) and the name takes the tile's width. Every tile keeps its picture.
  */
+.spy-grid {
+  /* Under a name on its picture: dark enough for the light name on any picture, clearing towards the top. */
+  --spy-scrim: linear-gradient(to top, rgb(20 21 20 / 0.82) 0, rgb(20 21 20 / 0.66) 34px, rgb(20 21 20 / 0.12) 100%);
+  --spy-scrim-shadow: 0 1px 2px rgb(20 21 20 / 0.9), 0 0 6px rgb(20 21 20 / 0.5);
+}
+
 .spy-grid li {
   min-width: 0;
   container: spy-tile / inline-size;
@@ -460,8 +466,26 @@ button.spy-tile:disabled {
     padding: 4px 8px 4px 6px;
   }
 
+  /* The backdrop: the picture fills the tile behind the name, under the scrim. */
   .spy-grid .spy-tile--md .spy-tile__picture {
-    display: none;
+    position: absolute;
+    inset: 0;
+    width: auto;
+    height: auto;
+    border-radius: calc(var(--radius-item) - 2px);
+  }
+
+  .spy-grid .spy-tile--md .spy-tile__picture::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--spy-scrim);
+  }
+
+  .spy-grid .spy-tile--md .spy-tile__body {
+    position: relative;
+    color: var(--color-offwhite);
+    text-shadow: var(--spy-scrim-shadow);
   }
 
   .spy-grid .spy-tile--md .spy-tile__name {
@@ -484,8 +508,26 @@ button.spy-tile:disabled {
     padding: 4px 8px 4px 6px;
   }
 
+  /* The backdrop, as for a guess tile above. */
   .spy-grid .spy-tile--sm .spy-tile__picture {
-    display: none;
+    position: absolute;
+    inset: 0;
+    width: auto;
+    height: auto;
+    border-radius: calc(var(--radius-item) - 2px);
+  }
+
+  .spy-grid .spy-tile--sm .spy-tile__picture::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--spy-scrim);
+  }
+
+  .spy-grid .spy-tile--sm .spy-tile__body {
+    position: relative;
+    color: var(--color-offwhite);
+    text-shadow: var(--spy-scrim-shadow);
   }
 
   .spy-grid .spy-tile--sm .spy-tile__name {
@@ -662,6 +704,15 @@ button.spy-accuse__row:disabled {
   color: var(--color-danger-text);
   font-size: 1.1rem;
   font-weight: 900;
+}
+
+/* The spy's own reminder that the vote does not stop their guesses. */
+.spy-vote__spy-guess {
+  text-align: center;
+  text-wrap: balance;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--color-primary-text);
 }
 
 .spy-vote__buttons {
@@ -896,8 +947,8 @@ button.spy-accuse__row:disabled {
  * Portrait phones: every candidate place is in view as the screen opens. The column's first screen
  * is at least the column's height; the role card and the grid's head take what they need and the
  * grid's eight rows of three share the rest equally, never under --spy-row-min, so a taller phone
- * gets taller tiles (with their picture once there is room for it). The players to accuse follow
- * below the fold.
+ * gets taller tiles. Every tile wears its picture behind its name, whatever its height. The players
+ * to accuse follow below the fold.
  */
 @media (max-width: 760px) and (orientation: portrait) {
   .spy--phone .spy__first {
@@ -934,17 +985,47 @@ button.spy-accuse__row:disabled {
     font-size: 0.85rem;
   }
 
+  /*
+   * The agents' place, big: the picture at the card's start (30% of the screen's width, 88 to 128px
+   * wide), the role, the label and the name beside it, so the picture grows without the card growing
+   * much (the tile's own box gives way to the card's grid).
+   */
+  .spy--phone .spy-role--agent {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    column-gap: 12px;
+    row-gap: 2px;
+  }
+
+  .spy--phone .spy-role--agent .spy-role__title {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: end;
+    font-size: 1rem;
+  }
+
   .spy--phone .spy-tile--lg {
-    gap: 10px;
+    display: contents;
   }
 
   .spy--phone .spy-tile--lg .spy-tile__picture {
-    width: 64px;
-    height: 48px;
+    grid-column: 1;
+    grid-row: 1 / span 2;
+    width: clamp(88px, 30vw, 128px);
+    height: auto;
+    aspect-ratio: 4 / 3;
+  }
+
+  .spy--phone .spy-tile--lg .spy-tile__body {
+    grid-column: 2;
+    grid-row: 2;
+    align-self: start;
   }
 
   .spy--phone .spy-tile--lg .spy-tile__name {
-    font-size: 1.2rem;
+    font-size: 1.4rem;
+    line-height: 1.1;
   }
 
   .spy--phone .spy-grid-card {
@@ -980,18 +1061,36 @@ button.spy-accuse__row:disabled {
     container: none / size;
   }
 
+  /* The name sits at the tile's foot, on its picture (the backdrop, as in the ladder above). */
   .spy--phone .spy-grid .spy-tile {
     height: 100%;
     min-height: 0;
     flex-direction: column;
     align-items: stretch;
-    justify-content: center;
-    gap: 3px;
+    justify-content: flex-end;
+    gap: 0;
     padding: 4px 8px 4px 6px;
   }
 
   .spy--phone .spy-grid .spy-tile__picture {
-    display: none;
+    position: absolute;
+    inset: 0;
+    width: auto;
+    height: auto;
+    border-radius: calc(var(--radius-item) - 2px);
+  }
+
+  .spy--phone .spy-grid .spy-tile__picture::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--spy-scrim);
+  }
+
+  .spy--phone .spy-grid .spy-tile__body {
+    position: relative;
+    color: var(--color-offwhite);
+    text-shadow: var(--spy-scrim-shadow);
   }
 
   .spy--phone .spy-grid .spy-tile__name {
@@ -1041,42 +1140,9 @@ button.spy-accuse__row:disabled {
     width: 10px;
     height: 10px;
   }
-
-  @container (min-height: 64px) {
-    .spy--phone .spy-grid .spy-tile {
-      justify-content: flex-start;
-      padding: 3px 3px 5px;
-    }
-
-    .spy--phone .spy-grid .spy-tile__picture {
-      position: relative;
-      display: block;
-      flex: 1 1 0;
-      min-height: 0;
-      width: 100%;
-      height: auto;
-      border-radius: 7px;
-    }
-
-    .spy--phone .spy-grid .spy-tile__picture img {
-      position: absolute;
-      inset: 0;
-    }
-
-    .spy--phone .spy-grid .spy-tile__emoji {
-      position: absolute;
-      inset: 0;
-      display: grid;
-      place-items: center;
-    }
-
-    .spy--phone .spy-grid .spy-tile__body {
-      padding: 0 3px;
-    }
-  }
 }
 
-/* Short portrait phones (an SE): tighter spacing and a smaller hero picture leave the rows their room. */
+/* Short portrait phones (an SE): tighter spacing and a smaller place card leave the rows their room. */
 @media (max-width: 760px) and (orientation: portrait) and (max-height: 600px) {
   .spy--phone .spy__main,
   .spy--phone .spy__first {
@@ -1087,9 +1153,26 @@ button.spy-accuse__row:disabled {
     padding: 8px 10px;
   }
 
+  /* The picture 27% of the width (86px on an SE), the label left to screen readers: the role and a two-line name fit beside it. */
   .spy--phone .spy-tile--lg .spy-tile__picture {
-    width: 48px;
-    height: 36px;
+    width: clamp(80px, 27vw, 104px);
+  }
+
+  .spy--phone .spy-role--agent .spy-role__title {
+    font-size: 0.95rem;
+  }
+
+  .spy--phone .spy-tile--lg .spy-tile__label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .spy--phone .spy-tile--lg .spy-tile__name {
+    font-size: 1.25rem;
   }
 
   .spy--phone .spy-grid-card {

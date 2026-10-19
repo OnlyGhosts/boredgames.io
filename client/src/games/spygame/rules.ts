@@ -21,7 +21,7 @@ export const spygameRules: GameRules = {
     { label: 'Vote', value: `${SPYGAME_VOTE_SECONDS} s`, note: 'No vote counts as No' },
   ],
   // The clocks, the candidates and the guesses sit in the facts above.
-  round: 'Each round has one spy. The others see the place, the spy only the list of candidates. Quiz each other without giving it away. An agent can accuse once a round: the clock pauses while the other agents vote, and a tie fails.',
+  round: 'Each round has one spy. The others see the place, the spy only the list of candidates. Quiz each other without giving it away. An agent can accuse once a round: the clock pauses while the other agents vote, and a tie fails. The spy can still guess during a vote, and a guess ends it.',
   scoring: `The spy names the place: ${P.spyFirstGuess} points (${P.spySecondGuess} on the second guess). Wrong person voted out: ${P.wrongAccusation} to the spy. Spy caught, wrong twice or time up: ${P.agentWin} to each agent, plus ${P.accuserBonus} to the accuser.`,
   end: 'After the last round, or when the host ends it. Most points wins.',
   settings: `Rounds (${L.rounds.min} to ${L.rounds.max}). Unhinged mode plays adult places.`,

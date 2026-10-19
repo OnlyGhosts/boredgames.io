@@ -198,17 +198,88 @@ describe('The Spy Game: the spy guesses', () => {
     expect(score(second, alice2)).toBe(3);
   });
 
-  it('refuses guesses from agents, of non-candidates, and outside the playing phase', () => {
+  it('refuses guesses from agents (during a vote too), of non-candidates, and once the round is over', () => {
     const s = sim('spygame');
-    const [alice, bob] = startGame(s, ['Alice', 'Bob', 'Carol']);
+    const [alice, bob, carol, dave] = startGame(s, ['Alice', 'Bob', 'Carol', 'Dave']);
     const refused = (effects: ReturnType<Sim['game']>, message: string): void => {
       expect(effects).toEqual([expect.objectContaining({ type: 'send', msg: { t: 'error', code: 'NOT_ALLOWED', message } })]);
     };
     refused(s.game(bob, { t: 'guess', locationId: 'airplane' }), 'Only the spy guesses the location.');
     refused(s.game(alice, { t: 'guess', locationId: 'nowhere' }), 'That is not one of the candidates.');
     expect(s.game(alice, { t: 'guess' })).toEqual([expect.objectContaining({ msg: expect.objectContaining({ code: 'INVALID_MESSAGE' }) })]);
-    s.game(bob, { t: 'accuse', playerId: s.playerId('Carol') });
-    refused(s.game(alice, { t: 'guess', locationId: 'airplane' }), 'You can only guess while the round clock runs.');
+    s.game(bob, { t: 'accuse', playerId: carol });
+    for (const agent of [bob, carol, dave]) refused(s.game(agent, { t: 'guess', locationId: 'airplane' }), 'Only the spy guesses the location.');
+    expect(data(s)).toMatchObject({ phase: 'voting', vote: { accuserId: bob, votes: { [bob]: true } } });
+    spyWins(s);
+    refused(s.game(alice, { t: 'guess', locationId: decoy(s) }), 'The round is over.');
+  });
+});
+
+describe('The Spy Game: the spy guesses during a vote', () => {
+  it('a right guess wins the round for the spy and ends the vote: the votes cast are dropped, no accuser bonus', () => {
+    const s = sim('spygame');
+    const [alice, bob, carol, dave, eve] = startGame(s, ['Alice', 'Bob', 'Carol', 'Dave', 'Eve']);
+    s.game(bob, { t: 'accuse', playerId: alice });
+    s.game(carol, { t: 'vote', yes: true });
+    expect(view(s, alice)).toMatchObject({ phase: 'voting', vote: { yes: 2, no: 0 } });
+    const effects = s.game(alice, { t: 'guess', locationId: 'airplane' });
+    expect(chatTexts(effects)).toContain('Alice was the spy and guessed the location: Airplane!');
+    expect(data(s)).toMatchObject({ phase: 'reveal', vote: null });
+    expect(data(s).reveal).toMatchObject({ outcome: 'spyGuessed', points: { [alice]: 4 } });
+    expect([alice, bob, carol, dave, eve].map((id) => score(s, id))).toEqual([4, 0, 0, 0, 0]);
+    expect(view(s, dave).vote).toBeNull();
+    expect(errorsOf(s.game(dave, { t: 'vote', yes: true }))).toEqual(['There is no vote running.']);
+  });
+
+  it('a wrong guess costs a guess and calls the vote off: votes dropped, the clock runs on with its kept time, the accuser may accuse again', () => {
+    const s = sim('spygame');
+    const [alice, bob, carol, dave, eve] = startGame(s, ['Alice', 'Bob', 'Carol', 'Dave', 'Eve']);
+    s.now += 20_000;
+    s.game(bob, { t: 'accuse', playerId: carol });
+    s.now += 5_000;
+    s.game(dave, { t: 'vote', yes: true });
+    const first = decoy(s);
+    const effects = s.game(alice, { t: 'guess', locationId: first });
+    expect(chatTexts(effects)).toEqual(['The spy guessed wrong! 1 guess left', 'The spy’s guess ends the vote. Play on.']);
+    expect(noticeTexts(effects)).toEqual(['The spy’s guess ends the vote. Play on.']);
+    expect(data(s)).toMatchObject({ phase: 'playing', vote: null });
+    expect(data(s).current.clock).toEqual({ kind: 'running', endsAt: s.now + ROUND_MS - 20_000 });
+    expect(view(s, bob)).toMatchObject({ phase: 'playing', guessesLeft: 1, spyGuessed: [first], vote: null });
+    expect(view(s, bob).players[bob].hasAccused).toBe(false);
+    expect(view(s, bob).players[carol].isAccused).toBe(false);
+    expect(errorsOf(s.game(eve, { t: 'vote', yes: true }))).toEqual(['There is no vote running.']);
+    expect(s.data.players.every((p) => p.score === 0)).toBe(true);
+
+    // Bob accuses again: a fresh vote, Dave's earlier Yes gone.
+    s.game(bob, { t: 'accuse', playerId: carol });
+    expect(view(s, dave).vote).toMatchObject({ yes: 1, no: 0, myVote: null });
+    // A wrong last guess during the vote loses the round as ever: each agent +1, no accuser bonus.
+    s.game(alice, { t: 'guess', locationId: decoy(s, [first]) });
+    expect(data(s)).toMatchObject({ phase: 'reveal', vote: null });
+    expect(data(s).reveal).toMatchObject({ outcome: 'spyWrong', points: { [bob]: 1, [carol]: 1, [dave]: 1, [eve]: 1 } });
+  });
+
+  it('a guess racing the last vote: whichever lands first settles the round, the other is refused', () => {
+    const accused = () => {
+      const s = sim('spygame');
+      const [alice, bob, carol, dave] = startGame(s, ['Alice', 'Bob', 'Carol', 'Dave']);
+      s.game(bob, { t: 'accuse', playerId: alice });
+      s.game(carol, { t: 'vote', yes: true });
+      return { s, alice, bob, dave };
+    };
+
+    // The guess lands first: the spy wins, the last vote finds no vote.
+    const guessFirst = accused();
+    guessFirst.s.game(guessFirst.alice, { t: 'guess', locationId: 'airplane' });
+    expect(errorsOf(guessFirst.s.game(guessFirst.dave, { t: 'vote', yes: true }))).toEqual(['There is no vote running.']);
+    expect(data(guessFirst.s).reveal).toMatchObject({ outcome: 'spyGuessed', points: { [guessFirst.alice]: 4 } });
+
+    // The last vote lands first: the spy is caught, the guess comes too late.
+    const voteFirst = accused();
+    voteFirst.s.game(voteFirst.dave, { t: 'vote', yes: true });
+    expect(errorsOf(voteFirst.s.game(voteFirst.alice, { t: 'guess', locationId: 'airplane' }))).toEqual(['The round is over.']);
+    expect(data(voteFirst.s).reveal).toMatchObject({ outcome: 'spyCaught', points: { [voteFirst.bob]: 3 } });
+    expect(score(voteFirst.s, voteFirst.alice)).toBe(0);
   });
 });
 

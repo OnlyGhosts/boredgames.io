@@ -2,7 +2,7 @@ import type { SpygameRoomState, SpygameView, SpygameVoteView } from '@shared/gam
 import { Avatar } from '../../../platform/components/Avatar';
 import { BottomSheet } from '../../../platform/components/BottomSheet';
 import { castVote } from '../actions';
-import { nameOf, playerOf, voteRoleOf, type VoteRole } from '../hooks';
+import { canGuessNow, nameOf, playerOf, voteRoleOf, type VoteRole } from '../hooks';
 import { useSpygame } from '../store';
 
 interface Props {
@@ -72,6 +72,12 @@ function VoteBody({ room, view, meId, role, withButtons, testIdPrefix }: Props &
         </span>
       </div>
       <p className={`spy-vote__status${role === 'accused' ? ' spy-vote__status--accused' : ''}`}>{statusLine(role, accusedName)}</p>
+      {/* Only on the spy's own screen: the vote never stops their guesses. */}
+      {canGuessNow(view) && (
+        <p className="spy-vote__spy-guess" data-testid="vote-spy-guess">
+          You can still guess the location below. A guess ends the vote.
+        </p>
+      )}
       <div className="spy-vote__foot">
         <Tally vote={vote} testId={`${testIdPrefix}-tally`} />
       </div>

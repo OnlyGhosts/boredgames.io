@@ -2290,7 +2290,9 @@ layout, which is a good reference for a non-scrolling phone game.
   by its own width (`@container spy-tile`), so every place's name, in every pack, reads whole on a
   tablet, a desktop and a phone on its side (an upright phone keeps its own three columns of eight,
   every place in view, the name a size down in a tile under 98px so the family pack's longest words
-  never break inside themselves). Quip Game's column spans the bar below 1024px.
+  never break inside themselves). No tile drops its picture: one too small to show it beside the
+  name wears it behind the name, under a dark scrim (`--spy-scrim`) that keeps the name readable on
+  any picture. Quip Game's column spans the bar below 1024px.
 - **Non-scrolling screens.** `useAppMode(isPhone)` from [`lib/useViewport.ts`](../client/src/platform/lib/useViewport.ts)
   puts `html.is-app` on the document (page never scrolls, `height: 100%`), and the shell publishes
   the visible viewport height as `--app-height` so a fixed layout sits above the on-screen

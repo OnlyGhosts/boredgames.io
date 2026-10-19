@@ -139,7 +139,9 @@ guesses straight into the blanks, and the turn ends when time runs out or everyo
 Three or more players in the same room. Each round one player is secretly the spy; everyone
 else sees the location (one of 24 candidates drawn from the pack in `shared/games/spygame/locations.ts`).
 Questions are asked out loud; the spy has two guesses, the agents one group accusation each
-round (a vote that pauses the clock). The host sets the number of rounds; the round clock (8 minutes)
+round (a vote that pauses the clock). The spy may still guess while a vote runs: the guess settles
+the round as ever and ends the vote, its votes dropped (after a wrong first guess play goes on
+and the accuser may accuse again). The host sets the number of rounds; the round clock (8 minutes)
 and the vote window (30 seconds) are fixed.
 
 **Location pictures.** Every location has a generated placeholder tile in

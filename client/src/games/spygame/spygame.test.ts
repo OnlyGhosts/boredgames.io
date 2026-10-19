@@ -410,16 +410,26 @@ describe('snapshot cues and local state', () => {
     useSpygameStore.getState().highlightLocation('airplane');
     snapshot(spyRoom(spyView({ clock: paused })));
     expect(useSpygameStore.getState().highlightedLocation).toBeNull();
-    // A vote: the same, and the store is not even consulted for the tile's look.
+    // While the grid is not tappable the store is not even consulted for the tile's look.
     useSpygameStore.getState().highlightLocation('airplane');
-    snapshot(spyRoom(spyView({ phase: 'voting', vote: { ...VOTE, canVote: false }, clock: { ...paused, pausedReason: 'vote', waitingForId: null } })));
-    expect(useSpygameStore.getState().highlightedLocation).toBeNull();
-    useSpygameStore.getState().highlightLocation('airplane');
-    const html = renderToString(createElement(spygameClient.Screen, { room: spyRoom(spyView({ phase: 'voting', vote: { ...VOTE, canVote: false }, clock: { ...paused, pausedReason: 'vote', waitingForId: null } })), meId: 'host', isHost: true }));
+    const held = renderToString(createElement(spygameClient.Screen, { room: spyRoom(spyView({ clock: paused })), meId: 'host', isHost: true }));
+    const heldTile = tagsWith(held, 'guess-tile').find((t) => attr(t, 'data-location-id') === 'airplane');
+    expect(heldTile).toContain('data-state="idle"');
+    expect(heldTile).toContain('disabled');
+    expect(held).not.toContain('Tap again to confirm');
+    // A vote leaves the grid tappable (a guess ends the vote): the picked tile survives it, and the panel says so to the spy alone.
+    const voting = spyRoom(spyView({ phase: 'voting', vote: { ...VOTE, canVote: false }, clock: { ...paused, pausedReason: 'vote', waitingForId: null } }));
+    snapshot(voting);
+    expect(useSpygameStore.getState().highlightedLocation).toBe('airplane');
+    const html = renderToString(createElement(spygameClient.Screen, { room: voting, meId: 'host', isHost: true }));
     const tile = tagsWith(html, 'guess-tile').find((t) => attr(t, 'data-location-id') === 'airplane');
-    expect(tile).toContain('data-state="idle"');
-    expect(tile).toContain('disabled');
-    expect(html).not.toContain('Tap again to confirm');
+    expect(tile).toContain('data-state="highlighted"');
+    expect(tile).not.toContain('disabled');
+    expect(html).toMatch(/data-testid="guess-hint"[^>]*>Tap Airplane again to guess\.</);
+    expect(tagWith(html, 'vote-spy-guess')).toBeTruthy();
+    expect(render(spyRoom(view({ phase: 'voting', vote: { ...VOTE, canVote: true } })), 'dave')).not.toContain('data-testid="vote-spy-guess"');
+    // With no guess left the vote holds the grid like anything else.
+    expect(renderToString(createElement(spygameClient.Screen, { room: spyRoom(spyView({ phase: 'voting', guessesLeft: 0, vote: { ...VOTE, canVote: false } })), meId: 'host', isHost: true }))).not.toContain('data-testid="vote-spy-guess"');
     // A highlight survives a snapshot that keeps the grid tappable (another agent's chat line, say).
     useSpygameStore.getState().highlightLocation('airplane');
     snapshot(spyRoom(spyView()));
@@ -488,7 +498,7 @@ describe('the stylesheet', () => {
     expect(css).not.toMatch(/min-width: 761px/);
   });
 
-  it('lays each tile out by its own width so every name of every pack reads whole on two lines: the mark, then the picture give way', () => {
+  it('lays each tile out by its own width so every name of every pack reads whole on two lines: the mark gives way, then the picture goes behind the name', () => {
     // The widest name of every pack takes two lines of 101px at 0.8rem bold (Inter), 113px at 0.9rem: room for 104 and 116.
     const NAME_ROOM = { sm: 104, md: 116, mdSmall: 104 };
     const px = (re: RegExp) => Number(css.match(re)?.[1]);
@@ -517,13 +527,15 @@ describe('the stylesheet', () => {
     const portraitMark = css.match(/\.spy--phone \.spy-grid \.spy-tile__mark \{([^}]*)\}/)?.[1] ?? '';
     expect(reach(portraitMark)).toBeLessThanOrEqual(border + Number(css.match(/\.spy--phone \.spy-grid \.spy-tile \{[^}]*padding: 4px (\d+)px 4px 6px;/)?.[1]));
     expect(css).not.toContain('::before');
-    expect(ladder(least(smPicture, NAME_ROOM.sm))).toMatch(/\.spy-grid \.spy-tile--sm \.spy-tile__picture \{\s*display: none/);
+    // Under that the picture moves behind the name (the backdrop) and the name takes the tile's width: no tile loses its picture.
+    expect(ladder(least(smPicture, NAME_ROOM.sm))).toMatch(/\.spy-grid \.spy-tile--sm \.spy-tile__picture \{\s*position: absolute;\s*inset: 0;/);
+    expect(css).not.toMatch(/\.spy-tile__picture \{\s*display: none/);
     // A guess tile: the mark to the corner under 228px, the picture and the name a size down under 200, the name alone under 180.
     expect(ladder(least(mdPicture, NAME_ROOM.md) + mark)).toMatch(/\.spy-grid \.spy-tile--md \.spy-tile__mark \{[^}]*top: -6px/);
     const smaller = ladder(least(mdPicture, NAME_ROOM.md));
     expect(smaller).toMatch(/\.spy-grid \.spy-tile--md \.spy-tile__picture \{\s*width: 52px/);
     expect(smaller).toMatch(/\.spy-grid \.spy-tile--md \.spy-tile__name \{\s*font-size: 0\.8rem/);
-    expect(ladder(least(52, NAME_ROOM.mdSmall))).toMatch(/\.spy-grid \.spy-tile--md \.spy-tile__picture \{\s*display: none/);
+    expect(ladder(least(52, NAME_ROOM.mdSmall))).toMatch(/\.spy-grid \.spy-tile--md \.spy-tile__picture \{\s*position: absolute;\s*inset: 0;/);
     // The name alone: the phone's own size, never under 11px, the confirm hint left to the grid's head.
     for (const size of ['sm', 'md']) expect(css).toMatch(new RegExp(`\\.spy-grid \\.spy-tile--${size} \\.spy-tile__name \\{\\s*font-size: 0\\.75rem`));
     // Every cell is a container, but a portrait phone's, whose tiles are laid out by their height.
@@ -542,8 +554,9 @@ describe('the stylesheet', () => {
     expect(portrait).toMatch(/\.spy--phone \.spy__first \{[^}]*min-height: 100%/);
     expect(portrait).toMatch(/\.spy--phone \.spy-grid \{[^}]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);\s*grid-template-rows: repeat\(8, minmax\(var\(--spy-row-min\), 1fr\)\)/);
     expect(portrait).toMatch(/--spy-row-min: 40px/);
-    // The picture shows only in a tile tall enough for it; the name is never under 11px.
-    expect(portrait).toMatch(/@container \(min-height: 64px\)/);
+    // Every tile wears its picture behind its name, whatever its height; the name is never under 11px.
+    expect(portrait).toMatch(/\.spy--phone \.spy-grid \.spy-tile__picture \{\s*position: absolute;\s*inset: 0;/);
+    expect(portrait).not.toMatch(/@container \(min-height/);
     expect(portrait).toMatch(/\.spy--phone \.spy-grid \.spy-tile__name \{[^}]*font-size: 0\.75rem/);
     // The narrowest phones' tiles (under 98px: a 320 to 340px phone) take the name a size down, 11px on 13px lines, so the
     // family pack's longest words ("Kindergarten", "Supermarket") stay whole rather than breaking inside themselves.

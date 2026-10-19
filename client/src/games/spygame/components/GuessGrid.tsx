@@ -9,7 +9,7 @@ import { GuessesLeft } from './RoleCard';
 /**
  * The spy's 24 candidates (two columns of twelve, three of eight on a portrait phone). One tap
  * highlights a tile, a second tap on the same tile sends the guess; tapping another tile moves the
- * highlight. Wrong guesses stay crossed out.
+ * highlight. Wrong guesses stay crossed out. A vote leaves the grid tappable: a guess ends the vote.
  */
 export function GuessGrid({ view }: { view: SpygameView }) {
   const highlighted = useSpygame((s) => s.highlightedLocation);
@@ -35,7 +35,7 @@ export function GuessGrid({ view }: { view: SpygameView }) {
           <GuessesLeft view={view} />
         </div>
         <p className="spy-grid-card__hint" data-testid="guess-hint">
-          {picked ? `Tap ${picked.name} again to guess.` : canGuess ? 'Tap a place, then tap it again to guess.' : view.phase === 'voting' ? 'A vote is running.' : view.phase === 'playing' ? 'The clock is paused.' : 'The round is over.'}
+          {picked ? `Tap ${picked.name} again to guess.` : canGuess ? 'Tap a place, then tap it again to guess.' : view.phase === 'playing' ? 'The clock is paused.' : 'The round is over.'}
         </p>
       </header>
       <ol className="spy-grid spy-grid--guess" data-testid="guess-grid">

@@ -105,8 +105,9 @@ export const spygameClient = defineGameClient<SpygameView, SpygameSettings>({
       store.highlightLocation(null);
     }
     if (spyWentAway(prev, room) && prev) addToast('info', waitingNotice(nameOf(room, room.game.clock.waitingForId)));
-    // A tile awaiting its confirming tap is forgotten whenever the grid stops being tappable (a vote,
-    // the spy's pause, a wrong guess, the reveal): the next tap must never send a guess on its own.
+    // A tile awaiting its confirming tap is forgotten whenever the grid stops being tappable (the
+    // spy's pause, a wrong guess, the reveal; a vote leaves it tappable): the next tap must never send
+    // a guess on its own.
     if (!canGuessNow(room.game) && store.highlightedLocation !== null) store.highlightLocation(null);
     if (roundEnded(prev, room)) {
       const outcome = room.game.reveal?.outcome;

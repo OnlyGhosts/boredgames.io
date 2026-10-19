@@ -49,9 +49,10 @@ export function spyWentAway(prev: SpygameRoomState | null, next: SpygameRoomStat
   return next.game?.clock.waitingForId !== null && next.game?.clock.waitingForId !== undefined && prev?.game?.clock.waitingForId !== next.game.clock.waitingForId;
 }
 
-/** Whether the spy may tap a tile right now: only while the round clock runs and guesses remain. */
+/** Whether this player (the spy) may tap a tile right now: while the round clock runs or a vote holds it, with guesses left. */
 export function canGuessNow(view: SpygameView): boolean {
-  return view.phase === 'playing' && view.clock.endsAt !== null && view.guessesLeft > 0;
+  if (view.role !== 'spy' || view.guessesLeft <= 0) return false;
+  return view.phase === 'voting' || (view.phase === 'playing' && view.clock.endsAt !== null);
 }
 
 /** Why this player cannot start a vote right now; null when they can. Target-specific reasons come from `accuseTargetBlock`. */

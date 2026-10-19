@@ -63,7 +63,7 @@ export const DEFAULT_SPYGAME_SETTINGS: SpygameSettings = { rounds: 5 };
 const idSchema = z.string().min(1).max(64);
 
 export const spygameClientMessageSchema = z.discriminatedUnion('t', [
-  /** Spy only, while playing: guess the location. */
+  /** Spy only, while the round runs (during a vote too, which the guess ends): guess the location. */
   z.object({ t: z.literal('guess'), locationId: idSchema }),
   /** Agents only, while playing: start a vote against another round player. */
   z.object({ t: z.literal('accuse'), playerId: idSchema }),
