@@ -8,9 +8,9 @@ export function QuipgameArt() {
       <path d="M8 16h28a4 4 0 0 1 4 4v12a4 4 0 0 1-4 4H20l-7 5v-5H8a4 4 0 0 1-4-4V20a4 4 0 0 1 4-4z" {...shape('paper', 'lilac')} />
       {/* The typing dots, ink well inside the white bubble. */}
       <g fill={ART.ink}>
-        <circle cx="15" cy="26" r="2.2" />
-        <circle cx="22" cy="26" r="2.2" />
-        <circle cx="29" cy="26" r="2.2" />
+        <circle cx="15" cy="26" r="2.5" />
+        <circle cx="22" cy="26" r="2.5" />
+        <circle cx="29" cy="26" r="2.5" />
       </g>
     </GameArt>
   );

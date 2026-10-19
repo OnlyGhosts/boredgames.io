@@ -86,8 +86,10 @@ describe('every game’s picture', () => {
       expect(html, g.id).toContain('aria-hidden="true"');
       expect(html, g.id).toContain(`data-art="${g.id}"`);
       expect(html, g.id).toContain(`viewBox="${ART_VIEWBOX}"`);
-      // The shadow: the same drawing once more under itself, which components.css recolours shape by shape to its edge.
-      expect(html, g.id).toContain('class="game-art__shadow"');
+      // No shadow: a picture is its shapes and nothing else (GameArt.tsx says why), so nothing is drawn twice and no copy of a shape can peek out beside it.
+      expect(html, g.id).not.toContain('game-art__shadow');
+      const markup = html.match(/<(?:path|rect|circle|ellipse|line|polygon)\b[^>]*>/g) ?? [];
+      expect(new Set(markup).size, `${g.id} draws nothing twice`).toBe(markup.length);
       // The mascots' palette comes through the theme tokens, never a raw colour, so both themes draw it alike.
       expect(html, g.id).not.toMatch(/#[0-9a-f]{3,8}\b/i);
       for (const colour of html.match(/(?:fill|stroke)="[^"]+"/g) ?? []) expect(colour, g.id).toMatch(/^(?:fill|stroke)="(?:none|var\(--[a-z-]+\))"$/);
@@ -104,6 +106,10 @@ describe('every game’s picture', () => {
     for (const [key, value] of Object.entries(ART)) if (key.startsWith('edge')) expect(['var(--game-edge-lime)', 'var(--game-edge-lilac)'], key).toContain(value);
     expect(tokens).not.toContain('--game-edge-paper');
     expect(tokens).not.toContain('--game-graphite');
+    // The lilac fill is a game token of its own, the brand lilac, because the picked tile swaps it (the lime never needs that: no tile is lime).
+    expect(ART.lilac).toBe('var(--game-lilac)');
+    expect(ART.lime).toBe('var(--color-primary)');
+    expect(hex('game-lilac')).toBe(hex('color-secondary'));
     // Every edge token there is (the picked tile’s deeper cuts included) resolves to lime or lilac: the hue of its fill, well saturated, never grey.
     const edgeTokens = [...new Set([...tokens.matchAll(/--(game-edge-[a-z-]+):/g)].map((m) => m[1]))].sort();
     expect(edgeTokens).toEqual(['game-edge-lilac', 'game-edge-lilac-picked', 'game-edge-lime', 'game-edge-lime-picked']);
@@ -162,7 +168,7 @@ describe('every game’s picture', () => {
     }
   });
 
-  it('draws its edges in tokens that rim their own fills as firmly as the lime does, read on the white tile and the paper, stand off the dark tile by their colour, and cut deeper on the picked lilac tile', () => {
+  it('draws its edges in tokens that rim their own fills as firmly as the lime does, read on the white tile and the paper, stand off the dark tile by their colour, and on the picked lilac tile cut deeper while the lilac fill goes paler', () => {
     // A tile is the panel: graphite on dark, white on light; the picked tile is the lilac fill.
     const tiles = values('color-surface');
     expect(tiles).toEqual(['#20221f', '#ffffff']);
@@ -170,7 +176,7 @@ describe('every game’s picture', () => {
     const lilacTile = hex('color-secondary');
     expect(lilacTile).toBe('#a699d5');
     const paper = hex('game-paper');
-    const fills = { lime: hex('color-primary'), lilac: hex('color-secondary') };
+    const fills = { lime: hex('color-primary'), lilac: hex('game-lilac') };
     // The lilac edge was #7466ad: 1.92:1 on its fill and only 19 L* under it, a soft rim beside the lime's firm one, so it is cut
     // to #4e3d94, the lime edge's step (34 L* under its fill); the picked tile's lilac cut goes deeper with it, #4f408c to #3d2f74.
     expect({ lime: hex('game-edge-lime'), lilac: hex('game-edge-lilac'), limePicked: hex('game-edge-lime-picked'), lilacPicked: hex('game-edge-lilac-picked') }).toEqual({
@@ -205,15 +211,125 @@ describe('every game’s picture', () => {
     // The lilac rim is as firm as the lime one, not the faded one it was.
     expect(step('lilac')).toBeGreaterThanOrEqual(step('lime') - 0.5);
     expect(contrast(hex('game-edge-lilac'), fills.lilac)).toBeGreaterThanOrEqual(contrast(hex('game-edge-lime'), fills.lime));
-    // The shadow fills each shape in its own edge colour (a white one in the edge it borrows) and each line’s fill in its edge; the details (filled, no edge) stay out of it.
+    // On the picked tile the lilac fill is a paler cut of the same lilac (a shape there, not an outline), still lilac rather than paper, and both picked edges rim it.
+    const pickedFill = hex('game-lilac-picked');
+    expect(pickedFill).toBe('#cdc4ee');
+    expect(contrast(pickedFill, lilacTile), 'picked lilac fill on the lilac tile').toBeGreaterThanOrEqual(1.5);
+    expect(lab(pickedFill).L - lab(lilacTile).L, 'picked lilac fill lighter than the tile').toBeGreaterThanOrEqual(14);
+    expect(deltaE(pickedFill, lilacTile), 'picked lilac fill apart from the tile').toBeGreaterThanOrEqual(17);
+    expect(Math.abs(hueSat(pickedFill).hue - hueSat(lilacTile).hue), 'picked lilac fill is the same lilac').toBeLessThanOrEqual(3);
+    expect(hueSat(pickedFill).sat).toBeGreaterThanOrEqual(0.25);
+    expect(deltaE(pickedFill, paper), 'picked lilac fill is not paper').toBeGreaterThanOrEqual(25);
+    expect(lab(pickedFill).L).toBeLessThanOrEqual(lab(paper).L - 10);
+    for (const colour of ['lime', 'lilac'] as const) expect(contrast(hex(`game-edge-${colour}-picked`), pickedFill), `picked ${colour} edge on the picked lilac fill`).toBeGreaterThanOrEqual(3);
+    // No shadow: components.css draws nothing under or behind a picture, and the only place a picture's tokens change is the picked tile (lobby.css), which swaps both edges and the lilac fill together.
     const components = readFileSync(fileURLToPath(new URL('../platform/styles/components.css', import.meta.url)), 'utf8');
-    const shadow = components.slice(components.indexOf('.game-art {'), components.indexOf('/* ---------- Buttons'));
-    for (const edge of EDGES) expect(shadow).toContain(`.game-art__shadow [stroke='${edge}']:not([fill='none']) {\n  fill: ${edge};\n}`);
-    for (const [fill, edge] of Object.entries(EDGE_OF)) expect(shadow).toContain(`.game-art__shadow [stroke='${fill}'] {\n  stroke: ${edge};\n}`);
-    expect(shadow).toContain(".game-art__shadow [fill]:not([fill='none']):not([stroke]) {\n  display: none;\n}");
-    const rules = shadow.replace(/\/\*[\s\S]*?\*\//g, '');
-    expect(rules).not.toMatch(/:\s*var\(--game-ink\)/);
-    expect(rules).not.toMatch(/--game-(?:edge-paper|graphite)/);
+    expect(components).not.toContain('game-art__shadow');
+    const artRules = [...components.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]*game-art[^{}]*)\{([^}]*)\}/g)];
+    expect(artRules.map((m) => m[1].trim())).toEqual(['.game-art']);
+    expect(artRules[0][2].trim()).toBe('display: block;');
+    const lobby = readFileSync(fileURLToPath(new URL('../platform/styles/lobby.css', import.meta.url)), 'utf8');
+    const picked = lobby.slice(lobby.indexOf('.game-tile.is-selected {'), lobby.indexOf('}', lobby.indexOf('.game-tile.is-selected {')));
+    expect(picked).toContain('--game-edge-lime: var(--game-edge-lime-picked);');
+    expect(picked).toContain('--game-edge-lilac: var(--game-edge-lilac-picked);');
+    expect(picked).toContain('--game-lilac: var(--game-lilac-picked);');
+    expect(tokens.match(/--game-lilac(?:-picked)?:/g)).toEqual(['--game-lilac:', '--game-lilac-picked:']);
+  });
+
+  it('sits on the half-unit grid, draws letters as paths, keeps every line 1.5 units or wider and says even-odd wherever a path has a second subpath', () => {
+    // A tile shows a picture at 1.1 to 4.5 pixels a unit, where a slip of a fraction of a unit renders as a hairline or a sliver (GameArt.tsx):
+    // shapes and lines (anything with an edge) sit on the half-unit grid, so two that touch share the coordinate they touch on; a transform
+    // turns about a grid point or shifts by grid steps; a letter is a path (text takes subpixel smoothing and shows coloured fringes); no
+    // deliberate line (a printed frame, a Line's fill) is thinner than 1.5 units; and a path with more than one subpath says even-odd, because
+    // under the default nonzero rule two subpaths wound opposite ways cancel where they overlap (the spade once lost the top of its stem that way).
+    const onGrid = (n: number) => Math.abs(n * 2 - Math.round(n * 2)) < 1e-9;
+    const numbers = (text: string) => (text.match(/-?\d*\.?\d+/g) ?? []).map(Number);
+    for (const g of GAME_LIST) {
+      const html = renderToString(createElement(GAMES[g.id].Art));
+      expect(html, g.id).not.toMatch(/<text[\s>]/);
+      let shapes = 0;
+      for (const { tag, attrs } of elements(html)) {
+        const what = `${g.id} <${tag} ${Object.entries(attrs).map(([k, v]) => `${k}="${v}"`).join(' ')}>`;
+        if (attrs.stroke) {
+          shapes++;
+          for (const key of ['x', 'y', 'width', 'height', 'cx', 'cy', 'r', 'rx', 'ry']) if (attrs[key] !== undefined) expect(onGrid(Number(attrs[key])), `${what}: ${key} on the half-unit grid`).toBe(true);
+          if (attrs.d) for (const n of numbers(attrs.d)) expect(onGrid(n), `${what}: ${n} in d on the half-unit grid`).toBe(true);
+          if (attrs.fill === 'none') expect(Number(attrs['stroke-width']), `${what}: no line thinner than 1.5`).toBeGreaterThanOrEqual(1.5);
+        }
+        for (const [, kind, args] of attrs.transform?.matchAll(/(rotate|translate)\(([^)]*)\)/g) ?? []) {
+          for (const n of kind === 'rotate' ? numbers(args).slice(1) : numbers(args)) expect(onGrid(n), `${what}: ${kind} on the half-unit grid`).toBe(true);
+        }
+        if (attrs.d && (attrs.d.match(/m/gi) ?? []).length > 1) expect(attrs['fill-rule'], `${what}: a second subpath needs even-odd`).toBe('evenodd');
+      }
+      expect(shapes, g.id).toBeGreaterThan(0);
+    }
+  });
+
+  it('leans Poker’s chip on the stack with its outline crossing every outline of the stack at 30 degrees or more, never grazing one', () => {
+    // The leaning chip is the one place two curved outlines of different shapes meet. Where two edges cross at a shallow angle, or run
+    // close without crossing, the fill between them tapers to a hairline (GameArt.tsx): the chip once met the top face's rim at 4
+    // degrees, a tangency that read clean only because the two dark edges lay on each other, and a nudge of a unit or two would have
+    // opened a lime sliver between them. So this measures, in the picture's units: the chip's outline (sampled every quarter degree,
+    // tilted as drawn) against the top face, each side's lower rim and the stack's two ends, the angle between the two tangents at every
+    // crossing, and the distance where they do not cross (two 2.2 edges and 1.5 of fill between is the least that stays clean).
+    const html = renderToString(createElement(GAMES.poker.Art));
+    const stroked = elements(html).filter((e) => e.attrs.stroke);
+    const num = (v: string | undefined) => Number(v);
+    // A side of the stack: `M<left> <top>a<rx> <ry> 0 0 0 <2rx> 0v<depth>...`, the front half of its rim at `top` and again `depth` lower.
+    const sides = stroked.map((e) => e.attrs.d?.match(/^M([\d.]+) ([\d.]+)a([\d.]+) ([\d.]+) 0 0 0 ([\d.]+) 0v([\d.]+)a/)).filter((m): m is RegExpMatchArray => m != null).map((m) => ({ left: num(m[1]), top: num(m[2]), rx: num(m[3]), ry: num(m[4]), depth: num(m[6]) }));
+    expect(sides.length).toBeGreaterThanOrEqual(2);
+    const [left, rx, ry] = [sides[0].left, sides[0].rx, sides[0].ry];
+    for (const side of sides) expect([side.left, side.rx, side.ry]).toEqual([left, rx, ry]);
+    const [top, chip] = stroked.filter((e) => e.tag === 'ellipse');
+    expect([num(top.attrs.cx), num(top.attrs.cy), num(top.attrs.rx), num(top.attrs.ry)]).toEqual([left + rx, Math.min(...sides.map((s) => s.top)), rx, ry]);
+    const tilt = html.match(/<g transform="rotate\((-?[\d.]+) (-?[\d.]+) (-?[\d.]+)\)"><ellipse /);
+    expect(tilt, 'the chip is the ellipse in the tilted group').toBeTruthy();
+    const [angle, px, py] = tilt!.slice(1).map(Number);
+    expect([px, py]).toEqual([num(chip.attrs.cx), num(chip.attrs.cy)]);
+    const outline: [number, number][] = [];
+    for (let a = 0; a < 360; a += 0.25) {
+      const [x, y] = [num(chip.attrs.rx) * Math.cos((a * Math.PI) / 180), num(chip.attrs.ry) * Math.sin((a * Math.PI) / 180)];
+      const [c, s] = [Math.cos((angle * Math.PI) / 180), Math.sin((angle * Math.PI) / 180)];
+      outline.push([px + x * c - y * s, py + x * s + y * c]);
+    }
+    const at = (i: number) => outline[(i + outline.length) % outline.length];
+    const tangent = (i: number): [number, number] => [at(i + 1)[0] - at(i - 1)[0], at(i + 1)[1] - at(i - 1)[1]];
+    const degrees = (sin: number) => (Math.asin(Math.min(1, sin)) * 180) / Math.PI;
+    /** How the chip's outline meets one outline of the stack: `f` is signed, zero on it; `grad` its gradient (the outline's normal); `on` says which samples count. */
+    const meets = (f: (p: [number, number]) => number, grad: (p: [number, number]) => [number, number], on: (p: [number, number]) => boolean) => {
+      const angles: number[] = [];
+      let closest = Infinity;
+      for (let i = 0; i < outline.length; i++) {
+        const [p, q] = [at(i), at(i + 1)];
+        if (!on(p) && !on(q)) continue;
+        const g = grad(p);
+        const gl = Math.hypot(...g);
+        closest = Math.min(closest, Math.abs(f(p)) / gl);
+        if (f(p) < 0 !== f(q) < 0) {
+          const t = tangent(i);
+          angles.push(degrees(Math.abs(t[0] * g[0] + t[1] * g[1]) / (Math.hypot(...t) * gl)));
+        }
+      }
+      return { angles, closest };
+    };
+    const ellipse = (cx: number, cy: number, lowerHalf: boolean) =>
+      meets(([x, y]) => ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2 - 1, ([x, y]) => [(2 * (x - cx)) / rx ** 2, (2 * (y - cy)) / ry ** 2], ([, y]) => !lowerHalf || y >= cy);
+    const bottom = Math.max(...sides.map((s) => s.top + s.depth));
+    const end = (x: number) => meets(([x0]) => x0 - x, () => [1, 0], ([, y]) => y >= num(top.attrs.cy) && y <= bottom);
+    const outlines: Record<string, ReturnType<typeof meets>> = { 'top face': ellipse(left + rx, num(top.attrs.cy), false), 'right end': end(left + 2 * rx), 'left end': end(left) };
+    for (const rim of new Set(sides.map((s) => s.top + s.depth))) outlines[`rim at ${rim}`] = ellipse(left + rx, rim, true);
+    for (const [name, { angles, closest }] of Object.entries(outlines)) {
+      for (const a of angles) expect(a, `the chip crosses the ${name} at ${a.toFixed(1)} degrees`).toBeGreaterThanOrEqual(30);
+      if (!angles.length) expect(closest, `the chip clears the ${name}`).toBeGreaterThanOrEqual(2 * EDGE_WIDTH + 1.5);
+    }
+    // And it does lean on the stack: over the top face's rim and the stack's right end, well inside the picture.
+    expect(outlines['top face'].angles.length).toBeGreaterThanOrEqual(2);
+    expect(outlines['right end'].angles).toHaveLength(1);
+    for (const [x, y] of outline) {
+      expect(x + EDGE_WIDTH / 2).toBeLessThanOrEqual(64);
+      expect(y + EDGE_WIDTH / 2).toBeLessThanOrEqual(46);
+      expect(y - EDGE_WIDTH / 2).toBeGreaterThanOrEqual(0);
+    }
   });
 
   it('shows on its lobby tile: every live game for the host, the one current game for a guest', () => {

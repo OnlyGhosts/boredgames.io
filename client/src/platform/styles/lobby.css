@@ -375,13 +375,14 @@ button.game-tile:active {
 
 /*
  * Selected: the whole panel fills lilac, the picture and the name in bold ink on it; the fill alone
- * marks it, no badge and no line. On the lilac the picture’s edges (and the sticker shadow drawn
- * in them) take the deeper cuts of the same two hues (tokens.css), so a lilac shape still stands
- * off the tile.
+ * marks it, no badge and no line. On the lilac the picture’s edges take the deeper cuts of the same
+ * two hues and its lilac fill a paler one (tokens.css), so a lilac shape is still a shape on the
+ * tile, filled and rimmed, not an outline.
  */
 .game-tile.is-selected {
   --game-edge-lime: var(--game-edge-lime-picked);
   --game-edge-lilac: var(--game-edge-lilac-picked);
+  --game-lilac: var(--game-lilac-picked);
   border-color: var(--color-secondary);
   background: var(--color-secondary);
   color: var(--color-secondary-contrast);

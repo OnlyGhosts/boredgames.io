@@ -76,35 +76,9 @@
   display: block;
 }
 
-/*
- * A game’s picture (GameArt): the drawing once more underneath, offset right and down, is its hard
- * shadow: a flat sticker with every shape filled in its own edge colour, deep lime or deep lilac (a
- * white shape in the one it borrows), never ink and never grey. A line’s fill turns to its edge
- * colour too. The details (filled, with no edge: ink, a nib, a card back’s mark) are no part of the
- * silhouette and stay out of it.
- */
+/* A game’s picture (GameArt): the svg alone, no shadow and nothing painted behind it; its size comes from lobby.css. */
 .game-art {
   display: block;
-}
-
-.game-art__shadow [stroke='var(--game-edge-lime)']:not([fill='none']) {
-  fill: var(--game-edge-lime);
-}
-
-.game-art__shadow [stroke='var(--game-edge-lilac)']:not([fill='none']) {
-  fill: var(--game-edge-lilac);
-}
-
-.game-art__shadow [stroke='var(--color-primary)'] {
-  stroke: var(--game-edge-lime);
-}
-
-.game-art__shadow [stroke='var(--color-secondary)'] {
-  stroke: var(--game-edge-lilac);
-}
-
-.game-art__shadow [fill]:not([fill='none']):not([stroke]) {
-  display: none;
 }
 
 /* ---------- Buttons ---------- */

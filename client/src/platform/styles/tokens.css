@@ -113,6 +113,11 @@
   /* The off-white in a game's picture (the mascots' palette: lime, lilac, this paper and ink), the same in both themes. */
   --game-paper: #f7f5ec;
   /*
+   * The lilac a picture's lilac shapes are filled with: the brand lilac, except on the picked tile
+   * (see --game-lilac-picked). Lime needs no cut of its own, because no tile is lime.
+   */
+  --game-lilac: #a699d5;
+  /*
    * A picture’s edges, the same in both themes, and the only two: deep lime and deep lilac, never
    * grey and never ink. A lime or lilac shape is rimmed in the deep shade of its own colour; a white
    * (paper) shape borrows the deep lime or deep lilac of the shape it sits beside or belongs with.
@@ -126,8 +131,8 @@
   --game-edge-lilac: #4e3d94;
   /*
    * The same two hues cut deeper for the picked tile, which is lilac: lobby.css swaps them in there
-   * and only there, so every edge and sticker shadow still parts its shape from the tile (3.30:1
-   * and 4.38:1 on #a699d5), still lime and still purple, never black.
+   * and only there, so every edge still parts its shape from the tile (3.30:1 and 4.38:1 on
+   * #a699d5), still lime and still purple, never black.
    */
   --game-edge-lime-picked: #405311;
   --game-edge-lilac-picked: #3d2f74;
@@ -139,6 +144,13 @@
   --game-scribble-edge: #7a6cb4;
   --game-quipgame-edge: #a57a20;
 
+  /*
+   * The lilac fill on the picked tile, swapped in by lobby.css with the edges: a lilac shape filled
+   * in the tile's own lilac would be an outline there. A paler cut of the same hue, L* 81 against
+   * the tile's 66 (delta E 18, 1.56:1), still a lilac well short of the paper (delta E 31), and the
+   * picked lilac edge rims it 6.85:1.
+   */
+  --game-lilac-picked: #cdc4ee;
   /*
    * Each accent as text (the How to play card's key facts) and as a soft wash (its hero): on dark
    * the accent itself or a lighter cut, every text cut AA (4.5:1) on the panel and the raised surface.

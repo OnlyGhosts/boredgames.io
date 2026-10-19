@@ -671,13 +671,15 @@ describe('wordmark and mascots', () => {
     expect(named).toBeGreaterThanOrEqual(5);
     expect(ruleOf(lobby, '.game-tile.is-selected')).toContain('background: var(--color-secondary)');
     expect(ruleOf(lobby, '.game-tile.is-selected')).toContain('color: var(--color-secondary-contrast)');
-    // On the picked lilac tile, and only there, the picture’s two edges (and the sticker shadow drawn in them) take their deeper cuts.
+    // On the picked lilac tile, and only there, the picture’s two edges take their deeper cuts and its lilac fill a paler one, so a lilac shape is still a shape there.
     expect(ruleOf(lobby, '.game-tile.is-selected')).toContain('--game-edge-lime: var(--game-edge-lime-picked);');
     expect(ruleOf(lobby, '.game-tile.is-selected')).toContain('--game-edge-lilac: var(--game-edge-lilac-picked);');
+    expect(ruleOf(lobby, '.game-tile.is-selected')).toContain('--game-lilac: var(--game-lilac-picked);');
+    expect(lobby.match(/--game-lilac[a-z-]*:/g)).toEqual(['--game-lilac:']);
     expect(lobby.match(/--game-edge-[a-z-]+:/g)).toEqual(['--game-edge-lime:', '--game-edge-lilac:']);
     const others = sheets.filter((f) => !/(?:^|\/)(?:tokens|lobby)\.css$/.test(f));
     expect(others.length).toBeGreaterThan(5);
-    for (const sheet of others) expect(readFileSync(`${src}/${sheet}`, 'utf8'), sheet).not.toMatch(/--game-edge-[a-z-]+:/);
+    for (const sheet of others) expect(readFileSync(`${src}/${sheet}`, 'utf8'), sheet).not.toMatch(/--game-(?:edge-[a-z-]+|lilac[a-z-]*):/);
     expect(tokens.match(/--game-edge-(?:lime|lilac):/g)).toHaveLength(2);
     // Nothing sits positioned on a tile any more (the check badge is gone), so the tile is no positioning context.
     expect(ruleOf(lobby, '.game-tile')).not.toContain('position');
