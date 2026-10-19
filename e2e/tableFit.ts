@@ -81,7 +81,11 @@ export async function cornersClear(page: Page, label: string, { dealer = false }
           for (const w of words) if (meet(corner, w.getBoundingClientRect())) covered.push(`${name} under "${(w as HTMLElement).innerText?.replace(/\s+/g, ' ') ?? w.className}"`);
           const fan = Array.from(card.closest('.tbl-fan')?.querySelectorAll('.playing-card') ?? []);
           for (const later of fan.slice(fan.indexOf(card) + 1)) if (meet(corner, later.getBoundingClientRect())) covered.push(`${name} under a later card`);
-          if (corner.left < box.left - 0.5 || corner.right > box.right + 0.5 || corner.top < box.top - 0.5 || corner.bottom > box.bottom + 0.5) covered.push(`${name} off its place`);
+          // A card in a row that scrolls sideways (Blackjack's hands) is in its place anywhere the row scrolls to.
+          const row = card.closest<HTMLElement>('.scroll-fade--x');
+          const rowBox = row && scope.contains(row) ? row.getBoundingClientRect() : null;
+          const reach = row && rowBox ? { left: rowBox.left - row.scrollLeft, right: rowBox.left - row.scrollLeft + row.scrollWidth, top: box.top, bottom: box.bottom } : box;
+          if (corner.left < reach.left - 0.5 || corner.right > reach.right + 0.5 || corner.top < reach.top - 0.5 || corner.bottom > reach.bottom + 0.5) covered.push(`${name} off its place`);
         }
       }
       return covered;

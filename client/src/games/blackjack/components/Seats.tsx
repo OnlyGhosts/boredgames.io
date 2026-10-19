@@ -15,7 +15,7 @@ interface Props {
   room: BlackjackRoomState;
   view: BlackjackView;
   ids: string[];
-  /** My own hands open in the same sheet from my row's "+N". */
+  /** Me: the sheet would title my own hands "Your hands" (nothing opens them there now: my row of hands scrolls on the stage). */
   meId: string;
   /** Whose hands are on my stage: that seat leaves its cards to the stage. */
   staged: string | null;

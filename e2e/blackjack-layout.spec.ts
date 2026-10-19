@@ -16,9 +16,10 @@ import { tableBots, type TableBot } from './tableBots';
  * at the bottom never move or resize through the betting, the deal, my turn, another player's turn,
  * the dealer's play and the settled table. Then a harness (e2e/harness: the real components and styles, built by
  * Vite, fed rigged snapshots) seats me with 2 to 16 split hands at every phone size and on a
- * desktop: nothing scrolls, every hand (full or folded into a chip) is wholly inside my place, my
- * hands keep the stage on another player's turn, and a watcher sees that player's many hands fit
- * the stage. On another player's turn on the real table my hand stays at the bottom centre at full
+ * desktop: every hand is its cards at the size one hand gets there, side by side, and past what
+ * fits the row of hands scrolls sideways inside its box (its cut ends fading, the hand in play
+ * brought into view as play moves on) while the page never scrolls; my hands keep the stage on
+ * another player's turn, and a watcher sees that player's many hands the same way on the stage. On another player's turn on the real table my hand stays at the bottom centre at full
  * size and theirs shows once, in their seat. The cards are really shuffled on the real table, so a
  * natural or the dealer's blackjack just means another round.
  */
@@ -401,7 +402,7 @@ test.describe('many hands (the harness)', () => {
     harnessDir = null;
   });
 
-  /** Every hand and chip (and each card of a full hand) lies wholly inside `container`, give or take `slack` px. */
+  /** Every element `items` finds in `container` lies wholly inside it (a row of hands: anywhere it scrolls to), give or take `slack` px. */
   async function allInside(page: Page, container: string, items: string, slack = 1): Promise<{ outside: number; count: number }> {
     return page.evaluate(
       ([c, q, d]) => {
@@ -410,7 +411,12 @@ test.describe('many hands (the harness)', () => {
         const els = Array.from(document.querySelectorAll(`[data-testid="${c}"] :is(${q})`)).filter((el) => el.getBoundingClientRect().width > 0);
         const outside = els.filter((el) => {
           const r = el.getBoundingClientRect();
-          return r.left < box.left - d || r.right > box.right + d || r.top < box.top - d || r.bottom > box.bottom + d;
+          // In a row of hands that scrolls sideways, inside is anywhere the row scrolls to.
+          const row = el.closest<HTMLElement>('.scroll-fade--x');
+          const rowBox = row ? row.getBoundingClientRect() : null;
+          const left = row && rowBox ? rowBox.left - row.scrollLeft : box.left;
+          const right = row && rowBox ? left + row.scrollWidth : box.right;
+          return r.left < left - d || r.right > right + d || r.top < box.top - d || r.bottom > box.bottom + d;
         }).length;
         return { outside, count: els.length };
       },
@@ -453,84 +459,119 @@ test.describe('many hands (the harness)', () => {
     };
   }
 
-  const MINE = '[data-testid="my-hand"], [data-testid="my-chip"], [data-testid="my-chip-more"], [data-testid="my-hand"] [data-testid="card"], [data-testid="hand-total"]';
-
   /**
-   * Every chip in `container` (the "+N" too) keeps a readable width (34px mine, 28px another
-   * player's on the stage) and its whole total inside its pill, mine at the big totals' size (at least 1.4
-   * times the old 0.68rem pill), and how many hands the chips stand for.
+   * A row of hands (`row`, its test id) as it shows: how many hands and cards, the cards' widths
+   * (one size for every card), how far it scrolls each way, the fade it shows at each end and which
+   * it should (an end with hands past it), every hand within the row's height, and the hand in play
+   * (its index, and how far its slot sits inside the row's visible box: never under a fading end).
    */
-  async function chipsRead(page: Page, container: string, chip: string): Promise<{ narrow: number; clipped: number; small: number; count: number; hands: number }> {
-    return page.evaluate(
-      ([c, id]) => {
-        const chips = Array.from(document.querySelectorAll<HTMLElement>(`[data-testid="${c}"] :is([data-testid="${id}"], [data-testid="${id}-more"])`));
-        const min = id === 'my-chip' ? 34 : 28;
-        const font = id === 'my-chip' ? 15.2 : 12;
-        const totals = chips.map((el) => el.querySelector<HTMLElement>('.bj-chip__total')).filter((t): t is HTMLElement => t !== null);
-        return {
-          narrow: chips.filter((el) => el.getBoundingClientRect().width < min - 0.5).length,
-          clipped: totals.filter((t) => t.scrollWidth > t.clientWidth + 0.5).length,
-          small: totals.filter((t) => parseFloat(getComputedStyle(t).fontSize) < font).length,
-          count: chips.length,
-          // The hands the chips stand for: one each, and the "+N" for N.
-          hands: chips.reduce((sum, el) => sum + Number(el.dataset.count ?? 1), 0),
-        };
-      },
-      [container, chip] as const,
-    );
+  async function rowShown(page: Page, row: string) {
+    return page.evaluate((id) => {
+      const el = document.querySelector<HTMLElement>(`[data-testid="${id}"]`);
+      if (!el) return null;
+      const box = el.getBoundingClientRect();
+      const hands = Array.from(el.querySelectorAll<HTMLElement>('.bj-slot > .bj-hand'));
+      const cards = Array.from(el.querySelectorAll<HTMLElement>('.playing-card')).map((c) => Math.round(c.getBoundingClientRect().width * 2) / 2);
+      const left = el.scrollLeft > 1;
+      const right = el.scrollLeft + el.clientWidth < el.scrollWidth - 1;
+      const lit = el.querySelector<HTMLElement>('.bj-hand[data-active="true"]');
+      const slot = lit?.closest('.bj-slot')?.getBoundingClientRect();
+      const fade = el.dataset.fade ?? '';
+      return {
+        hands: hands.length,
+        cards: cards.length,
+        sizes: [...new Set(cards)],
+        sideways: el.scrollWidth > el.clientWidth + 1,
+        down: el.scrollHeight > el.clientHeight + 1,
+        fade,
+        due: [left ? 'left' : '', right ? 'right' : ''].filter(Boolean).join(' '),
+        masked: getComputedStyle(el).maskImage !== 'none',
+        taller: hands.filter((h) => h.getBoundingClientRect().top < box.top - 1 || h.getBoundingClientRect().bottom > box.bottom + 1).length,
+        active: lit ? Number(lit.dataset.index) : -1,
+        // The hand in play's slot inside the row's visible box, clear of a fading end (28px).
+        inView: slot ? slot.left >= box.left + (fade.includes('left') ? 27 : -1) && slot.right <= box.right - (fade.includes('right') ? 27 : -1) : null,
+      };
+    }, row);
   }
 
-  for (const size of [{ width: 320, height: 568 }, { width: 360, height: 740 }, { width: 390, height: 844 }, { width: 1280, height: 800 }, { width: 1440, height: 900 }]) {
-    test(`${size.width}x${size.height}: any number of my hands fits my row, nothing scrolls, the hand in play full size`, async ({ browser }) => {
+  for (const size of [{ width: 320, height: 568 }, { width: 390, height: 844 }, { width: 428, height: 753 }, { width: 1440, height: 900 }]) {
+    test(`${size.width}x${size.height}: every hand of mine is its cards at one hand's size, the row scrolling sideways past what fits`, async ({ browser }) => {
       const pages = harnessPages(browser, size);
       const errors = pages.errors;
       try {
         let ref: { dealer: Box; mine: Box } | null = null;
+        // The card a hand on its own gets here: no number of hands changes it.
+        let card = 0;
         let page: Page;
-        for (const hands of [1, 2, 4, 6, 8, 12, 16]) {
+        for (const hands of [1, 2, 4, 6, 8, 16]) {
           for (const phase of ['mine', 'results', 'other', 'over']) {
             const active = Math.floor(hands / 2);
-            page = await pages.go(`phase=${phase}&others=5&hands=${hands}&active=${active}&cards=3`);
+            page = await pages.go(`phase=${phase}&others=5&hands=${hands}&active=${active}&cards=3&allCards=1`);
             const label = `${hands} hands, ${phase}`;
-            await expect.poll(async () => Number((await page.getByTestId('my-hands-row').getAttribute('data-full'))) + Number(await page.getByTestId('my-hands-row').getAttribute('data-chips')), { message: label }).toBe(hands);
+            await expect(page.getByTestId('my-hand'), label).toHaveCount(hands);
+            const shown = await rowShown(page, 'my-hands-row');
+            if (!shown) throw new Error(`${label}: no row of hands`);
+            if (card === 0) card = shown.sizes[0] ?? 0;
+            // Every hand as its three cards, every card the one size, the row never taller than its box.
+            expect(shown, label).toMatchObject({ hands, cards: hands * 3, sizes: [card], down: false, taller: 0 });
+            expect(card, label).toBeGreaterThanOrEqual(30);
+            // Past what fits the row scrolls sideways and fades the end(s) with more hands; the page never scrolls.
             await nothingScrolls(page, label);
-            await expect.poll(() => allInside(page, 'my-area', MINE), { message: `${label}: every hand inside my row` }).toMatchObject({ outside: 0 });
-            // A folded hand reads: a readable chip, its whole total in the big totals' size; past what fits, a "+N".
-            const folded = Number(await page.getByTestId('my-hands-row').getAttribute('data-chips'));
-            await expect.poll(() => chipsRead(page, 'my-area', 'my-chip'), { message: `${label}: my chips read` }).toMatchObject({ narrow: 0, clipped: 0, small: 0, hands: folded });
-            // The rank and suit of every card in my row and the dealer's read whole.
+            await expect
+              .poll(async () => {
+                const r = await rowShown(page, 'my-hands-row');
+                return r && { fade: r.fade === r.due, masked: r.masked === (r.due !== '') };
+              }, { message: `${label}: the ends with more hands past them fade` })
+              .toEqual({ fade: true, masked: true });
+            if (hands <= 2) expect(shown.sideways, `${label}: two hands share the row`).toBe(false);
+            if (hands >= 8) expect(shown.sideways, `${label}: eight hands scroll`).toBe(true);
+            // The rank and suit of every card in my row and the dealer's read whole, wherever my row scrolls to.
             await cornersClear(page, label, { dealer: true });
             // My row and the dealer's never move, however many hands.
-            const now = await places(page);
-            if (ref === null) ref = now;
-            expectSame(`${label}: the dealer’s hand`, ref.dealer, now.dealer);
-            expectSame(`${label}: the stage`, ref.mine, now.mine);
+            const fixed = await places(page);
+            if (ref === null) ref = fixed;
+            expectSame(`${label}: the dealer’s hand`, ref.dealer, fixed.dealer);
+            expectSame(`${label}: the stage`, ref.mine, fixed.mine);
             if (phase === 'mine') {
-              // The hand in play is always full size and lit.
+              // The hand in play is lit and in view, clear of the fades.
               const lit = page.locator('[data-testid="my-hand"][data-active="true"]');
               await expect(lit, label).toHaveCount(1);
               await expect(lit, label).toHaveAttribute('data-index', String(active));
-              await expect(lit.getByTestId('card'), label).toHaveCount(3);
+              await expect.poll(async () => (await rowShown(page, 'my-hands-row'))?.inView, { message: `${label}: the hand in play in view` }).toBe(true);
             }
+          }
+        }
+        // My turn moving through eight hands, then my hands splitting one at a time up to eight: each hand in play comes into view.
+        for (const phase of ['walk', 'splits']) {
+          page = await pages.go(`phase=${phase}&others=5&hands=8&cards=3&allCards=1&stepMs=1500`);
+          const steps = phase === 'walk' ? 8 : 7;
+          for (let step = 0; step < steps; step += 1) {
+            const label = `${phase}, step ${step + 1}`;
+            await expect(page.locator('html'), label).toHaveAttribute('data-harness-step', String(step), { timeout: 5000 });
+            const want = phase === 'walk' ? step : step + 1;
+            await expect.poll(async () => { const r = await rowShown(page, 'my-hands-row'); return r && { active: r.active, inView: r.inView, sizes: r.sizes }; }, { message: `${label}: the hand in play in view`, timeout: 1300 }).toEqual({ active: want, inView: true, sizes: [card] });
+            await nothingScrolls(page, label);
           }
         }
         // Another player's many hands: dealt in, mine keep the stage and theirs stay in their seat.
         page = await pages.go('phase=other&others=5&otherHands=7&active=0&hands=2');
         await expect(page.getByTestId('hand-stage').getByTestId('my-hand')).toHaveCount(2);
         await expect(page.getByTestId('stage-hand')).toHaveCount(0);
-        // A watcher sees them fit the stage: the hand in play full size and named, the line under the banner says which, the rest as chips.
-        for (const [others, otherHands] of [[5, 2], [5, 7], [5, 16], [23, 9], [49, 16]]) {
+        // A watcher sees them on the stage the same way: every hand its cards at one size, the hand in play named and in view.
+        for (const [others, otherHands] of [[5, 2], [5, 6], [5, 16], [23, 9], [49, 16]]) {
           page = await pages.go(`phase=other&others=${others}&otherHands=${otherHands}&active=0&watch=1`);
           const label = `another player’s ${otherHands} hands at a table of ${others + 1}, watching`;
           await nothingScrolls(page, label);
           await expect(page.getByTestId('hand-stage')).toHaveAttribute('data-kind', 'turn');
+          await expect(page.getByTestId('stage-hand')).toHaveCount(otherHands);
+          const stage = await rowShown(page, 'stage-hands-row');
+          expect(stage, label).toMatchObject({ hands: otherHands, cards: otherHands * 2, down: false, taller: 0, active: 0, inView: true });
+          expect(stage?.sizes, `${label}: one card size`).toHaveLength(1);
+          expect(stage?.fade, `${label}: the ends that fade`).toBe(stage?.due);
           await expect(page.getByTestId('stage-owner')).toHaveCount(1);
           await expect.poll(() => allInside(page, 'hand-stage', '[data-testid="stage-owner"]'), { message: `${label}: the name by the hand` }).toEqual({ outside: 0, count: 1 });
           await expect(page.getByTestId('table-turn')).toContainText(`hand 1 of ${otherHands}`);
-          await expect.poll(() => allInside(page, 'hand-stage', '[data-testid="stage-hand"], [data-testid="stage-chip"], [data-testid="stage-chip-more"]'), { message: label }).toMatchObject({ outside: 0 });
-          // Every hand is there: the one in play, a chip each, or in the "+N".
-          const full = await page.getByTestId('stage-hand').count();
-          await expect.poll(() => chipsRead(page, 'hand-stage', 'stage-chip'), { message: `${label}: the chips read` }).toMatchObject({ narrow: 0, clipped: 0, small: 0, hands: otherHands - full });
+          await cornersClear(page, label, { dealer: true });
           // The line under the banner (whose turn, which hand, who is next) always shows in full.
           const line = await page.getByTestId('table-turn').evaluate((el) => ({ sw: el.scrollWidth, cw: el.clientWidth }));
           expect(line.cw, `${label}: the line under the banner`).toBeGreaterThanOrEqual(line.sw);
@@ -547,14 +588,14 @@ test.describe('many hands (the harness)', () => {
       const ctx = await browser.newContext({ viewport: size });
       const page = await ctx.newPage();
       try {
-        // My bet goes down while the last round's hands are still on the table: it never covers a card or a chip, and stays on the stage.
+        // My bet goes down while the last round's hands are still on the table: it never covers a card, and stays on the stage.
         for (const hands of [1, 2, 3, 9]) {
           await open(page, `phase=results&others=5&hands=${hands}&myBet=10`);
           await expect(page.getByTestId('my-bet')).toHaveAttribute('data-bet', '10');
           const overlaps = await page.evaluate(() => {
             const bet = document.querySelector('[data-testid="my-bet"]')?.getBoundingClientRect();
             if (!bet) return -1;
-            return Array.from(document.querySelectorAll('[data-testid="my-area"] :is([data-testid="card"], [data-testid="my-chip"], [data-testid="my-chip-more"], [data-testid="my-slot"], [data-testid="hand-total"])')).filter((el) => {
+            return Array.from(document.querySelectorAll('[data-testid="my-area"] :is([data-testid="card"], [data-testid="my-slot"], [data-testid="hand-total"])')).filter((el) => {
               const r = el.getBoundingClientRect();
               return r.left < bet.right && r.right > bet.left && r.top < bet.bottom && r.bottom > bet.top;
             }).length;
@@ -583,16 +624,6 @@ test.describe('many hands (the harness)', () => {
             expect(f.below, `${query}: the outcome word no lower than the pill`).toBeLessThanOrEqual(1);
             expect(f.grounded, `${query}: the outcome word on its own ground`).toBe(true);
           }
-        }
-        // The "+N" past what my row holds opens every one of my hands (a phone's row holds fifteen or so chips; a desktop's sixteen hands and more).
-        const many = size.width < 760 ? 30 : 16;
-        await open(page, `phase=mine&others=5&hands=${many}&active=8&cards=3`);
-        const more = page.getByTestId('my-chip-more');
-        if (size.width < 760) {
-          await more.click();
-          await expect(page.getByTestId('seat-detail').getByTestId('detail-hand')).toHaveCount(many);
-        } else {
-          await expect(more).toHaveCount(0);
         }
         // A soft total ("10/20") stays inside its pill.
         await open(page, 'phase=mine&others=5&hands=1&active=0&soft=1');
@@ -626,7 +657,7 @@ test.describe('many hands (the harness)', () => {
   }
 
   // Split hands side by side on a phone: my stake by each total (its chips and the figure) keeps to the width the word Bet gave it,
-  // so a split never folds a hand into a chip that the old "Bet 1,200" left full (two hands at 320px folded one when the pill grew).
+  // so two hands at 320px and three at 414px share the row without scrolling it (the old "Bet 1,200" once pushed one out).
   for (const [size, hands, stakes] of [
     [{ width: 320, height: 568 }, 2, ['stake=10&start=1000', 'stake=200&start=1000', 'stake=990&start=1000', 'stake=600&doubled=1&start=1000', 'stake=740&doubled=1&start=1000', 'stake=4990&start=1000', 'stake=1200&start=10000', 'stake=2900&start=10000']],
     [{ width: 414, height: 896 }, 3, ['stake=200&start=1000', 'stake=990&start=1000', 'stake=200&doubled=1&start=10000']],
@@ -638,7 +669,7 @@ test.describe('many hands (the harness)', () => {
         for (const stake of stakes) {
           const query = `phase=mine&others=3&hands=${hands}&${stake}`;
           await open(page, query);
-          await expect.poll(() => page.getByTestId('my-hands-row').getAttribute('data-full'), { message: `${query}: every hand full size` }).toBe(String(hands));
+          await expect.poll(async () => (await rowShown(page, 'my-hands-row'))?.sideways, { message: `${query}: every hand in view, the row not scrolling` }).toBe(false);
           await expect(page.getByTestId('hand-bet')).toHaveCount(hands);
           await nothingScrolls(page, query);
           await expect.poll(() => allInside(page, 'hand-stage', '.tbl-hand__head'), { message: `${query}: each stake and total on the stage` }).toMatchObject({ outside: 0, count: hands });
@@ -859,7 +890,7 @@ test.describe('many hands (the harness)', () => {
         page = await pages.go('phase=mine&others=3&hands=1&stake=200&start=1000');
         await expect.poll(() => page.locator('[data-testid="hand-bet"] .tbl-stake__chip:visible').count(), { message: 'three chips by a hand on its own' }).toBe(3);
         page = await pages.go('phase=mine&others=3&hands=2&stake=1250&start=1000');
-        await expect.poll(() => page.getByTestId('my-hands-row').getAttribute('data-full')).toBe('2');
+        await expect.poll(async () => (await rowShown(page, 'my-hands-row'))?.sideways).toBe(false);
         await expect.poll(() => shownText(page, '[data-testid="hand-bet"]')).toEqual(phone ? ['1.3k', '1.3k'] : ['1,250', '1,250']);
         // A 100,000 table: "12,000" by my hand and by my empty places (its figure, after three chips and a plus), in every phase my stake
         // is out, as the seats' pills read beside it.
@@ -1011,7 +1042,7 @@ test.describe('many hands (the harness)', () => {
           const query = `phase=${phase}&others=${others}&hands=2&cards=2&stake=12000&start=100000&bet=12000&chips=88000&hand=10H,6H&stepMs=300`;
           const page = await pages.go(query);
           if (phase === 'deal') await expect(page.locator('html')).toHaveAttribute('data-harness-step', '1');
-          await expect.poll(() => page.getByTestId('my-hands-row').getAttribute('data-full'), { message: query }).toBe('2');
+          await expect.poll(async () => (await rowShown(page, 'my-hands-row'))?.sideways, { message: `${query}: both hands in view` }).toBe(false);
           await expect.poll(() => cardWidth(page), { message: `${query}: the least card` }).toBe(30);
           await expect.poll(() => allInside(page, 'hand-stage', '.tbl-hand__head > *, .tbl-hand__head .tbl-stake', 0.5), { message: `${query}: the words over each hand on the stage` }).toMatchObject({ outside: 0 });
           await cornersClear(page, query);
@@ -1035,7 +1066,7 @@ test.describe('many hands (the harness)', () => {
             for (const phase of ['mine', 'results']) {
               const query = `phase=${phase}&others=1&hands=2&cards=${cards}&${layout}&${money}`;
               const page = await pages.go(query);
-              await expect.poll(() => page.getByTestId('my-hands-row').getAttribute('data-full'), { message: query }).toBe('2');
+              await expect(page.getByTestId('my-hand'), query).toHaveCount(2);
               await expect.poll(() => allInside(page, 'hand-stage', '.tbl-hand__head > *, .tbl-hand__head .tbl-stake', 0.5), { message: `${query}: the words over each hand on the stage` }).toMatchObject({ outside: 0 });
               await cornersClear(page, query);
             }

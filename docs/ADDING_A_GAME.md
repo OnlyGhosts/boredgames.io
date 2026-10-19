@@ -301,11 +301,16 @@ next round is dealt. My own hand is on the stage whenever I am dealt
 in, in every phase and on every turn, my stake by its total (a pill of chips, read as "Bet 10"); the player on turn plays in
 their own seat (lit, and nowhere else). Not dealt in (watching, sitting out, out of chips), the
 stage shows the hand in play with its owner's name by its total, and that seat leaves its cards to
-the stage (`stageOwner` in each game's `lib/focus.ts`). [`lib/hands.ts`](../client/src/games/blackjack/lib/hands.ts)
-decides when Blackjack's split hands fold into chips, the hand in play staying full size, every
-full hand at least as wide as the words over its corner (measured as the row lays out), and,
-never narrower than a two-digit total, past what fits into one "+N" that opens the seat's sheet
-with every hand. Poker's stage holds my two cards whenever I hold some (the hand in play when I am
+the stage (`stageOwner` in each game's `lib/focus.ts`). Blackjack's split hands (`HandRow`, with
+[`lib/hands.ts`](../client/src/games/blackjack/lib/hands.ts)) are always their cards, each with its
+stake and total, at the size a hand on its own gets on the stage: a split never shrinks them, and
+a hand never turns into a number. While they fit side by side each hand has an equal share of
+the row, never narrower than its own fan or the words over its corner (measured as the row lays
+out); past that the row scrolls sideways inside its box (a hand to a snap, by swipe, wheel or
+trackpad, no scrollbar), its cut ends fading where more hands wait (`.scroll-fade--x`), and it
+brings the hand in play to its middle as play moves on or a split adds a hand (smoothly, at once
+for less motion); with no hand in play it stays where the player left it. The stage never moves
+or resizes and the page never scrolls. Poker's stage holds my two cards whenever I hold some (the hand in play when I am
 not dealt in), with what they make in the pill and, left of it, the dealer button, my bet and where
 I stand ("All in", "Folded"), or how the hand ended ("Win +300"); those words sit in the hand's own
 box, so on a narrow phone the cards move right just as far as the words need to stay on the stage. The shared pieces: `HandFan` / `OutcomeFlag` (a hand as a stepped fan, each card a
@@ -2209,7 +2214,7 @@ themes are checked side by side at every size: anything you colour must read in 
 | Overlays | `.overlay__card`, `.overlay__card--wide`, `.overlay__kicker`, `.overlay__title`, `.overlay__hint`, `.overlay__footer` (the results use these; a game's own in-screen overlay can too); a round result adds `.result-card`, `.result-kicker`, `.result-reveal*`, `.result-points*`, `.result-next` from `results.css` |
 | Player list | `.player-list`, `.player`, `.player--me`, `.player--offline`, `.player--guessed`, `.player__avatar`, `.player__badge`, `.player__badge--drawer`, `.player__badge--guessed`, `.player__rank`, `.player__name`, `.player__meta`, `.player__score`, `.player__turn-points` |
 | Timer | `.timer`, `.timer--lg`, `.timer--md`, `.timer--urgent` (the last 5 seconds), `.timer--long` (m:ss), `.timer__track`, `.timer__arc` |
-| Sheets and toasts | `.sheet*`, `.menu-sheet*` (a phone options sheet: `.menu-sheet__row`, `.menu-sheet__label`, `.menu-sheet__leave`), `.scroll-fade` (a scrolling box whose cut edges fade into the surface, `data-fade` kept by `useScrollFade`: a sheet's body, the How to play card, Scribble's players panel), `.toasts`, `.toast` with `.toast--success/warning/error` (an `info` toast uses the base style) |
+| Sheets and toasts | `.sheet*`, `.menu-sheet*` (a phone options sheet: `.menu-sheet__row`, `.menu-sheet__label`, `.menu-sheet__leave`), `.scroll-fade` (a scrolling box whose cut edges fade into the surface, `data-fade` kept by `useScrollFade`: a sheet's body, the How to play card, Scribble's players panel; `.scroll-fade--x` with `useScrollFade(ref, mounted, 'x')` for a box that scrolls sideways, its left and right ends faded by a mask: Blackjack's row of hands), `.toasts`, `.toast` with `.toast--success/warning/error` (an `info` toast uses the base style) |
 | Header | `.site-header`, `.brand` (the wordmark link; a button in a game), `.wordmark` (24px tall on phones, 30px on desktop, via `--wordmark-height`), `.wordmark--icon` (the two phones alone), `.wordmark__accent`, `.settings-menu`, `.pref-row`; the room code's tiles `.room-card__value` and `.room-card__char` and a room button `.room-card__btn` (one rule for the waiting room and the game bar), the game top bar's ways out `.gbar-end` and `.gbar-leave` |
 | Connection | `.conn-notice`, `.conn-notice__card` (the inverted `--notice-bg` / `--notice-fg` card), `.conn-notice__title`, `.conn-notice__detail` |
 | Misc | `.avatar--sm/md/lg/xl`, `.face-img`, `.swatch`, `.emoji-choice`, `.code-input`, `.range`, `.toggle`, `.setting*`, `.podium*` (the results' top three), `.results*`, `.exit-action*`, `.exit-confirm*`, `.btn--danger-solid`, `.hide-mobile`, `.sr-only` |

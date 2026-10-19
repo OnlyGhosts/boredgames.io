@@ -107,35 +107,39 @@
 }
 
 /*
- * N hands share the row in N equal slots (fanStyle sets --hands and the most cards in a hand,
- * --fan). In its slot a hand starts from a fixed spot (two cards centred) and grows to the right;
- * the cards shrink until the widest fan fits its slot and the row's height.
+ * Every hand keeps the cards a hand on its own gets here (the round's size, fanStyle's --fan the
+ * most cards in any hand): a split never shrinks them. While the hands fit side by side each slot
+ * is an equal share of the row (fanStyle's --hands); a slot never narrows below its own hand (its
+ * fan, the words over its corner, a pill with a word in it), and past what fits the row scrolls
+ * sideways inside its box: a hand to a snap, by swipe, wheel or trackpad, no scrollbar, its cut
+ * ends fading where more hands wait (.scroll-fade--x), the hand in play brought to the middle
+ * (HandRow). The stage around it never moves or resizes. In its slot a hand starts from a fixed
+ * spot (two cards centred) and grows to the right.
  */
 .bj-hands--mine,
 .bj-hands--stage {
-  --bj-slot: calc((100cqw - (var(--hands, 1) - 1) * 8px) / var(--hands, 1));
-  --fit-w: max(14px, calc((var(--bj-slot) - 8px) / (1 + var(--fan-step) * (var(--fan, 2) - 1))));
+  --fit-w: max(14px, calc((100cqw - 8px) / (1 + var(--fan-step) * (var(--fan, 2) - 1))));
   --fit-h: calc((100cqh - var(--tbl-pill-h) - 4px) / var(--hand-k));
   --tbl-w: min(var(--bj-card-w), var(--fit-w), var(--fit-h));
   --bj-anchor: calc((var(--tbl-w) * (1 + var(--fan-step)) + 6px) / 2);
   justify-content: flex-start;
 }
 
-.bj-hands--stage {
-  container-type: size;
+.bj-hands.scroll-fade--x {
+  position: relative;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
 }
 
-.bj-hands--mine > .bj-slot,
-.bj-hands--stage > .bj-slot {
-  /* Every slot its equal share of the row, however much room its own words keep before its cards. */
-  flex: 0 0 var(--bj-slot);
-  display: flex;
-  align-items: flex-end;
-  justify-content: flex-start;
-  min-width: 0;
-  height: 100%;
-  /* Centred on two cards, but never so far right that the widest fan in the row runs out of its slot. */
-  padding-left: max(var(--bj-head-room), min(calc(var(--bj-slot) / 2 - var(--bj-anchor)), calc(var(--bj-slot) - max(6px + var(--tbl-w) * (1 + var(--fan-step) * (var(--fan, 2) - 1)), var(--tbl-pill-h) * 2.2 + 6px))));
+.bj-hands.scroll-fade--x::-webkit-scrollbar {
+  display: none;
+}
+
+.bj-hands--stage {
+  container-type: size;
 }
 
 /*
@@ -149,7 +153,23 @@
  */
 .bj-hands--mine > .bj-slot,
 .bj-hands--stage > .bj-slot {
+  --bj-fan-w: calc(6px + var(--tbl-w) * (1 + var(--fan-step) * (var(--slot-fan, 2) - 1)));
   --bj-head-room: max(0px, calc(var(--bj-head-w, 0px) - 3px - var(--tbl-w) * (1 + var(--fan-step) * (var(--slot-fan, 2) - 1))));
+  --bj-hand-least: max(var(--bj-fan-w), calc(var(--bj-head-w, 0px) + 3px), calc(var(--tbl-pill-h) * 2.2 + 6px));
+  /* An equal share of the row, giving way to a longer hand beside it, never narrower than its own hand. */
+  flex: 0 1 max(var(--bj-hand-least), calc((100cqw - (var(--hands, 1) - 1) * 8px) / var(--hands, 1)));
+  min-width: var(--bj-hand-least);
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-start;
+  height: 100%;
+  scroll-snap-align: center;
+}
+
+/* Centred on two cards (its slot's middle), but never so far right that its fan runs out of its slot. */
+.bj-hands--mine > .bj-slot > *,
+.bj-hands--stage > .bj-slot > * {
+  margin-left: max(var(--bj-head-room), min(calc(50% - var(--bj-anchor)), calc(100% - max(var(--bj-fan-w), var(--tbl-pill-h) * 2.2 + 6px))));
 }
 
 /* Split hands not in play step back a little: the one in play reads first. */
@@ -158,8 +178,8 @@
   opacity: 0.82;
 }
 
-.bj-hands--mine:not(.bj-hands--chips) > .bj-slot:only-child .bj-hand,
-.bj-hands--stage:not(.bj-hands--chips) > .bj-slot:only-child .bj-hand {
+.bj-hands--mine > .bj-slot:only-child .bj-hand,
+.bj-hands--stage > .bj-slot:only-child .bj-hand {
   opacity: 1;
 }
 
@@ -185,9 +205,8 @@
 
 /*
  * Split hands side by side on a phone's stage (under 460px; HandRow marks the row): my stake by
- * each total keeps to the width the word Bet gave it, so the hands still share the row (two on a
- * 320px phone, three on a 414px one; HandRow folds a hand into a chip once its stake and total
- * outgrow its share): packed tighter, two chips at most, the plus saying the rest, and a four-digit
+ * each total keeps to the width the word Bet gave it, so more hands share the row before it
+ * scrolls: packed tighter, two chips at most, the plus saying the rest, and a four-digit
  * figure short ("1.2k"). A hand on its own has the room, and keeps three chips and its figure in
  * full ("1,250"), as Poker's stage reads my stake (short there only where the full figure would
  * run the pill, or my hand, off the stage: fit.tsx STAGE_FIT).
@@ -228,118 +247,6 @@
 .bj-hand--empty .tbl-fan__card > .playing-card--slot {
   --card-w: var(--tbl-w);
   --card-h: calc(var(--tbl-w) * 1.5);
-}
-
-/* Past what fits, the hand in play keeps its full size and the others fold into chips beside it. */
-.bj-hands--chips {
-  justify-content: center;
-}
-
-.bj-hands--mine.bj-hands--chips,
-.bj-hands--stage.bj-hands--chips {
-  --tbl-w: min(var(--bj-card-w), var(--fit-h));
-}
-
-.bj-hands--chips > .bj-slot {
-  flex: none;
-  padding-left: var(--bj-head-room);
-}
-
-.bj-chips {
-  flex: 1 1 0;
-  display: grid;
-  grid-template-columns: repeat(var(--chip-cols, 1), minmax(0, 1fr));
-  grid-template-rows: repeat(var(--chip-rows, 1), minmax(0, 1fr));
-  gap: 4px;
-  min-width: 0;
-  max-width: calc(var(--chip-cols, 1) * 64px);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.bj-hands--mine .bj-chips {
-  height: 100%;
-  max-height: calc(var(--chip-rows, 1) * 46px);
-  align-self: center;
-}
-
-/* Another player's chips on the stage: a row or two. */
-.bj-hands--stage .bj-chips {
-  align-self: center;
-  grid-template-rows: repeat(var(--chip-rows, 1), 30px);
-  max-width: calc(var(--chip-cols, 1) * 48px);
-}
-
-.bj-hands--stage .bj-chip__total.tbl-pill {
-  padding: 0 2px;
-}
-
-.bj-chip {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-  min-width: 0;
-  min-height: 0;
-  padding: 1px 2px;
-  border-width: 1.5px;
-  background: var(--color-surface-2);
-  overflow: hidden;
-  container-type: size;
-}
-
-.bj-chip .tbl-pill--neutral {
-  border-color: transparent;
-  background: none;
-}
-
-.bj-chip__total.tbl-pill {
-  height: auto;
-  min-width: 0;
-  max-width: 100%;
-  padding: 1px 4px;
-  font-size: 0.8rem;
-  font-weight: 800;
-  line-height: 1.2;
-}
-
-/* My folded hands keep the big totals' weight: a chip's total is as easy to follow as the hand in play's. */
-.bj-hands--mine .bj-chip__total.tbl-pill {
-  padding: 0 3px;
-  font-size: 1rem;
-  letter-spacing: -0.02em;
-  line-height: 1.15;
-}
-
-/* The hands that did not get a chip: "+N", a tap away from every hand in the seat's sheet. */
-.bj-chip--more {
-  padding: 0;
-  border-style: dashed;
-}
-
-/* "+12" is a character longer than a total: no padding around it in its pill. */
-.bj-chip--more .bj-chip__total.tbl-pill {
-  padding: 0;
-  letter-spacing: -0.04em;
-}
-
-.bj-chip__more {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-  width: 100%;
-  height: 100%;
-  min-height: 0;
-  padding: 1px 2px;
-  border: 0;
-  background: none;
-  color: inherit;
-  font: inherit;
-  cursor: pointer;
 }
 
 /* ---------- A hand in miniature, on a seat ---------- */

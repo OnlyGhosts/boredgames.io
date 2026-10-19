@@ -1,51 +1,38 @@
 import { useLayoutEffect, useRef, useState, type CSSProperties, type RefObject } from 'react';
 import type { PlayingCardSize } from '../../../platform/components/PlayingCard';
-import { outlineClass } from '../../../platform/table/Outcome';
-import { HAND_GAP_PX, MIN_CHIP_PX, MIN_FULL_HAND_PX, STAGE_CHIP_ROWS, chipGrid, chipsShown, fitCount, fullHandsFit, handSlots, type HandPlace } from '../lib/hands';
-import { totalText, type TableHand } from '../lib/table';
+import { prefersReducedMotion } from '../../../platform/lib/media';
+import { useScrollFade } from '../../../platform/lib/useScrollFade';
+import { scrollToHand, type HandPlace } from '../lib/hands';
+import type { TableHand } from '../lib/table';
 import type { Timeline } from '../lib/timeline';
-import { outcomeLabel } from '../lib/text';
-import { useBlackjackStore } from '../store';
-import { Hand, handOnScreen, handTone } from './Hand';
-
-interface Size {
-  width: number;
-  height: number;
-  /** The width the full hands take beside the chips (their slots and the gaps after them). */
-  full: number;
-  /**
-   * The widest words over a hand's top right corner (its stake or owner and its total, or how it
-   * ended): a full hand keeps room for them. It never shrinks while the row keeps its hands, so
-   * which hands fold into chips never flips back and forth.
-   */
-  head: number;
-}
+import { Hand } from './Hand';
 
 /** The widest head (the words over a hand's corner) in the row: they keep their width whatever the cards' size. */
 function headWidth(el: HTMLElement): number {
   return Math.ceil(Math.max(0, ...Array.from(el.querySelectorAll('.tbl-hand__head')).map((h) => h.getBoundingClientRect().width)));
 }
 
-/** The full hands' slots in a row of hands, and the gap after each. */
-function fullWidth(el: HTMLElement): number {
-  return Array.from(el.children).reduce((sum, c) => (c.classList.contains('bj-slot') ? sum + c.getBoundingClientRect().width + HAND_GAP_PX : sum), 0);
-}
-
-/** A row's size as it lays out (null until measured, and on the server render), and its full hands' width. */
-function useSize<T extends HTMLElement>(count: number): [RefObject<T | null>, Size | null] {
+/**
+ * The row's width and the widest words over a hand's corner in it (its stake or owner and its
+ * total, or how it ended), as it lays out (0 until measured, and on the server render): every slot
+ * keeps room for those words. They never shrink while the row keeps its hands, so the slots never
+ * flip back and forth.
+ */
+function useRowSize<T extends HTMLElement>(count: number): [RefObject<T | null>, { width: number; head: number }] {
   const ref = useRef<T | null>(null);
-  const [size, setSize] = useState<Size | null>(null);
-  // A new number of hands starts the head over.
+  const [size, setSize] = useState({ width: 0, head: 0 });
+  // A new number of hands starts the words' width over.
   const counted = useRef(count);
   const measure = () => {
     const el = ref.current;
     if (!el) return;
     const fresh = counted.current !== count;
     counted.current = count;
-    const next = { width: el.clientWidth, height: el.clientHeight, full: Math.ceil(fullWidth(el)), head: headWidth(el) };
+    const width = el.clientWidth;
+    const words = headWidth(el);
     setSize((s) => {
-      const head = s && !fresh ? Math.max(s.head, next.head) : next.head;
-      return s && s.width === next.width && s.height === next.height && s.full === next.full && s.head === head ? s : { ...next, head };
+      const head = fresh ? words : Math.max(s.head, words);
+      return s.width === width && s.head === head ? s : { width, head };
     });
   };
   // The observer is made again for a new number of hands, so its callback never measures with a stale count.
@@ -56,59 +43,41 @@ function useSize<T extends HTMLElement>(count: number): [RefObject<T | null>, Si
     observer.observe(el);
     return () => observer.disconnect();
   }, [count]);
-  // A hand's width changes with its cards, not the row's: measured again after every render.
+  // The words change with the hands, not the row's size: measured again after every render.
   useLayoutEffect(measure);
   return [ref, size];
 }
 
 /**
- * How many full hands share the width and the most cards in any of them: the stylesheet sizes the
- * cards so every fan fits its share (blackjack.css, --fit-w), however many hits.
+ * The most cards in any hand of the row and how many hands share it: the stylesheet sizes the
+ * cards as a hand on its own gets them (blackjack.css --fit-w, however many hits), and gives each
+ * hand an equal share of the row while they all fit.
  */
 export function fanStyle(hands: readonly { cards: readonly unknown[] }[]): CSSProperties {
   const fan = Math.max(2, ...hands.map((h) => h.cards.length));
   return { '--hands': Math.max(1, hands.length), '--fan': fan } as CSSProperties;
 }
 
-interface ChipProps {
-  playerId: string;
-  index: number;
-  hand: TableHand;
-  timeline: Timeline;
-  now: number;
-  testId: string;
-}
-
-/** A hand folded down to its total and stake, in its outcome's colour once settled. */
-function HandChip({ playerId, index, hand, timeline, now, testId }: ChipProps) {
-  const { cards, total, outcome } = handOnScreen(playerId, index, hand, timeline, now);
-  const tone = handTone(outcome, total !== null && total.total > 21, hand.status === 'blackjack' && cards.length === 2, false);
-  return (
-    <li
-      className={`bj-chip ${outlineClass(tone)}`}
-      aria-label={`Hand ${index + 1}${total ? `: ${total.total}` : ''}${outcome ? `, ${outcomeLabel(outcome)}` : ''}`}
-      data-testid={testId}
-      data-index={index}
-      data-status={hand.status}
-      data-total={total?.total ?? 0}
-      data-bet={hand.bet}
-      data-outcome={outcome ?? undefined}
-      data-payout={outcome ? (hand.payout ?? 0) : undefined}
-    >
-      <span className={`bj-chip__total tbl-pill tbl-pill--${tone}`}>{total ? totalText(total, false) : ''}</span>
-    </li>
-  );
-}
-
-/** The hands that did not get a chip of their own: how many; a tap opens every hand. */
-function MoreChip({ playerId, hands, total, testId }: { playerId: string; hands: TableHand[]; total: number; testId: string }) {
-  return (
-    <li className="bj-chip bj-chip--more tbl-outline tbl-outline--neutral" data-testid={testId} data-count={hands.length}>
-      <button type="button" className="bj-chip__more" aria-label={`${hands.length} more hands. Show all ${total}`} onClick={() => useBlackjackStore.getState().openSeat(playerId)}>
-        <span className="bj-chip__total tbl-pill tbl-pill--neutral">+{hands.length}</span>
-      </button>
-    </li>
-  );
+/**
+ * Brings the hand in play (`activeIndex`) to the middle of the row in `ref` as play moves on or a
+ * split adds a hand: smoothly, or at once for a viewer who asked for less motion and when the row
+ * itself changed (its first layout, its size, the words over its hands). With no hand in play
+ * (the bets, the dealer's turn, the settled table) the row stays where the player left it.
+ */
+function useFollowHand(ref: RefObject<HTMLElement | null>, activeIndex: number, count: number, layout: string): void {
+  const last = useRef<{ active: number; count: number } | null>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    const before = last.current;
+    last.current = { active: activeIndex, count };
+    if (!el || activeIndex < 0) return;
+    const slot = el.children[activeIndex];
+    if (!(slot instanceof HTMLElement)) return;
+    const left = scrollToHand({ left: slot.offsetLeft, width: slot.offsetWidth }, el.clientWidth, el.scrollWidth);
+    if (Math.abs(el.scrollLeft - left) < 1) return;
+    const moved = before !== null && (before.active !== activeIndex || before.count !== count);
+    el.scrollTo({ left, behavior: moved && !prefersReducedMotion() ? 'smooth' : 'auto' });
+  }, [ref, activeIndex, count, layout]);
 }
 
 interface Props {
@@ -124,55 +93,39 @@ interface Props {
   /** `mine`: my hands on the stage at the bottom of the table; `stage`: another player's there, when I am not dealt in. */
   place: HandPlace;
   size: PlayingCardSize;
-  /** Each full hand's stake by its total (my hands while they play). */
+  /** Each hand's stake by its total (my hands while they play). */
   stakes?: boolean;
   /** Another player's hands on my stage: their name by the hand in play's total (the first's, between turns). */
   ownerName?: string;
   testId: string;
-  chipTestId: string;
 }
 
 /**
- * A seat's hands side by side, never scrolling: every hand full size while they fit, the cards
- * shrinking as hands are added; past that the hand in play stays full size and the others fold
- * into chips in a grid beside it, and past what the grid holds the furthest fold into a "+N".
- * Two or more full hands mark the row `bj-hands--side`: on a phone their stakes pack tighter
- * (blackjack.css), and a hand on its own keeps its stake in full.
+ * A seat's hands side by side, every one of them always its cards with its stake and total, the
+ * cards the size a hand on its own gets here: a split never shrinks them. While they fit, each hand
+ * has an equal share of the row; past that the row scrolls sideways inside its box (a hand to a
+ * snap, by swipe, wheel or trackpad, no scrollbar), its cut ends fading (`.scroll-fade--x`) where
+ * more hands wait, and it brings the hand in play to its middle as play moves on. The stage never
+ * moves or resizes and the page never scrolls. Two or more hands mark the row `bj-hands--side`: on
+ * a phone their stakes pack tighter (blackjack.css), and a hand on its own keeps its stake in full.
  */
-export function HandRow({ playerId, hands, start, timeline, now, leaving, activeIndex, place, size, stakes = false, ownerName, testId, chipTestId }: Props) {
-  const [ref, box] = useSize<HTMLDivElement>(hands.length);
-  // A full hand is never narrower than the words over its corner (its stake and total, its outcome).
-  const minHand = Math.max(MIN_FULL_HAND_PX[place], (box?.head ?? 0) + HAND_GAP_PX);
-  const maxFull = box === null ? hands.length : fullHandsFit(box.width, minHand);
-  const slots = handSlots(hands.length, activeIndex, maxFull);
-  const full = hands.filter((_, i) => slots[i] === 'full');
-  const chipped = hands.flatMap((_, i) => (slots[i] === 'chip' ? [i] : []));
-  const chips = chipped.length;
-  // My hands have a fixed height to fill; another player's chips keep to a couple of rows.
-  const maxRows = place === 'stage' ? STAGE_CHIP_ROWS : fitCount(box?.height ?? 0, MIN_CHIP_PX.height);
-  // Before the first measure every chip shows (the server render); the grid caps them once the row has a size.
-  // The chips take what the full hands leave (a full hand's least width until it is measured).
-  const beside = full.length === 0 ? 0 : Math.max(box?.full ?? 0, minHand + HAND_GAP_PX);
-  const grid = box === null ? { cols: chips, rows: 1, shown: chips } : chipGrid(chips, box.width - beside, maxRows, place === 'stage' ? MIN_CHIP_PX.stage : MIN_CHIP_PX.width);
-  const shown = chipsShown(chipped, grid.shown, activeIndex);
-  const folded = chipped.filter((i) => !shown.has(i)).map((i) => hands[i]);
-  const style = { ...fanStyle(full), '--chip-cols': grid.cols, '--chip-rows': grid.rows, '--bj-head-w': `${box?.head ?? 0}px` } as CSSProperties;
-  const named = activeIndex >= 0 ? activeIndex : slots.indexOf('full');
-  // Each slot keeps the room its own hand's words reach left of its own fan (blackjack.css --bj-head-room).
-  const fullHand = (hand: TableHand, i: number) => (
-    <div key={i} className="bj-slot" style={{ '--slot-fan': Math.max(2, hand.cards.length) } as CSSProperties}>
-      <Hand playerId={playerId} index={i} hand={hand} start={start} timeline={timeline} now={now} leaving={leaving} size={size} active={i === activeIndex} narrow={full.length > 1} stake={stakes} ownerName={i === named ? ownerName : undefined} testId={testId} />
-    </div>
-  );
+export function HandRow({ playerId, hands, start, timeline, now, leaving, activeIndex, place, size, stakes = false, ownerName, testId }: Props) {
+  const [ref, box] = useRowSize<HTMLDivElement>(hands.length);
+  const [fade, refade] = useScrollFade(ref, true, 'x');
+  // A new hand or a new size changes what the row holds, which the fade's own observer cannot see.
+  useLayoutEffect(refade);
+  useFollowHand(ref, activeIndex, hands.length, `${box.width} ${box.head}`);
+  const style = { ...fanStyle(hands), '--bj-head-w': `${box.head}px` } as CSSProperties;
+  const named = activeIndex >= 0 ? activeIndex : 0;
+  const side = hands.length > 1;
   return (
-    <div ref={ref} className={`bj-hands bj-hands--${place}${full.length > 1 ? ' bj-hands--side' : ''}${chips > 0 ? ' bj-hands--chips' : ''}`} style={style} data-testid={`${testId}s-row`} data-full={full.length} data-chips={chips} data-more={folded.length}>
-      {hands.map((hand, i) => (slots[i] === 'full' ? fullHand(hand, i) : null))}
-      {chips > 0 && (
-        <ol className="bj-chips" aria-label="Other hands">
-          {hands.map((hand, i) => (shown.has(i) ? <HandChip key={i} playerId={playerId} index={i} hand={hand} timeline={timeline} now={now} testId={chipTestId} /> : null))}
-          {folded.length > 0 && <MoreChip playerId={playerId} hands={folded} total={hands.length} testId={`${chipTestId}-more`} />}
-        </ol>
-      )}
+    <div ref={ref} className={`bj-hands bj-hands--${place} scroll-fade scroll-fade--x${side ? ' bj-hands--side' : ''}`} style={style} data-testid={`${testId}s-row`} data-count={hands.length} data-fade={fade}>
+      {hands.map((hand, i) => (
+        // Each slot keeps the room its own hand's words reach left of its own fan (blackjack.css --bj-head-room).
+        <div key={i} className="bj-slot" style={{ '--slot-fan': Math.max(2, hand.cards.length) } as CSSProperties}>
+          <Hand playerId={playerId} index={i} hand={hand} start={start} timeline={timeline} now={now} leaving={leaving} size={size} active={i === activeIndex} narrow={side} stake={stakes} ownerName={i === named ? ownerName : undefined} testId={testId} />
+        </div>
+      ))}
     </div>
   );
 }

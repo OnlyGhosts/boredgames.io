@@ -11,8 +11,12 @@ import { defaultPlatformSettings } from '../../shared/platform/settings';
 
 export const ME = 'me';
 
-/** `over`: the final table once the game has ended, the last round's hands still on it and "Game over" under the banner. */
-export const PHASES = ['betting', 'deal', 'other', 'mine', 'dealer', 'results', 'over'] as const;
+/**
+ * `over`: the final table once the game has ended, the last round's hands still on it and "Game over" under the banner.
+ * `walk`: my turn moving through my hands, one a beat (`stepMs`) from the first to the last. `splits`: my hands split one
+ * at a time, from two up to `hands`, the newest hand in play each beat.
+ */
+export const PHASES = ['betting', 'deal', 'other', 'mine', 'dealer', 'results', 'over', 'walk', 'splits'] as const;
 export type HarnessPhase = (typeof PHASES)[number];
 
 export interface Scenario {
@@ -175,8 +179,8 @@ function seatedRooms(s: Scenario): BlackjackRoomState[] {
   const SOFT: Card[] = [{ rank: 'A', suit: 'S' }, { rank: '9', suit: 'H' }];
   const BUST: Card[] = [{ rank: '10', suit: 'S' }, { rank: '6', suit: 'H' }, { rank: 'K', suit: 'D' }];
   const special = s.hand ?? (s.soft ? SOFT : s.bust ? BUST : null);
-  const myCards = (status: (i: number) => HandStatus) =>
-    Array.from({ length: s.hands }, (_, i) => hand(special && i === s.active ? special : cardsFor(i, i === s.active || s.allCards ? s.cards : 2), status(i), s.hands > 1, s.stake, s.doubled));
+  const myCards = (status: (i: number) => HandStatus, count = s.hands) =>
+    Array.from({ length: count }, (_, i) => hand(special && i === s.active ? special : cardsFor(i, i === s.active || s.allCards ? s.cards : 2), status(i), s.hands > 1, s.stake, s.doubled));
   const otherHands = (id: string, status: HandStatus, count = 1) =>
     Array.from({ length: count }, (_, i) => hand(cardsFor(i + others.indexOf(id) + 3, 2), status, count > 1, s.bet));
   const seat = (hands: HandView[], bet: number, extra: Partial<BlackjackPlayerView> = {}): BlackjackPlayerView => ({ chips: s.chips, bet, hands, inRound: true, sittingOut: false, bustedOut: false, ...extra });
@@ -202,7 +206,7 @@ function seatedRooms(s: Scenario): BlackjackRoomState[] {
     controls: { canSitOut: s.myBet === 0, canDealNow: true, canSkip: false },
   });
 
-  const acting = (turnId: string, handIndex: number): BlackjackView => {
+  const acting = (turnId: string, handIndex: number, count = s.hands): BlackjackView => {
     const players: Record<string, BlackjackPlayerView> = {};
     for (const id of others) {
       const before = order.indexOf(id) < order.indexOf(turnId);
@@ -210,7 +214,7 @@ function seatedRooms(s: Scenario): BlackjackRoomState[] {
       players[id] = seat(otherHands(id, status, id === turnId ? s.otherHands : 1), s.bet);
     }
     players[ME] = seat(
-      myCards((i) => (turnId !== ME ? 'waiting' : i < handIndex ? 'stood' : i === handIndex ? 'acting' : 'waiting')),
+      myCards((i) => (turnId !== ME ? 'waiting' : i < handIndex ? 'stood' : i === handIndex ? 'acting' : 'waiting'), count),
       s.stake,
     );
     return {
@@ -256,6 +260,10 @@ function seatedRooms(s: Scenario): BlackjackRoomState[] {
       return [room(last === ME ? acting(ME, s.hands - 1) : acting(last, 0)), room(settled())];
     case 'results':
       return [room(settled())];
+    case 'walk':
+      return Array.from({ length: s.hands }, (_, i) => room(acting(ME, i)));
+    case 'splits':
+      return Array.from({ length: Math.max(1, s.hands - 1) }, (_, i) => room(acting(ME, i + 1, i + 2)));
     case 'over': {
       // The host ended the game: the last round's hands stay on the table, no stake down, nothing on offer.
       const done = settled();

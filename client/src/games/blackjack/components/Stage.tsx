@@ -73,7 +73,7 @@ export function Stage({ room, view, meId, owner, focus, frame, now }: Props) {
         <div className="bj-mine" data-testid="my-area" data-count={myHands.length}>
           <div className="bj-mine__hands" data-testid="my-hands" data-count={myHands.length}>
             {myHands.length > 0 ? (
-              <HandRow playerId={meId} hands={myHands} start={start} timeline={timeline} now={now} leaving={leaving} activeIndex={activeIndex(frame, view, meId)} place="mine" size="md" stakes={live} testId="my-hand" chipTestId="my-chip" />
+              <HandRow playerId={meId} hands={myHands} start={start} timeline={timeline} now={now} leaving={leaving} activeIndex={activeIndex(frame, view, meId)} place="mine" size="md" stakes={live} testId="my-hand" />
             ) : (
               <EmptyHand stake={nextStake} start={start} />
             )}
@@ -98,7 +98,6 @@ export function Stage({ room, view, meId, owner, focus, frame, now }: Props) {
           size="md"
           ownerName={player.name}
           testId="stage-hand"
-          chipTestId="stage-chip"
         />
       </div>
     </TableStage>
