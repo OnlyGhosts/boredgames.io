@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react';
 import { CHAT_MAX_LENGTH } from '@shared/platform/constants';
-import { describeMask, groupMetrics, hintMatches, layoutGuess, type GuessSlot } from '../lib/wordMask';
+import { describeMask, groupMetrics, guessText, hintMatches, layoutGuess, typeDraft, type GuessDraft, type GuessSlot } from '../lib/wordMask';
 import { FINE_POINTER_QUERY, matchesMedia } from '../lib/media';
 import { SendIcon } from './Icons';
 
@@ -11,9 +11,10 @@ const PLACEHOLDER = 'Type your guess…';
 export interface GuessTilesProps {
   /** The server's mask of the word: "_" per hidden letter, revealed letters as themselves, separators kept. */
   mask: string;
-  draft: string;
-  onDraftChange(draft: string): void;
-  /** Sends the draft; returns true when it went out (the draft is then cleared by the caller). */
+  /** The input's text and the slot each of its letters sits in (wordMask's typeDraft keeps it). */
+  draft: GuessDraft;
+  onDraftChange(draft: GuessDraft): void;
+  /** Sends the guess (the typed text, revealed letters in place); returns true when it went out (the caller then clears the draft). */
   onSubmit(text: string): boolean;
   /** False while the socket is down: the tiles stay typeable, the Send button waits. */
   canSend: boolean;
@@ -76,12 +77,14 @@ export function GuessTiles({ mask, draft, onDraftChange, onSubmit, canSend }: Gu
 
   const { groups, overflow } = layoutGuess(mask, draft);
   useLayoutEffect(() => revealActiveTile(rowRef.current), [mask, draft]);
-  const sendable = canSend && draft.trim().length > 0;
+  // What is sent spells what the tiles show: revealed letters the player typed past are part of it.
+  const guess = guessText(mask, draft);
+  const sendable = canSend && guess.length > 0;
   const descriptionId = 'guess-input-description';
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    if (onSubmit(draft.trim())) onDraftChange('');
+    if (guess && onSubmit(guess)) onDraftChange({ text: '', places: [] });
     // Same handler as the Enter/Send gesture: keeps the phone keyboard open.
     inputRef.current?.focus();
   };
@@ -125,7 +128,7 @@ export function GuessTiles({ mask, draft, onDraftChange, onSubmit, canSend }: Gu
           className="guess-tiles__input"
           data-testid="guess-input"
           type="text"
-          value={draft}
+          value={draft.text}
           maxLength={CHAT_MAX_LENGTH}
           placeholder={PLACEHOLDER}
           aria-label={PLACEHOLDER}
@@ -136,7 +139,7 @@ export function GuessTiles({ mask, draft, onDraftChange, onSubmit, canSend }: Gu
           enterKeyHint="send"
           inputMode="text"
           aria-describedby={descriptionId}
-          onChange={(e) => onDraftChange(e.target.value)}
+          onChange={(e) => onDraftChange(typeDraft(mask, draft, e.target.value))}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
         />

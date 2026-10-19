@@ -16,6 +16,7 @@ import { scribbleCanvas } from './canvas';
 import { PencilIcon } from './components/Icons';
 import { ScribbleSettingsFields } from './components/SettingsFields';
 import { drawerIdOf, hasGuessed, isNewTurn } from './hooks';
+import { EMPTY_DRAFT } from './lib/mask';
 import { ScribbleArt } from './art';
 import { scribbleRules } from './rules';
 import { ScribbleScreen } from './Screen';
@@ -102,7 +103,7 @@ export const scribbleClient = defineGameClient<ScribbleView, ScribbleSettings>({
     // A new turn (or a return to the lobby) always starts on a blank canvas. A welcome (no prev)
     // brought the authoritative canvas along, so it is never wiped here.
     if (prev && ((next?.kind === 'choosing' && before?.kind !== 'choosing') || (room.phase === 'lobby' && prev.phase !== 'lobby'))) scribbleCanvas.store.getState().clear();
-    if (isNewTurn(prev, room) || room.phase === 'lobby') store.setGuessDraft('');
+    if (isNewTurn(prev, room) || room.phase === 'lobby') store.setGuessDraft(EMPTY_DRAFT);
     // A game starting under this player's eyes, or a welcome into a running one: the feed holds only this game's lines.
     if (room.phase === 'playing' && (!prev || prev.phase !== 'playing')) store.setFeedFrom(feedStart(room.game));
     if (next?.kind === 'choosing' && next.drawerId === me && !(before?.kind === 'choosing' && before.drawerId === me)) playCue('yourTurn');

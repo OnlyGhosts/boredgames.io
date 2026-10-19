@@ -19,6 +19,8 @@ const { WordDisplay } = await import('./components/WordDisplay');
 const { ScribbleSettingsFields } = await import('./components/SettingsFields');
 const { ScribbleScreen } = await import('./Screen');
 const { guessBoxLine } = await import('./lib/format');
+const { EMPTY_DRAFT, guessText, typeDraft } = await import('./lib/mask');
+const { GuessTiles } = await import('../../platform/components/GuessTiles');
 const { GuessBox } = await import('./components/GuessBox');
 const { GuessFeed } = await import('./components/GuessFeed');
 const { chatLine, player, registryOf, resetStore, room, welcome } = await import('../../test/fixtures');
@@ -62,29 +64,29 @@ describe('welcome and the guess draft', () => {
   it('restores the canvas from welcome.extra and keeps a half-typed guess across a rejoin into the same turn', () => {
     enter(turn(), 'bob', { canvas: [stroke(1)] });
     expect(canvas().canvas).toHaveLength(1);
-    scribble().setGuessDraft('ab');
+    scribble().setGuessDraft({ text: 'ab', places: [0, 1] });
     enter(turn(), 'bob', { canvas: [stroke(1), stroke(2)] });
-    expect(scribble().guessDraft).toBe('ab');
+    expect(scribble().guessDraft.text).toBe('ab');
     expect(canvas().canvas).toHaveLength(2);
   });
 
   it('clears the draft when the rejoin lands in another turn or seat', () => {
     enter(turn());
-    scribble().setGuessDraft('ab');
+    scribble().setGuessDraft({ text: 'ab', places: [0, 1] });
     enter(inTurn(drawingPhase('bob'), { turn: 2 }));
-    expect(scribble().guessDraft).toBe('');
+    expect(scribble().guessDraft.text).toBe('');
 
-    scribble().setGuessDraft('cd');
+    scribble().setGuessDraft({ text: 'cd', places: [0, 1] });
     enter(inTurn(drawingPhase('bob'), { turn: 2 }), 'carol');
-    expect(scribble().guessDraft).toBe('');
+    expect(scribble().guessDraft.text).toBe('');
   });
 
   it('starts every turn and the lobby on a blank canvas and an empty draft', () => {
     enter(turn(), 'bob', { canvas: [stroke(1)] });
-    scribble().setGuessDraft('ab');
+    scribble().setGuessDraft({ text: 'ab', places: [0, 1] });
     snapshot(inTurn({ kind: 'choosing', drawerId: 'bob', endsAt: Date.now() + 15_000 }, { turn: 2 }));
     expect(canvas().canvas).toEqual([]);
-    expect(scribble().guessDraft).toBe('');
+    expect(scribble().guessDraft.text).toBe('');
     canvas().appendOps([{ k: 'start', id: 1, tool: 'brush', color: '#000000', size: 6, x: 1, y: 1 }]);
     snapshot(room() as ScribbleRoomState);
     expect(canvas().canvas).toEqual([]);
@@ -316,6 +318,22 @@ describe('guess tiles for assistive tech and narrow bars', () => {
     expect(html).toContain('--letters:4;--seps:1');
     // The row knows the whole phrase too: short viewports fit it on one line instead of wrapping.
     expect(html).toContain('--total-letters:14;--total-seps:1;--groups:2');
+  });
+
+  it('keeps a revealed letter the guesser typed past in its tile, and lets the guess go', () => {
+    const mask = 'h_____p___';
+    // Typed "helicot": the revealed P stays put and the T lands after it. (The tiles take the draft
+    // as a prop here: a server render reads the store's initial state.)
+    const draft = typeDraft(mask, EMPTY_DRAFT, 'helicot');
+    const bar = renderToString(createElement(GuessTiles, { mask, draft, onDraftChange: () => {}, onSubmit: () => true, canSend: true }));
+    const barTiles = [...bar.matchAll(/<span class="(gtile gtile--letter[^"]*)"[^>]*>([^<]*)<\/span>/g)].map((m) => [m[1], m[2]]);
+    expect(barTiles.map(([, ch]) => ch).join('')).toBe('helicopt');
+    expect(barTiles[6][0]).toContain('gtile--hint');
+    expect(barTiles[6][0]).not.toContain('gtile--mismatch');
+    expect(barTiles[7][0]).not.toContain('gtile--hint');
+    expect(barTiles[8][0]).toContain('gtile--active');
+    expect(tagWith(bar, 'guess-send')).not.toContain('disabled');
+    expect(guessText(mask, draft)).toBe('helicopt');
   });
 
   it('exposes the header mask as an image with the same description', () => {

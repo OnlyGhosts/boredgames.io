@@ -562,6 +562,72 @@
   }
 }
 
+/*
+ * ---------- An upright phone with its keyboard open (html.is-keyboard, from useViewport) ----------
+ * Typing a guess never shrinks the drawing. The canvas keeps its full-width 4:3 size and the rest
+ * gives way around it: the header steps aside (only its clock stays, over the canvas's top right
+ * corner), the tiles keep to one row, the guess bar sits right above the keyboard and the guess
+ * feed takes whatever is left. Only a screen shorter than the full canvas and the guess bar
+ * together takes the difference out of the canvas. iOS never shrinks the layout viewport for its
+ * keyboard (only --app-height follows it), so this keys on the class, not on a height query.
+ */
+@media (max-width: 760px) and (max-aspect-ratio: 3/2) {
+  .is-keyboard .game--phone {
+    position: relative;
+  }
+
+  .is-keyboard .game--phone .game__center {
+    flex: 0 1 calc(75vw - 11px);
+  }
+
+  .is-keyboard .game--phone .game__guesses {
+    padding-bottom: 6px; /* the keyboard covers the home indicator's safe area */
+  }
+
+  .is-keyboard .game--phone .game__guesses .feed {
+    min-height: 0;
+  }
+
+  .is-keyboard .game--phone .game__top {
+    position: absolute;
+    z-index: 3;
+    top: calc(var(--space-2) + env(safe-area-inset-top) + 6px);
+    right: calc(var(--space-2) + env(safe-area-inset-right) + 6px);
+    container-type: normal;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: var(--color-surface);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .is-keyboard .game--phone .game__top > :not(.gbar__people),
+  .is-keyboard .game--phone .game__top .gbar__people > :not(.gbar__clock) {
+    display: none;
+  }
+
+  .is-keyboard .game--phone .game__top .timer--lg {
+    width: 44px;
+    height: 44px;
+    font-size: 1rem;
+  }
+
+  .is-keyboard .game--phone .guess-tiles__groups {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .is-keyboard .game--phone .guess-tiles__group {
+    flex-wrap: nowrap;
+    --gtile-w: clamp(16px, min(var(--gtile-fit-word), var(--gtile-fit-bar)), var(--gtile-max));
+  }
+
+  .is-keyboard .game--phone .guess-tiles__overflow {
+    flex: none;
+  }
+}
+
 /* ---------- Landscape phones: canvas left, header + guesses right ---------- */
 @media (min-aspect-ratio: 3/2) and (max-height: 520px) {
   .game {

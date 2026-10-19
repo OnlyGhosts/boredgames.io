@@ -8,6 +8,10 @@
  * themselves, and spaces / hyphens / apostrophes stay where they are. Only letters and digits of
  * the draft are placed (guesses are compared without separators anyway), so a player can type
  * "ice cream" or "icecream" and both fill the same slots.
+ *
+ * A revealed letter is part of the word being typed: the caret may rest on it, typing that letter
+ * types over it, and typing any other letter leaves it in place and lands in the slot after it.
+ * The guess sent (guessText) is what the player typed with those revealed letters put back in.
  */
 
 export type GuessSlot =
@@ -21,6 +25,19 @@ export type GuessSlot =
       active: boolean;
     }
   | { kind: 'sep'; char: string };
+
+/**
+ * A guess being typed: the input's own text and, for each of its letters, the letter slot it sits
+ * in (a slot past the last one is overflow). A revealed letter the player typed past takes no
+ * letter of the text, so places can skip a slot; a letter keeps its slot when a hint is revealed
+ * under it later, so nothing shifts while the player types.
+ */
+export interface GuessDraft {
+  text: string;
+  places: readonly number[];
+}
+
+export const EMPTY_DRAFT: GuessDraft = { text: '', places: [] };
 
 export interface GuessLayout {
   /** One group per word of the mask. */
@@ -48,10 +65,52 @@ export function letterCountFor(mask: string): number {
   return count;
 }
 
-export function layoutGuess(mask: string, draft: string): GuessLayout {
-  const letters = draftLetters(draft);
+/** The revealed letter of each letter slot of the mask, or null for a hidden one. */
+function slotHints(mask: string): (string | null)[] {
+  const hints: (string | null)[] = [];
+  for (const ch of mask) if (isLetterSlot(ch)) hints.push(ch === '_' ? null : ch);
+  return hints;
+}
+
+/**
+ * The draft once the input's text becomes `text`. Letters the edit left alone keep their slots;
+ * each new letter goes to the slot after the last one, past any revealed letter it does not match
+ * (a matching one is typed over).
+ */
+export function typeDraft(mask: string, prev: GuessDraft, text: string): GuessDraft {
+  const before = draftLetters(prev.text);
+  const after = draftLetters(text);
+  let kept = 0;
+  while (kept < before.length && kept < after.length && kept < prev.places.length && before[kept] === after[kept]) kept++;
+  const places = prev.places.slice(0, kept);
+  const hints = slotHints(mask);
+  let slot = kept > 0 ? places[kept - 1] + 1 : 0;
+  for (const letter of after.slice(kept)) {
+    while (slot < hints.length && hints[slot] !== null && !hintMatches(letter, hints[slot] as string)) slot++;
+    places.push(slot++);
+  }
+  return { text, places };
+}
+
+/** A draft as typed from empty against this mask, or the given one when its places fit its text. */
+function asDraft(mask: string, draft: GuessDraft | string): GuessDraft {
+  if (typeof draft !== 'string' && draft.places.length === draftLetters(draft.text).length) return draft;
+  return typeDraft(mask, EMPTY_DRAFT, typeof draft === 'string' ? draft : draft.text);
+}
+
+/** The tiles for a draft (a plain string reads as typed from empty against this mask). */
+export function layoutGuess(mask: string, draft: GuessDraft | string): GuessLayout {
+  const { text, places } = asDraft(mask, draft);
+  const letters = draftLetters(text);
   const total = letterCountFor(mask);
-  const activeIndex = letters.length < total ? letters.length : -1;
+  const typedAt = new Map<number, string>();
+  const overflow: string[] = [];
+  letters.forEach((letter, i) => {
+    if (places[i] < total) typedAt.set(places[i], letter);
+    else overflow.push(letter);
+  });
+  const next = places.length > 0 ? places[places.length - 1] + 1 : 0;
+  const activeIndex = next < total ? next : -1;
   let cursor = 0;
   const groups = mask
     .split(' ')
@@ -62,11 +121,41 @@ export function layoutGuess(mask: string, draft: string): GuessLayout {
         const index = cursor++;
         const slot: GuessSlot = { kind: 'letter', active: index === activeIndex };
         if (ch !== '_') slot.hint = ch;
-        if (index < letters.length) slot.typed = letters[index];
+        const typed = typedAt.get(index);
+        if (typed !== undefined) slot.typed = typed;
         return slot;
       }),
     );
-  return { groups, overflow: letters.slice(total) };
+  return { groups, overflow };
+}
+
+/**
+ * The guess to send: what the player typed, their own spaces kept (it reads as typed in the guess
+ * feed), with each revealed letter they typed past put back in its place and the revealed letters
+ * the caret rests on added at the end, so it spells what the tiles show. Empty until the player
+ * has typed a letter.
+ */
+export function guessText(mask: string, draft: GuessDraft | string): string {
+  const { text, places } = asDraft(mask, draft);
+  if (places.length === 0) return '';
+  const hints = slotHints(mask);
+  const revealed = (from: number, to: number): string => {
+    let out = '';
+    for (let slot = from; slot < Math.min(to, hints.length); slot++) out += hints[slot] ?? '';
+    return out;
+  };
+  let out = '';
+  let letter = 0;
+  for (const ch of text) {
+    if (LETTER_OR_DIGIT.test(ch)) {
+      out += revealed(letter > 0 ? places[letter - 1] + 1 : 0, places[letter]);
+      letter++;
+    }
+    out += ch;
+  }
+  let next = places[places.length - 1] + 1;
+  while (next < hints.length && hints[next] !== null) out += hints[next++];
+  return out.trim();
 }
 
 /** Whether a typed letter matches a revealed hint, ignoring case and accents. */

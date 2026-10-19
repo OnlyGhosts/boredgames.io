@@ -144,7 +144,8 @@ unhinged = cheeky + unhinged), Scribble's words (`wordPoolForMode` /
 `buildWordPool(lang, custom, customOnly, mode)` in
 [`shared/games/scribble/words/index.ts`](../shared/games/scribble/words/index.ts): family = the
 language list, unhinged = the cheeky and unhinged word tiers only, custom words merged into either;
-any word game may reuse it) and The Spy Game's locations (`locationsForMode` in
+any word game may reuse it; every shipped entry is one word or a two-word name people say, such as
+"ice cream" or "beer belly", never three words, a phrase or a scene, which `words.test.ts` enforces) and The Spy Game's locations (`locationsForMode` in
 [`shared/games/spygame/locations.ts`](../shared/games/spygame/locations.ts): family = the family
 pack, unhinged = the cheeky and unhinged tiers in `locationTiers.ts` only, with generated tiles for
 every tier). An Unhinged pool must be big enough on its own: tests hold Scribble's adult words to
@@ -2255,7 +2256,7 @@ layout, which is a good reference for a non-scrolling phone game.
 | [`PlayingCard`](../client/src/platform/components/PlayingCard.tsx) | `card: Card \| null`, `size?: 'sm' \| 'md' \| 'lg' \| 'xl'`, `testId?` ('card'), `slot?`, `highlight?`, `className?` | A white CSS card in both themes; a face-down card's markup carries no rank or suit (`data-face`, `data-rank`, `data-suit` on face-up cards); `cardName(card)` is its accessible name. Blackjack and Poker |
 | [`Chips`](../client/src/platform/components/Chips.tsx) | `value`, `size?`, `className?`, `testId?` | A chip count with the coin (`data-chips`); `ChipIcon` alone for inputs |
 | [`ChipsSetting`](../client/src/platform/components/ChipsSetting.tsx) | `id`, `label`, `value`, `min`, `max`, `presets`, `onCommit(v)`, `hint?` | A chip amount setting: one row of preset buttons and a numeric field (which holds the value) committed on blur or Enter, clamped; test ids `settings-<id>`, `settings-<id>-<preset>` |
-| [`GuessTiles`](../client/src/platform/components/GuessTiles.tsx) | `mask`, `draft`, `onDraftChange(draft)`, `onSubmit(text): boolean`, `canSend` | Type into the blanks of a masked word (layout in [`lib/wordMask.ts`](../client/src/platform/lib/wordMask.ts)); Scribble's guess bar; test ids `guess-input`, `guess-send` |
+| [`GuessTiles`](../client/src/platform/components/GuessTiles.tsx) | `mask`, `draft`, `onDraftChange(draft)`, `onSubmit(text): boolean`, `canSend` | Type into the blanks of a masked word (layout in [`lib/wordMask.ts`](../client/src/platform/lib/wordMask.ts): `draft` is a `GuessDraft` kept by `typeDraft`, and a revealed letter is part of the word, so the caret may rest on it, typing it types over it, any other letter lands after it, and `guessText` sends the typed text with those letters put back); Scribble's guess bar; test ids `guess-input`, `guess-send` |
 | [`Timer`](../client/src/platform/components/Timer.tsx) | `endsAt: number \| null \| undefined`, `warnUnder?` (10), `tickUnder?`, `size?: 'md' \| 'lg'`, `paused?`, `settling?`, `label?` (a small word under the ring: what it counts when that is not the usual clock), `data?` (extra data attributes) | Server-clock countdown in a ring whose lime arc empties toward the deadline (the length is the time left when this client first saw the deadline; reduced motion steps it once a second); plain seconds up to 99, m:ss beyond; the danger colour in the last 5 seconds (never with `warnUnder` 0); `tickUnder` plays a tick cue for the final seconds |
 | [`BottomSheet`](../client/src/platform/components/BottomSheet.tsx) | `open`, `title`, `onClose()`, `children`, `testId`, `className?`, `label?`, `hideTitle?` | Phone sheet with focus trap and Escape; `${testId}-close`, `${testId}-backdrop`. `className="sheet--dialog"` makes it a centred box over the dimmed page from 1024px (the lobby's Change my look); Escape and a click on the page around it still close it. `hideTitle` is for a confirm step whose own question says what it is ("Leave the room?"): no title row repeating it, the close button alone over the panel's corner, the title naming the dialog for screen readers |
 | [`ResultsPopup`](../client/src/platform/components/ResultsPopup.tsx) | `results`, `meId`, `onClose()` | Rendered by the shell over the lobby once a game ended (the store's `results`); you never render it. The small happy phone (96px at most), "Scribble · Game over", "Alice wins!" and the score in the game's `scoreUnit` (points, or a card table's chips), where you came, why it ended early (`results-reason`), the top three on small lime / lilac / graphite blocks (`results-step`), every player in order (`results-entry` with `data-rank`) and a brief confetti; a game cut short by too few players crowns nobody. Back to the room, the X, Escape or (a desktop) a tap beside it closes it for good |
@@ -2296,7 +2297,13 @@ layout, which is a good reference for a non-scrolling phone game.
 - **Non-scrolling screens.** `useAppMode(isPhone)` from [`lib/useViewport.ts`](../client/src/platform/lib/useViewport.ts)
   puts `html.is-app` on the document (page never scrolls, `height: 100%`), and the shell publishes
   the visible viewport height as `--app-height` so a fixed layout sits above the on-screen
-  keyboard. Scrolling screens like Click Race need neither.
+  keyboard. While the keyboard is open (a text field has focus and the visible height dropped by
+  120px or more) `<html>` also carries `is-keyboard`: iOS never shrinks the layout viewport for its
+  keyboard, so no height media query sees it. Scribble's rule: the keyboard never shrinks the
+  drawing; the header steps aside (its clock stays over the canvas corner), the guess feed gives
+  way and the guess bar sits right above the keyboard; only a screen shorter than the full canvas
+  and the guess bar takes the difference out of the canvas (`e2e/scribble-guessing.spec.ts`).
+  Scrolling screens like Click Race need neither.
 - **Safe areas.** Pad the root with `env(safe-area-inset-*)` as `template.css` does.
 - **Targets.** 44px minimum for anything tappable (the e2e specs assert it); inputs at `16px` or
   more (`base.css` enforces `max(1em, 16px)`) so iOS does not zoom.

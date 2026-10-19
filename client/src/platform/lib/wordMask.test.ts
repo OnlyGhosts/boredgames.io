@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { maskWord } from '@shared/platform/words';
-import { draftLetters, hintMatches, layoutGuess, letterCountFor, type GuessSlot } from './wordMask';
+import { EMPTY_DRAFT, draftLetters, guessText, hintMatches, layoutGuess, letterCountFor, typeDraft, type GuessDraft, type GuessSlot } from './wordMask';
 
 function letterSlots(groups: GuessSlot[][]): Extract<GuessSlot, { kind: 'letter' }>[] {
   return groups.flat().filter((s): s is Extract<GuessSlot, { kind: 'letter' }> => s.kind === 'letter');
@@ -82,7 +82,7 @@ describe('layoutGuess', () => {
     expect(letterSlots(groups).map((s) => s.typed)).toEqual(['d', 'o', 'n', 't']);
   });
 
-  it('carries revealed hints in their slot and reports typed letters over them', () => {
+  it('carries revealed hints in their slot; typing the revealed letter types over it', () => {
     const mask = maskWord('apple', [0, 3]); // "a__l_"
     expect(mask).toBe('a__l_');
     const partial = layoutGuess(mask, 'ap');
@@ -93,10 +93,7 @@ describe('layoutGuess', () => {
     expect(slots[3]).toEqual({ kind: 'letter', hint: 'l', active: false });
     expect(slots[4]).toEqual({ kind: 'letter', active: false });
     expect(hintMatches(slots[0].typed ?? '', slots[0].hint ?? '')).toBe(true);
-
-    const mismatch = letterSlots(layoutGuess(mask, 'Xpp').groups);
-    expect(mismatch[0]).toEqual({ kind: 'letter', hint: 'a', typed: 'X', active: false });
-    expect(hintMatches('X', 'a')).toBe(false);
+    expect(letterSlots(layoutGuess(mask, 'APPLE').groups).map((s) => s.typed)).toEqual(['A', 'P', 'P', 'L', 'E']);
   });
 
   it('matches hints ignoring case and accents', () => {
@@ -148,5 +145,99 @@ describe('describeMask', () => {
   it('spells out revealed hint letters in place', () => {
     expect(describeMask(maskWord('apple', [0, 3]))).toBe('5 letters. Revealed: A blank blank L blank.');
     expect(describeMask('i__ __e__')).toBe('8 letters in 2 words. Revealed: I blank blank, blank blank E blank blank.');
+  });
+});
+
+/** Types `keys` one at a time (Backspace as "\b"), the way the input reports each change. */
+function typeKeys(mask: string, keys: string, from: GuessDraft = EMPTY_DRAFT): GuessDraft {
+  let draft = from;
+  for (const key of keys) draft = typeDraft(mask, draft, key === '\b' ? draft.text.slice(0, -1) : draft.text + key);
+  return draft;
+}
+
+/** The tiles as one line: a letter per tile ("." blank), "^" after the caret's tile. */
+function tilesOf(mask: string, draft: GuessDraft): string {
+  return letterSlots(layoutGuess(mask, draft).groups)
+    .map((s) => `${s.typed ?? s.hint ?? '.'}${s.active ? '^' : ''}`)
+    .join('');
+}
+
+describe('typing into a word with revealed letters', () => {
+  const mask = 'h_____p___'; // "helicopter" with the H and the P revealed
+
+  it('rests the caret on a revealed letter; any other letter leaves it in place and lands after it', () => {
+    let draft = typeKeys(mask, 'helico');
+    expect(tilesOf(mask, draft)).toBe('helicop^...');
+    draft = typeKeys(mask, 'te', draft);
+    expect(tilesOf(mask, draft)).toBe('helicopte.^');
+    expect(draft.text).toBe('helicote');
+    expect(guessText(mask, draft)).toBe('helicopte');
+    expect(guessText(mask, typeKeys(mask, 'r', draft))).toBe('helicopter');
+  });
+
+  it('types over a revealed letter when the player types it, so typing the whole word never doubles it', () => {
+    const draft = typeKeys(mask, 'helicopter');
+    expect(tilesOf(mask, draft)).toBe('helicopter');
+    expect(layoutGuess(mask, draft).overflow).toEqual([]);
+    expect(guessText(mask, draft)).toBe('helicopter');
+    // Skipping the first revealed letter too.
+    expect(guessText(mask, typeKeys(mask, 'elicoter'))).toBe('helicopter');
+  });
+
+  it('backspaces one tile at a time across a revealed letter', () => {
+    let draft = typeKeys(mask, 'helicot');
+    expect(tilesOf(mask, draft)).toBe('helicopt.^.');
+    draft = typeKeys(mask, '\b', draft);
+    expect(tilesOf(mask, draft)).toBe('helicop^...');
+    draft = typeKeys(mask, '\b', draft);
+    expect(tilesOf(mask, draft)).toBe('helic.^p...');
+    expect(guessText(mask, draft)).toBe('helic');
+  });
+
+  it('keeps every typed letter in its tile when a letter is revealed under the draft', () => {
+    const draft = typeKeys('__________', 'heli');
+    expect(tilesOf('_x________', draft)).toBe('heli.^.....');
+    expect(letterSlots(layoutGuess('_x________', draft).groups)[1]).toEqual({ kind: 'letter', hint: 'x', typed: 'e', active: false });
+    // Revealed where the caret is: the caret rests on it and the next letter carries on after it.
+    expect(tilesOf('____c_____', draft)).toBe('helic^.....');
+    expect(tilesOf('____c_____', typeKeys('____c_____', 'o', draft))).toBe('helico.^...');
+  });
+
+  it('steps over several revealed letters in a row and across words', () => {
+    expect(tilesOf('_a_a_a', typeKeys('_a_a_a', 'bnn'))).toBe('banana^');
+    expect(guessText('_a_a_a', typeKeys('_a_a_a', 'bnn'))).toBe('banana');
+    expect(guessText('_a_a_a', typeKeys('_a_a_a', 'banana'))).toBe('banana');
+    // "ice cream" with the C of cream revealed: typed with or without the space, and with or without the C.
+    for (const typed of ['ice ream', 'ice cream']) expect(guessText('___ c____', typeKeys('___ c____', typed))).toBe('ice cream');
+    for (const typed of ['iceream', 'icecream']) expect(guessText('___ c____', typeKeys('___ c____', typed))).toBe('icecream');
+    expect(tilesOf('___ c____', typeKeys('___ c____', 'ice'))).toBe('icec^....');
+    expect(guessText('___-d__', typeKeys('___-d__', 'hot-og'))).toBe('hot-dog');
+    expect(guessText('___-d__', typeKeys('___-d__', 'hotog'))).toBe('hotdog');
+  });
+
+  it('sends what was typed, revealed letters in place: nothing before a letter, letters past the end kept', () => {
+    expect(guessText('h____', EMPTY_DRAFT)).toBe('');
+    expect(guessText('h____', typeKeys('h____', '?! '))).toBe('');
+    expect(guessText('___-___', typeKeys('___-___', 'hot '))).toBe('hot');
+    // A sentence typed as a guess reads as typed in the feed.
+    expect(guessText('_____ ____', typeKeys('_____ ____', 'definitely not it'))).toBe('definitely not it');
+    expect(guessText('___', typeKeys('___', 'cats'))).toBe('cats');
+    expect(guessText('c__', typeKeys('c__', 'ats'))).toBe('cats');
+  });
+
+  it('types a letter equal to the revealed one over it, even when the next letter is the same', () => {
+    // "access" with the first C revealed: a C typed there is the revealed C, so the next C goes after it.
+    expect(tilesOf('_c____', typeKeys('_c____', 'ac'))).toBe('ac.^...');
+    expect(guessText('_c____', typeKeys('_c____', 'access'))).toBe('access');
+  });
+
+  it('places again only the letters after an edit in the middle of the text', () => {
+    const draft = typeKeys(mask, 'helicot');
+    const edited = typeDraft(mask, draft, 'helxcot');
+    expect(edited.places).toEqual([0, 1, 2, 3, 4, 5, 7]);
+    expect(guessText(mask, edited)).toBe('helxcopt');
+    // A plain string reads as typed from empty, and stale places are worked out again.
+    expect(layoutGuess(mask, 'helicot')).toEqual(layoutGuess(mask, draft));
+    expect(layoutGuess(mask, { text: 'helicot', places: [] })).toEqual(layoutGuess(mask, draft));
   });
 });

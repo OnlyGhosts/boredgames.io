@@ -129,6 +129,11 @@
   animation: caret-blink 1s steps(2, start) infinite;
 }
 
+/* The caret on a revealed letter sits at the tile's edge, beside the letter rather than through it. */
+.guess-tiles.is-focused .gtile--hint.gtile--active::after {
+  left: 2px;
+}
+
 .gtile--sep {
   width: var(--gsep-w);
   background: transparent;

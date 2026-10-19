@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CHEEKY_WORDS } from './words/cheeky.js';
+import { EN_WORDS } from './words/en.js';
 import { TIER_WORDS, WORD_LISTS, buildWordPool, getWordList, pickWords, wordPoolForMode } from './words/index.js';
 import { UNHINGED_WORDS } from './words/unhinged.js';
 
@@ -11,18 +12,28 @@ describe('word lists', () => {
     for (const w of en) expect(w).toBe(w.trim());
     expect(WORD_LISTS.en).toBe(en);
   });
+
+  // Guessed from a drawing: one word, or a pair people say as one name ("ice cream", "beer belly"),
+  // never three words, a phrase or a scene nobody would guess.
+  it('holds single words and two-word names only, in every pack, each entry once', () => {
+    const packs: Record<string, readonly string[]> = { en: EN_WORDS, cheeky: CHEEKY_WORDS, unhinged: UNHINGED_WORDS };
+    for (const [name, list] of Object.entries(packs)) {
+      expect(list.filter((w) => w.trim().split(/\s+/).length > 2), `${name}: entries over two words`).toEqual([]);
+      expect(new Set(list.map((w) => w.trim().toLowerCase())).size, `${name}: entries listed twice`).toBe(list.length);
+    }
+  });
 });
 
 describe('the adult tiers', () => {
   const lower = (list: readonly string[]): string[] => list.map((w) => w.toLowerCase());
 
-  it('ship distinct, trimmed, drawable-length words and phrases', () => {
+  it('ship distinct, trimmed, drawable words and two-word names', () => {
     for (const tier of [CHEEKY_WORDS, UNHINGED_WORDS]) {
       expect(new Set(lower(tier)).size).toBe(tier.length);
       for (const w of tier) {
         expect(w).toBe(w.trim().replace(/\s+/g, ' '));
-        // One to four words: a drawer has about 80 seconds.
-        expect(w.split(' ').length, w).toBeLessThanOrEqual(4);
+        // One word or a two-word name: a drawer has about 80 seconds, a guesser has to say it.
+        expect(w.split(' ').length, w).toBeLessThanOrEqual(2);
       }
     }
     expect(UNHINGED_WORDS.length).toBeGreaterThanOrEqual(300);

@@ -2,6 +2,7 @@ import type { ScribblePhase, ScribbleRoomState, ScribbleView } from '@shared/gam
 import type { RoomState } from '@shared/platform/protocol';
 import { room } from '../../../test/fixtures';
 import { scribbleCanvas } from '../canvas';
+import { EMPTY_DRAFT } from '../lib/mask';
 import { useScribbleStore } from '../store';
 
 export function drawingPhase(drawerId: string, overrides: Partial<Extract<ScribblePhase, { kind: 'drawing' }>> = {}): ScribblePhase {
@@ -25,6 +26,6 @@ export function inTurn(phase: ScribblePhase, viewOverrides: Partial<ScribbleView
 }
 
 export function resetScribbleStore(): void {
-  useScribbleStore.setState({ guessDraft: '', feedFrom: 0 });
+  useScribbleStore.setState({ guessDraft: EMPTY_DRAFT, feedFrom: 0 });
   scribbleCanvas.store.setState({ canvas: [], canvasEpoch: 0 });
 }
