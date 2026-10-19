@@ -5,7 +5,14 @@
  * middle, drawn point-symmetric so the back reads the same upside down. Vector, so it stays crisp
  * from a seat's small cards to the dealer's.
  */
+/*
+ * --card-index-top: how far below a card's top edge its corner (the rank and suit) begins, in card
+ * widths (0.10, a little more than the 0.08 from its left edge). A hand's words over its corner
+ * (table.css) come down over the cards no further than this, so they never cover a rank or a suit,
+ * and still overlap the top edge as far as they always did on a phone's 70px card.
+ */
 :root {
+  --card-index-top: 0.1;
   --card-back-border: #f7f5ec;
   --card-back-field: #c7e976;
   --card-back-ink: #141514;
@@ -63,7 +70,7 @@
 /* The face: a big bold rank at the top left and one big suit right under it, the part a fanned card leaves in view. */
 .playing-card__corner {
   position: absolute;
-  top: calc(var(--card-w) * 0.07);
+  top: calc(var(--card-w) * var(--card-index-top));
   left: calc(var(--card-w) * 0.08);
   display: flex;
   flex-direction: column;

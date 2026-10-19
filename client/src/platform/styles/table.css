@@ -410,15 +410,23 @@
  * --tbl-w is the card width (set per place by the game). Each card sits a step right of and below
  * the one before, the step right (--fan-step, in card widths) leaving the rank and suit in view,
  * a "10" too; past four cards the step down shrinks, so the fan keeps one height (1.77 cards'
- * width) however many hits. The pill overlaps the fan's top edge a little. A game sizes a fan of n
- * cards as (1 + (n - 1) * --fan-step) card widths.
+ * width) however many hits. A game sizes a fan of n cards as (1 + (n - 1) * --fan-step) card
+ * widths.
+ *
+ * The pill and the words beside it (a stake, how the hand ended, a name) overlap the fan's top
+ * edge only as far as a card's corner begins (--head-over: cards.css --card-index-top, 0.1 card
+ * widths), so nothing over a hand ever covers a rank or a suit, whatever the card's size: a hand
+ * is a pill's height and 1.67 card widths tall, and its 3px of padding below.
  */
 :root {
   --fan-step: 0.44;
+  /* A hand's height in card widths, its pill aside: the fan's 1.77 less what the pill comes down over it (1.67). */
+  --hand-k: calc(1.77 - var(--card-index-top));
 }
 
 .tbl-hand {
   --pill-h: var(--tbl-pill-h, 26px);
+  --head-over: calc(var(--tbl-w) * var(--card-index-top));
   --fan-dx: calc(var(--tbl-w) * var(--fan-step));
   --fan-dy: min(calc(var(--tbl-w) * 0.09), calc(var(--tbl-w) * 0.27 / max(1, var(--fan, 2) - 1)));
   position: relative;
@@ -426,7 +434,7 @@
   flex-direction: column;
   align-items: flex-start;
   flex: none;
-  padding: calc(var(--pill-h) * 0.7) 3px 3px;
+  padding: calc(var(--pill-h) - var(--head-over)) 3px 3px;
   border-radius: var(--radius-item);
 }
 
@@ -1076,10 +1084,15 @@
   font-size: calc(var(--face) * 0.58);
 }
 
-/* The status in the avatar's corner: an icon, or just a dot on the small tiles. */
+/*
+ * The status in the avatar's corner: an icon, or just a dot on the small tiles. It reaches 2px past
+ * the avatar, less than the 3px to 6px the tile's columns keep between the face and the words (3px
+ * on a compact tile 46px tall or less), so a tick or a star stays at least 1px clear of the
+ * stack's first figure ("1,150 chips").
+ */
 .tbl-tile__mark {
   position: absolute;
-  right: -4px;
+  right: -2px;
   bottom: -3px;
   display: grid;
   place-items: center;
@@ -1303,12 +1316,11 @@
     line-height: 1.2;
   }
 
-  /* A stack too long for its row ends in an ellipsis, never cut mid-letter. */
+  /* A stack too long for its row ("100,000 chips" three across a 360px phone) reads short: StackCount measures it as it lays out (fit.tsx), so it is never cut. */
   .tbl-tile--full .tbl-tile__chips {
     grid-area: chips;
     min-width: 0;
     overflow: hidden;
-    text-overflow: ellipsis;
   }
 
   .tbl-tile--full .tbl-tile__bet {
@@ -1435,6 +1447,11 @@
     column-gap: 4px;
     grid-template-areas: 'face name total' 'meta meta meta';
     padding: 4px;
+  }
+
+  /* The stack's line runs under the face here: the badge keeps to the avatar's height, clear of the figure under it. */
+  .tbl-tile--compact .tbl-tile__mark {
+    bottom: 0;
   }
 
   .tbl-tile--compact .tbl-stake {
@@ -1573,8 +1590,9 @@
     font-size: 0.72em;
   }
 
+  /* A table with more seats than its room (ten players on a 375x667 phone: 16px tiles) keeps the total inside the tile. */
   .tbl-tile--compact .tbl-tile__total .tbl-pill {
-    height: 18px;
+    height: min(18px, calc(100cqh - 2px));
     min-width: 22px;
     padding: 0 4px;
     font-size: 0.66em;
@@ -1702,14 +1720,14 @@
   display: none;
 }
 
-/* The dot sits at the avatar's lower left, clear of the total beside it. */
+/* The dot sits at the avatar's lower left, clear of the total beside it and of the name under it. */
 .tbl-tile--small .tbl-tile__mark,
 .tbl-tile--dense .tbl-tile__mark {
   width: calc(var(--face) * 0.42);
   height: calc(var(--face) * 0.42);
   left: -3px;
   right: auto;
-  bottom: -2px;
+  bottom: 0;
   border-width: 1px;
 }
 

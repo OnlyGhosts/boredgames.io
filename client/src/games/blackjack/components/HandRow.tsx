@@ -158,8 +158,9 @@ export function HandRow({ playerId, hands, start, timeline, now, leaving, active
   const folded = chipped.filter((i) => !shown.has(i)).map((i) => hands[i]);
   const style = { ...fanStyle(full), '--chip-cols': grid.cols, '--chip-rows': grid.rows, '--bj-head-w': `${box?.head ?? 0}px` } as CSSProperties;
   const named = activeIndex >= 0 ? activeIndex : slots.indexOf('full');
+  // Each slot keeps the room its own hand's words reach left of its own fan (blackjack.css --bj-head-room).
   const fullHand = (hand: TableHand, i: number) => (
-    <div key={i} className="bj-slot">
+    <div key={i} className="bj-slot" style={{ '--slot-fan': Math.max(2, hand.cards.length) } as CSSProperties}>
       <Hand playerId={playerId} index={i} hand={hand} start={start} timeline={timeline} now={now} leaving={leaving} size={size} active={i === activeIndex} narrow={full.length > 1} stake={stakes} ownerName={i === named ? ownerName : undefined} testId={testId} />
     </div>
   );

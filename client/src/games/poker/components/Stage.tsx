@@ -3,6 +3,7 @@ import { handName } from '@shared/games/poker/hands';
 import { PlayingCard } from '../../../platform/components/PlayingCard';
 import { HandFan, OutcomeFlag } from '../../../platform/table/HandFan';
 import { PayoutFloat, type Tone } from '../../../platform/table/Outcome';
+import { STAGE_FIT } from '../../../platform/table/fit';
 import { StakePill } from '../../../platform/table/Stakes';
 import { TableCard } from '../../../platform/table/TableCard';
 import { TableStage } from '../../../platform/table/TableStage';
@@ -30,9 +31,6 @@ interface Props {
   /** A phone: the hand's name in its short form, so the pill fits. */
   isPhone: boolean;
 }
-
-/** Past this many chips a stake's figure reads short ("12k"), so it keeps beside the total (on a phone from 1,000). */
-const SHORT_STAKE = 10_000;
 
 /** My place in the hand, in a word, where it is the news: out, not dealt in, folded, all in. */
 export function myState(view: PokerView, meId: string): string {
@@ -103,7 +101,8 @@ export function Stage({ room, view, meId, owner, focus, table, timeline, live, n
       )}
       {/* Where this seat's chips land; the pill only while a bet is out. */}
       <span className="pk-bet" data-table-anchor={betAnchor(owner)} data-testid={mine ? 'my-bet' : 'stage-bet'} data-bet={bet}>
-        {bet > 0 && mine && <StakePill value={bet} start={room.settings.startingChips} format={bet >= SHORT_STAKE || (isPhone && bet >= 1000) ? 'short' : 'full'} className="tbl-hand__stake" />}
+        {/* In full ("12,000"), as the seats' pills read; short ("12k") only where the words in full would push my cards off the stage. */}
+        {bet > 0 && mine && <StakePill value={bet} start={room.settings.startingChips} format="fit" fit={STAGE_FIT} className="tbl-hand__stake" />}
       </span>
     </>
   );

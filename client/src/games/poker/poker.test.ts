@@ -24,7 +24,7 @@ const { pokerClient } = await import('./module');
 const { usePokerStore } = await import('./store');
 const { seatRing } = await import('./hooks');
 const { amountFrom, clampAmount, idleAmount, potSized, raiseRange, wagerKind } = await import('./lib/raise');
-const { categoryLabel, focusLine, handHint, handLabel, handRankOf, lastActionLabel, moveText, resultLine, ribbonText, shortHandName, standingOf, streetText } = await import('./lib/text');
+const { categoryLabel, focusLine, handHint, handLabel, handRankOf, lastActionForms, moveText, resultLine, ribbonText, shortHandName, standingOf, streetText } = await import('./lib/text');
 const { focusOf, stageKind, stageOwner } = await import('./lib/focus');
 const { committedBefore, dealingOrder, tableOf } = await import('./lib/table');
 const T = await import('./lib/timeline');
@@ -496,8 +496,24 @@ describe('copy', () => {
   it('labels the hand, the moves, the street, the result and where I stand', () => {
     expect(handLabel({ hand: 3, totalHands: 10 })).toBe('Hand 3 of 10');
     expect(handLabel({ hand: 3, totalHands: 0 })).toBe('Hand 3');
-    expect(lastActionLabel({ kind: 'raise', amount: 1200 })).toBe('Raise to 1,200');
-    expect(lastActionLabel({ kind: 'bigBlind', amount: 10 })).toBe('BB 10');
+    // A seat's last move in whole words, the fullest first, then what a narrow tile falls back on: the short figure, then the move alone
+    // (the bet pill beside it says the figure). A figure under 1,000 has no short form of its own.
+    for (const [move, forms] of [
+      [{ kind: 'raise', amount: 1200 }, ['Raise to 1,200', 'Raise 1.2k', 'Raise']],
+      [{ kind: 'raise', amount: 12_000 }, ['Raise to 12,000', 'Raise 12k', 'Raise']],
+      [{ kind: 'raise', amount: 100_000 }, ['Raise to 100,000', 'Raise 100k', 'Raise']],
+      [{ kind: 'bigBlind', amount: 10 }, ['BB 10', 'BB']],
+      [{ kind: 'bigBlind', amount: 1000 }, ['BB 1,000', 'BB 1k', 'BB']],
+      [{ kind: 'smallBlind', amount: 500 }, ['SB 500', 'SB']],
+      [{ kind: 'call', amount: 30_000 }, ['Call 30,000', 'Call 30k', 'Call']],
+      [{ kind: 'bet', amount: 2500 }, ['Bet 2,500', 'Bet 2.5k', 'Bet']],
+      [{ kind: 'allIn', amount: 99_500 }, ['All in 99,500', 'All in 100k', 'All in']],
+      [{ kind: 'check', amount: 0 }, ['Check']],
+      [{ kind: 'fold', amount: 0 }, ['Fold']],
+    ] as const) {
+      expect(lastActionForms(move), move.kind).toEqual(forms);
+    }
+    expect(lastActionForms(null)).toEqual(['']);
     // The street beside the hand under the banner (the blinds are on the banner itself).
     expect(streetText(view())).toBe('Pre-flop');
     expect(streetText(flop())).toBe('Flop');
@@ -773,8 +789,9 @@ describe('the table keeps its places', () => {
   it('sizes the board from the room the table has and my cards on a phone from the room the hand’s seats leave, in the calm table’s fixed first and last rows', () => {
     const css = readFileSync(join(import.meta.dirname, 'poker.css'), 'utf8');
     expect(css).toMatch(/\.pk-table \{[^}]*--tbl-head-h: calc\(var\(--pk-pot-h\) \+ 8px \+ var\(--pk-card-w\) \* 1\.5 \+ 4px\);/);
-    // The stage is sized for my two cards' own width (--pk-stage-w), the board's on a desktop.
-    expect(css).toMatch(/\.pk-table \{[^}]*--tbl-stage-h: calc\(var\(--tbl-pill-h\) \* 0\.7 \+ var\(--pk-stage-w\) \* 1\.77 \+ 4px\);/);
+    // The stage is sized for my two cards' own width (--pk-stage-w), the board's on a desktop: the pill's height and 1.67 card widths
+    // (table.css --hand-k), the words over the cards coming down over them only as far as their corners begin.
+    expect(css).toMatch(/\.pk-table \{[^}]*--tbl-stage-h: calc\(var\(--tbl-pill-h\) \+ var\(--pk-stage-w\) \* var\(--hand-k\) \+ 4px\);/);
     // Worked out once on the table, from its height and its width (five cards and the deck across).
     expect(css).toMatch(/@property --pk-card-w \{\s*syntax: '<length>';/);
     expect(css).toMatch(/@property --pk-stage-w \{\s*syntax: '<length>';\s*inherits: true;/);
@@ -782,11 +799,11 @@ describe('the table keeps its places', () => {
     expect(css).toMatch(/\.pk-mine \.tbl-hand \{\s*--tbl-w: var\(--pk-stage-w\);/);
     // On a phone the board is bound by its width (five cards beside the deck keep it under 50px at 390 wide), so my two cards
     // take their own size: the board's card, and over it the room the seats leave (--tbl-spare, worked out by the table from the
-    // seats the hand was dealt with: room.ts useSeatRoom), 1.77px of it a card pixel, up to half as wide again as the board's
+    // seats the hand was dealt with: room.ts useSeatRoom), 1.67px of it a card pixel (--hand-k), up to half as wide again as the board's
     // and 84px (a flat 84px put 84px cards under a 49px board). --tbl-grow tells the table how much taller the stage is for it.
     const phone = css.slice(css.indexOf('@media (max-width: 760px), (min-aspect-ratio: 3/2) and (max-height: 520px)'));
     expect(phone).toMatch(
-      /\.pk-table \{[^}]*--pk-stage-w: clamp\(var\(--pk-card-w\), calc\(var\(--pk-card-w\) \+ var\(--tbl-spare\) \/ 1\.77\), max\(var\(--pk-card-w\), min\(84px, var\(--pk-card-w\) \* 1\.5\)\)\);\s*--tbl-grow: calc\(\(var\(--pk-stage-w\) - var\(--pk-card-w\)\) \* 1\.77\);/,
+      /\.pk-table \{[^}]*--pk-stage-w: clamp\(var\(--pk-card-w\), calc\(var\(--pk-card-w\) \+ var\(--tbl-spare\) \/ var\(--hand-k\)\), max\(var\(--pk-card-w\), min\(84px, var\(--pk-card-w\) \* 1\.5\)\)\);\s*--tbl-grow: calc\(\(var\(--pk-stage-w\) - var\(--pk-card-w\)\) \* var\(--hand-k\)\);/,
     );
     // The shortest phones pin the board at 30px; my cards take the same rule over it (45px at the most).
     expect(css.slice(css.indexOf('@media (max-width: 760px) and (max-height: 620px)'))).toMatch(/\.pk-table \{[^}]*--pk-card-w: 30px;\s*--tbl-pill-h/);
@@ -816,8 +833,9 @@ describe('the table keeps its places', () => {
     const hand = css.match(/\.pk-mine \.tbl-hand \{([^}]*)\}/)?.[1] ?? '';
     expect(hand).toMatch(/--pk-fan-w: calc\(var\(--tbl-w\) \* \(1 \+ var\(--fan-step\) \* \(var\(--fan, 2\) - 1\)\) \+ 6px\);/);
     expect(hand).toMatch(/align-items: flex-end;\s*padding-top: 0;\s*margin-left: auto;\s*margin-right: calc\(50% - var\(--pk-fan-w\) \/ 2\);/);
-    // The words keep their place over the cards' top right corner: the pill's height, overlapping the cards by 0.3 of it, as HandFan floats them.
-    expect(css).toMatch(/\.pk-mine \.tbl-hand__head \{\s*position: relative;\s*top: auto;\s*right: auto;\s*margin-bottom: calc\(var\(--pill-h\) \* -0\.3\);/);
+    // The words keep their place over the cards' top right corner, coming down over the cards only as far as their corners begin
+    // (table.css --head-over), as HandFan floats them: "Four high" once covered the top of the 4 and the 2 on a 360px phone.
+    expect(css).toMatch(/\.pk-mine \.tbl-hand__head \{\s*position: relative;\s*top: auto;\s*right: auto;\s*margin-bottom: calc\(var\(--head-over\) \* -1\);/);
     // The payout still rises over the cards.
     expect(css).toMatch(/\.pk-mine \.tbl-payout \{\s*left: calc\(100% - var\(--pk-fan-w\) \/ 2\);/);
   });

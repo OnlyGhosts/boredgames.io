@@ -11,7 +11,8 @@ import { defaultPlatformSettings } from '../../shared/platform/settings';
 
 export const ME = 'me';
 
-export const PHASES = ['betting', 'deal', 'other', 'mine', 'dealer', 'results'] as const;
+/** `over`: the final table once the game has ended, the last round's hands still on it and "Game over" under the banner. */
+export const PHASES = ['betting', 'deal', 'other', 'mine', 'dealer', 'results', 'over'] as const;
 export type HarnessPhase = (typeof PHASES)[number];
 
 export interface Scenario {
@@ -48,6 +49,10 @@ export interface Scenario {
   bet: number;
   /** The other players' stacks. */
   chips: number;
+  /** Every one of my hands holds `cards` cards (not only the one in play). */
+  allCards: boolean;
+  /** My hand in play's cards, as "10H,6H" in the query (a "10" is the widest corner). */
+  hand: Card[] | null;
 }
 
 const NAMES = ['Pia', 'Quinn', 'Ada', 'Ben', 'Cleo', 'Dev', 'Eli', 'Fay', 'Gus', 'Ivy', 'Jas', 'Kit', 'Lou', 'Max', 'Nia', 'Oli', 'Pip', 'Rae', 'Sam', 'Tia', 'Uma', 'Vic', 'Wes', 'Xan'];
@@ -55,6 +60,12 @@ const NAMES = ['Pia', 'Quinn', 'Ada', 'Ben', 'Cleo', 'Dev', 'Eli', 'Fay', 'Gus',
 function int(params: URLSearchParams, key: string, fallback: number): number {
   const n = Number(params.get(key));
   return params.has(key) && Number.isFinite(n) ? n : fallback;
+}
+
+/** "10H,6H" as cards; null when absent or unreadable. */
+function cardsOf(text: string | null): Card[] | null {
+  const cards = (text ?? '').split(',').filter((c) => c.length > 1).map((c) => ({ rank: c.slice(0, -1) as CardRank, suit: c.slice(-1) as Card['suit'] }));
+  return cards.length > 0 && cards.every((c) => SUITS.includes(c.suit)) ? cards : null;
 }
 
 export function parseScenario(params: URLSearchParams): Scenario {
@@ -78,6 +89,8 @@ export function parseScenario(params: URLSearchParams): Scenario {
     start: Math.max(1, int(params, 'start', DEFAULT_BLACKJACK_SETTINGS.startingChips)),
     bet: Math.max(1, int(params, 'bet', 10)),
     chips: Math.max(0, int(params, 'chips', 900)),
+    allCards: params.get('allCards') === '1',
+    hand: cardsOf(params.get('hand')),
   };
 }
 
@@ -161,9 +174,9 @@ function seatedRooms(s: Scenario): BlackjackRoomState[] {
   const order = [...others, ME];
   const SOFT: Card[] = [{ rank: 'A', suit: 'S' }, { rank: '9', suit: 'H' }];
   const BUST: Card[] = [{ rank: '10', suit: 'S' }, { rank: '6', suit: 'H' }, { rank: 'K', suit: 'D' }];
-  const special = s.soft ? SOFT : s.bust ? BUST : null;
+  const special = s.hand ?? (s.soft ? SOFT : s.bust ? BUST : null);
   const myCards = (status: (i: number) => HandStatus) =>
-    Array.from({ length: s.hands }, (_, i) => hand(special && i === s.active ? special : cardsFor(i, i === s.active ? s.cards : 2), status(i), s.hands > 1, s.stake, s.doubled));
+    Array.from({ length: s.hands }, (_, i) => hand(special && i === s.active ? special : cardsFor(i, i === s.active || s.allCards ? s.cards : 2), status(i), s.hands > 1, s.stake, s.doubled));
   const otherHands = (id: string, status: HandStatus, count = 1) =>
     Array.from({ length: count }, (_, i) => hand(cardsFor(i + others.indexOf(id) + 3, 2), status, count > 1, s.bet));
   const seat = (hands: HandView[], bet: number, extra: Partial<BlackjackPlayerView> = {}): BlackjackPlayerView => ({ chips: s.chips, bet, hands, inRound: true, sittingOut: false, bustedOut: false, ...extra });
@@ -243,5 +256,11 @@ function seatedRooms(s: Scenario): BlackjackRoomState[] {
       return [room(last === ME ? acting(ME, s.hands - 1) : acting(last, 0)), room(settled())];
     case 'results':
       return [room(settled())];
+    case 'over': {
+      // The host ended the game: the last round's hands stay on the table, no stake down, nothing on offer.
+      const done = settled();
+      const players = Object.fromEntries(Object.entries(done.players).map(([id, p]) => [id, { ...p, bet: 0 }]));
+      return [room({ ...done, phase: 'gameOver', round: base.round, waitingFor: [], controls: NO_CONTROLS, players })];
+    }
   }
 }

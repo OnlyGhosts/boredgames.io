@@ -1,3 +1,5 @@
+import { useRef } from 'react';
+import { useFitForm, type FitRule } from './fit';
 import { betChips, chipFigure, stakeText, type ChipBand, type StakeFormat } from './stakes';
 
 type DataAttrs = Record<`data-${string}`, string | number | boolean | undefined>;
@@ -6,7 +8,8 @@ type DataAttrs = Record<`data-${string}`, string | number | boolean | undefined>
  * The figure in a stack or a stake. `fit` writes both forms and table.css picks one by the tile's
  * width and, for a stake, by its pill (two chips or a plus are wider than the word Bet was): a
  * stack reads "1,040" wherever it fits, and a stake read as "1k" is told from 1,000 by its chips
- * (PlayersGrid's tileFigures says where each reads short).
+ * (PlayersGrid's tileFigures says where each reads short). Where the stylesheet's pick still does
+ * not fit, a tile's stack and a stake on the stage are measured and read short (fit.tsx).
  */
 function Figure({ value, format, className }: { value: number; format: StakeFormat; className: string }) {
   const full = chipFigure(value, 'full');
@@ -25,6 +28,13 @@ interface StackProps {
   format?: StakeFormat;
   className?: string;
   testId?: string;
+  /**
+   * With `fit`: where the figure the stylesheet picks still does not fit by this rule, the short
+   * figure, measured as it lays out (fit.tsx). A tile's stack (TILE_FIT) reads short ("100k
+   * chips") where in full it would be cut ("100,000 chips" on a full tile three across a phone) or
+   * run under the name, so it is never cut.
+   */
+  fit?: FitRule;
 }
 
 /** A stack of five digits or more ("12,500"): a narrow tile reads it short (table.css). */
@@ -33,11 +43,17 @@ const LONG_FIGURE = 6;
 /** A stake of four digits or more ("1,000"): a tile reads it short ("1k") where the pill would crowd its line (table.css, PlayersGrid's tileFigures). */
 const LONG_STAKE = 5;
 
+const noBox = () => null;
+
 /** A player's stack, in words: the figure large and bold, "chips" after it ("1,000 chips"); `data-long` marks a five-digit one. */
-export function StackCount({ value, format = 'full', className, testId }: StackProps) {
+export function StackCount({ value, format = 'full', className, testId, fit }: StackProps) {
+  const ref = useRef<HTMLSpanElement>(null);
+  // Two forms where the figure has a short one: the stylesheet's pick, then the short figure.
+  const forms = format === 'fit' && fit && chipFigure(value, 'full') !== chipFigure(value, 'short') ? 2 : 1;
+  const at = useFitForm(ref, String(value), forms, fit?.box ?? noBox, fit?.cut);
   return (
-    <span className={`tbl-stackcount${className ? ` ${className}` : ''}`} data-testid={testId} data-chips={value} data-long={chipFigure(value, 'full').length >= LONG_FIGURE ? '' : undefined}>
-      <Figure value={value} format={format} className="tbl-stackcount__value" /> <span className="tbl-stackcount__word">{value === 1 ? 'chip' : 'chips'}</span>
+    <span ref={ref} className={`tbl-stackcount${className ? ` ${className}` : ''}`} data-testid={testId} data-chips={value} data-long={chipFigure(value, 'full').length >= LONG_FIGURE ? '' : undefined}>
+      <Figure value={value} format={at > 0 ? 'short' : format} className="tbl-stackcount__value" /> <span className="tbl-stackcount__word">{value === 1 ? 'chip' : 'chips'}</span>
     </span>
   );
 }
@@ -76,6 +92,13 @@ interface PillProps {
   className?: string;
   testId?: string;
   data?: DataAttrs;
+  /**
+   * With `fit`: where the figure the stylesheet picks still does not fit by this rule, the short
+   * figure, measured as it lays out (fit.tsx). A stake by my hand (STAGE_FIT) reads in full
+   * ("12,000"), as the seats' pills read, short ("12k") only where the full figure would run the
+   * pill, or its hand, off the stage; Poker's pot, only where it would crowd the board.
+   */
+  fit?: FitRule;
 }
 
 interface BetPillProps extends PillProps {
@@ -102,11 +125,16 @@ type StakeProps = BetPillProps | PotPillProps;
  * beside them, and reads as "Bet 10"; the pot keeps its word ("Pot 120").
  */
 export function StakePill(props: StakeProps) {
-  const { value, format = 'full', className, testId, data } = props;
+  const { value, className, testId, data, fit } = props;
+  const ref = useRef<HTMLSpanElement>(null);
+  // Measured, two forms where the figure has a short one: the stylesheet's pick, then the short figure.
+  const forms = fit && props.format === 'fit' && chipFigure(value, 'full') !== chipFigure(value, 'short') ? 2 : 1;
+  const at = useFitForm(ref, String(value), forms, fit?.box ?? noBox, fit?.cut);
+  const format = at > 0 ? 'short' : (props.format ?? 'full');
   const extra = className ? ` ${className}` : '';
   if (props.kind === 'pot') {
     return (
-      <span className={`tbl-stake tbl-stake--pot${extra}`} data-testid={testId} data-bet={value} {...data}>
+      <span ref={ref} className={`tbl-stake tbl-stake--pot${extra}`} data-testid={testId} data-bet={value} {...data}>
         <span className="tbl-stake__word">{props.word ?? 'Pot'}</span> <Figure value={value} format={format} className="tbl-stake__value" />
       </span>
     );
@@ -115,7 +143,7 @@ export function StakePill(props: StakeProps) {
   // Wider than the word Bet was (two chips, or a plus): a compact tile, and a full one 200px to 239px wide, read a four-digit figure beside them short (table.css).
   const wide = bands.length > 1 || more;
   return (
-    <span className={`tbl-stake tbl-stake--bet${wide ? ' tbl-stake--wide' : ''}${extra}`} role="img" aria-label={stakeText(value)} data-testid={testId} data-bet={value} data-chips={count} data-bands={bands.join(' ')} data-long={chipFigure(value, 'full').length >= LONG_STAKE ? '' : undefined} {...data}>
+    <span ref={ref} className={`tbl-stake tbl-stake--bet${wide ? ' tbl-stake--wide' : ''}${extra}`} role="img" aria-label={stakeText(value)} data-testid={testId} data-bet={value} data-chips={count} data-bands={bands.join(' ')} data-long={chipFigure(value, 'full').length >= LONG_STAKE ? '' : undefined} {...data}>
       <ChipSpread bands={bands} />
       {/* The plus: shown when more chips are owed than drawn; a spare one, hidden until a tile or the phone's stage hides a drawn chip (table.css, blackjack.css). */}
       {count > 1 && (

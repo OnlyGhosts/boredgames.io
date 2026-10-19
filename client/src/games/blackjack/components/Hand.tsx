@@ -1,6 +1,7 @@
 import type { PlayingCardSize } from '../../../platform/components/PlayingCard';
 import { HandFan, OutcomeFlag } from '../../../platform/table/HandFan';
 import { PayoutFloat, type Tone } from '../../../platform/table/Outcome';
+import { STAGE_FIT } from '../../../platform/table/fit';
 import { StakePill } from '../../../platform/table/Stakes';
 import { TableCard } from '../../../platform/table/TableCard';
 import { cardKey, shownTotal, totalText, type TableHand } from '../lib/table';
@@ -57,12 +58,15 @@ function endWord(outcome: NonNullable<TableHand['outcome']>, bust: boolean): str
   return outcome === 'loss' && bust ? 'Bust' : outcomeLabel(outcome);
 }
 
-/** Past this many chips a stake's figure reads short ("12k"), so it keeps beside the total; split hands side by side on a phone's stage read it short from 1,000 (blackjack.css). */
-const SHORT_STAKE = 10_000;
-
-/** The stake ("Bet 10": its chips and the figure) by a hand's total, at a table that started with `start` chips. */
+/**
+ * The stake ("Bet 10": its chips and the figure) by a hand's total, at a table that started with
+ * `start` chips: in full ("12,000") on a hand of its own, as the seats' pills read beside it. The
+ * short form ("12k") is only for where the pill would crowd its line: split hands side by side on a
+ * phone's stage (blackjack.css), and a figure that would run the pill off the stage (my next stake
+ * beside my empty places, "1,250,000" on a 375px phone: STAGE_FIT, measured).
+ */
 export function stakeOf(value: number, start: number, testId?: string) {
-  return <StakePill value={value} start={start} format={value >= SHORT_STAKE ? 'short' : 'fit'} className="tbl-hand__stake" testId={testId} />;
+  return <StakePill value={value} start={start} format="fit" fit={STAGE_FIT} className="tbl-hand__stake" testId={testId} />;
 }
 
 /** Left of a hand's total while it plays: its owner's name on my stage, its stake, or the doubled tag. */

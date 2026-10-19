@@ -1,7 +1,7 @@
 import { expect, test, type Browser, type BrowserContext, type Locator, type Page } from '@playwright/test';
 import { closeResults, createParty, expectReadyCount, joinByCode, readyAll } from './party';
 import { tableBots, type TableBot } from './tableBots';
-import { myAreaOnScreen, tilesReadable } from './tableFit';
+import { cornersClear, myAreaOnScreen, tilesReadable } from './tableFit';
 
 /**
  * Texas Hold'em on the Stake-style table, between a desktop host and two phones (390x844, touch):
@@ -65,7 +65,7 @@ async function boxOf(locator: Locator): Promise<{ x: number; y: number; width: n
   return box;
 }
 
-/** The phone layout holds: no sideways scroll, the whole panel on screen, every control a 44px target, the field 16px. */
+/** The phone layout holds: no sideways scroll, the whole panel on screen, every control a 44px target, the field 16px, my cards' ranks and suits whole. */
 async function phoneLayoutHolds(p: Player, size: { width: number; height: number }): Promise<void> {
   await expect.poll(() => p.page.evaluate(() => document.documentElement.scrollWidth), { message: `${p.name}: document.scrollWidth` }).toBeLessThanOrEqual(size.width);
   const panel = await boxOf(p.page.getByTestId('pk-panel'));
@@ -92,6 +92,8 @@ async function phoneLayoutHolds(p: Player, size: { width: number; height: number
     );
   // Nor is the hand under the name ever cut short.
   await expect.poll(scrolls, { message: `${p.name}: nothing scrolls or is cut short` }).toEqual([]);
+  // Every rank and suit of my cards reads whole: nothing over their corners (the hand's name, my bet, the dealer button).
+  await cornersClear(p.page, p.name);
 }
 
 async function chipsOf(p: Player): Promise<number> {
@@ -580,6 +582,7 @@ async function bigTable(browser: Browser, base: string, size: number): Promise<v
         await expect.poll(scrolls, { message: `${label}: nothing scrolls` }).toEqual([]);
         await myAreaOnScreen(page, 'my-area', label);
         await tilesReadable(page, label, s.width > 760 ? 28 : 0);
+        await cornersClear(page, label);
       }
       if (own) await page.setViewportSize(own);
     };
@@ -629,6 +632,86 @@ test('no page errors were raised in any browser', async () => {
  * button, the raise and the hand's name stay on the stage at 320px and 360px, the dealt name and the
  * longest a phone shows (they once ran 33px past its left edge), the words still over the cards.
  */
+/**
+ * A 100,000 table of three on a 320px phone (me and two players on bare sockets, moved by the spec):
+ * a seat that calls my 12,000 raise gets a pill of chips beside its line, and the 142px tile
+ * squeezes the line to "Call 12k" while they fly in; once the street has closed and the chips have
+ * gone to the pot, the line has its row again and reads "Call 12,000" in full (it once stayed
+ * "Call 12k" for the whole next street, measured only when its tile resized). The seat that closes
+ * the street is read, its call being the move that stays on show into the flop; a hand where that
+ * seat would then be first to act (me the big blind, the small blind closing), where its line says
+ * "Thinking", is folded out first, and the next hand deals me the small blind.
+ */
+test('a 100,000 table of three on a 320px phone: a seat’s call reads in full once its chips have gone to the pot', async ({ browser, baseURL }) => {
+  test.setTimeout(90_000);
+  const base = baseURL ?? 'http://localhost:4173';
+  const ctx = await browser.newContext({ viewport: SMALL, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
+  const page = await ctx.newPage();
+  const errors: string[] = [];
+  page.on('pageerror', (err) => errors.push(err.message));
+  let bots: TableBot[] = [];
+  try {
+    const code = await createParty(page, 'Hana', 'poker');
+    const start = page.getByTestId('settings-startingChips');
+    await start.fill('100000');
+    await start.press('Enter');
+    await expect(start).toHaveValue('100000');
+    bots = await tableBots(2, code, base, { game: 'poker', hold: true });
+    await expectReadyCount(page, 3);
+    await page.getByTestId('start-game').click();
+    const screen = page.getByTestId('poker-screen');
+    const board = page.getByTestId('board');
+    await expect(screen).toHaveAttribute('data-phase', 'acting');
+    await expect(page.getByTestId('seats')).toHaveAttribute('data-tier', 'full');
+    const myId = await page.getByTestId('my-area').getAttribute('data-player-id');
+    const turn = async () => (await screen.getAttribute('data-turn-player')) ?? '';
+    const botOn = (id: string): TableBot => {
+      const bot = bots.find((b) => b.id === id);
+      if (!bot) throw new Error(`no bot has the turn: ${id}`);
+      return bot;
+    };
+    // Me the big blind (the first bot the button): the button and the small blind fold, and the next hand reads instead.
+    const buttonSeat = page.locator('[data-testid="seat"][data-dealer="true"]');
+    if ((await page.getByTestId('my-area').getAttribute('data-dealer')) !== 'true' && (await buttonSeat.getAttribute('data-player-id')) === bots[0].id) {
+      for (const bot of bots) {
+        await expect.poll(turn, { message: `${bot.name} to act` }).toBe(bot.id);
+        bot.move({ t: 'fold' });
+      }
+      await expect(screen).toHaveAttribute('data-hand', '2', { timeout: 20_000 });
+      await expect(screen).toHaveAttribute('data-phase', 'acting');
+    }
+    // Everyone limps round to me, I raise to 12,000 and everyone calls: the last caller closes the street.
+    let closer = '';
+    for (let moves = 0; moves < 6 && (await board.getAttribute('data-street')) !== 'flop'; moves++) {
+      await expect.poll(turn, { message: 'someone to act' }).not.toBe('');
+      const id = await turn();
+      if (id === myId) {
+        await expect(page.getByTestId('action-fold')).toBeEnabled();
+        await page.getByTestId('raise-input').fill('12000');
+        await page.getByTestId('raise-input').press('Enter');
+      } else {
+        botOn(id).move({ t: 'call' });
+        closer = id;
+      }
+      await expect.poll(async () => `${await turn()} ${await board.getAttribute('data-street')}`, { message: `the turn passes from ${id}` }).not.toBe(`${id} preflop`);
+    }
+    await expect(board).toHaveAttribute('data-street', 'flop');
+    expect(closer, 'a bot closed the street').not.toBe('');
+    // Its chips went to the pot: the line has its row again and reads in full, the first of its forms.
+    const seat = page.locator(`[data-testid="seat"][data-player-id="${closer}"]`);
+    await expect(seat.getByTestId('seat-bet')).toHaveAttribute('data-bet', '0');
+    await expect(seat.getByTestId('seat-line')).toHaveText('Call 12,000');
+    await expect(seat.getByTestId('seat-line')).toHaveAttribute('data-fit', '0');
+    await expect(page.getByTestId('pot')).toHaveText(/^Pot\s+36,000$/, { useInnerText: true });
+    await tilesReadable(page, 'the flop on a 320px phone');
+    expect(errors).toEqual([]);
+    expect(bots.flatMap((b) => b.errors)).toEqual([]);
+  } finally {
+    for (const b of bots) b.close();
+    await ctx.close();
+  }
+});
+
 test('a 100,000 table: a raise to 12,000 reads on the raiser’s seat and by their cards at every phone size', async ({ browser }) => {
   const phone = { viewport: PORTRAIT, isMobile: true, hasTouch: true, deviceScaleFactor: 2 };
   const contexts = [await browser.newContext(phone), await browser.newContext(phone)];
@@ -670,16 +753,31 @@ test('a 100,000 table: a raise to 12,000 reads on the raiser’s seat and by the
           return el !== null && (el.scrollWidth > el.clientWidth || el.scrollHeight > el.clientHeight);
         }),
       );
-    for (const size of [{ width: 360, height: 740 }, PORTRAIT, { width: 414, height: 896 }]) {
+    // The raiser's tile says what happened in whole words at every width ("Raise to 12,000", "Raise 12k" or "Raise" beside the 12k pill,
+    // never "Raise t…"), and the pot reads in full ("Pot 12,010": the raise and the big blind's 10) wherever it fits, a desktop's too.
+    for (const size of [SMALL, { width: 360, height: 740 }, PORTRAIT, { width: 414, height: 896 }, { width: 430, height: 932 }, ...DESKTOPS]) {
       const label = `the raiser’s seat at ${size.width}x${size.height}`;
       await watcher.setViewportSize(size);
       await expect(watcher.getByTestId('seats')).toHaveAttribute('data-tier', 'full');
       await expect.poll(() => scrolls(watcher), { message: `${label}: nothing scrolls` }).toEqual([]);
       await tilesReadable(watcher, label);
+      await expect(seat.getByTestId('seat-line'), label).toHaveText(/^(Raise to 12,000|Raise 12k|Raise)$/);
+      if (size.width > 760) await expect(seat.getByTestId('seat-line'), `${label}: in full on a desktop`).toHaveText('Raise to 12,000');
+      await expect(watcher.getByTestId('pot'), label).toHaveText(/^Pot\s+12,010$/, { useInnerText: true });
+      await cornersClear(watcher, label);
     }
 
     await expect(raiser.locator('[data-testid="my-bet"] .tbl-stake')).toHaveAttribute('data-bet', '12000');
     await expect(raiser.getByTestId('my-dealer')).toBeVisible();
+    // By my cards my raise reads in full, as the seats' pills read it, at every phone size and on a desktop (it once read "12k" even at
+    // 1440 wide), and the pill, the dealer button and the hand's name never cover a rank or a suit.
+    for (const size of [SMALL, { width: 360, height: 740 }, PORTRAIT, { width: 430, height: 932 }, ...DESKTOPS]) {
+      const label = `my raise at ${size.width}x${size.height}`;
+      await raiser.setViewportSize(size);
+      await expect(raiser.locator('[data-testid="my-bet"] .tbl-stake'), label).toHaveText(/^\+?\s*12,000$/, { useInnerText: true });
+      await expect(raiser.getByTestId('pot'), label).toHaveText(/^Pot\s+12,010$/, { useInnerText: true });
+      await cornersClear(raiser, label);
+    }
     // The words over my cards (the dealer button, the raise, the hand's name): wholly on the stage, their right end over the cards' right edge.
     const head = () =>
       raiser.evaluate(() => {

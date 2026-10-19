@@ -8,7 +8,7 @@ import { holeOnScreen, sameCard, winningCards, wonOnScreen } from '../lib/screen
 import type { PokerTable } from '../lib/table';
 import { shortChips } from '../../../platform/lib/format';
 import { betAnchor, betValue, chipsValue, outcomesShown, paidOut, valueAt, type Timeline } from '../lib/timeline';
-import { categoryLabel, lastActionLabel, payoutText } from '../lib/text';
+import { categoryLabel, lastActionForms, payoutText } from '../lib/text';
 import { usePoker, usePokerStore } from '../store';
 import { DealerButton } from './DealerButton';
 
@@ -44,11 +44,13 @@ export function seatLine(view: PokerView, table: PokerTable | null, id: string, 
   if (seat.status === 'folded') return { state: 'folded', text: 'Folded', tone: 'quiet' };
   if (view.phase === 'acting' && view.turn === id) return { state: 'turn', text: 'Thinking', tone: 'turn' };
   if (seat.status === 'allIn') return { state: 'allin', text: 'All in', tone: 'strong' };
-  const action = lastActionLabel(seat.lastAction);
-  if (action) return { state: 'acted', text: action, tone: 'quiet' };
+  // Its last move in whole words, with shorter forms for a narrow tile ("Raise to 12,000", "Raise 12k", "Raise").
+  const acted = (forms: string[]): SeatLine => ({ state: 'acted', text: forms[0], tone: 'quiet', short: forms.slice(1) });
+  const action = lastActionForms(seat.lastAction);
+  if (action[0]) return acted(action);
   // The move that closed the last street, until somebody moves again.
   const move = view.lastMove;
-  if (move && move.playerId === id && move.street !== view.street) return { state: 'acted', text: lastActionLabel(move), tone: 'quiet' };
+  if (move && move.playerId === id && move.street !== view.street) return acted(lastActionForms(move));
   return { state: 'waiting', text: '', tone: 'quiet' };
 }
 

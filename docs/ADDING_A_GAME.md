@@ -311,7 +311,10 @@ I stand ("All in", "Folded"), or how the hand ended ("Win +300"); those words si
 box, so on a narrow phone the cards move right just as far as the words need to stay on the stage. The shared pieces: `HandFan` / `OutcomeFlag` (a hand as a stepped fan, each card a
 little right of and below the one before, the total in a pill over its top right corner; one
 height however many cards; an outcome outlines every card and colours the pill, its word beside the
-pill; `flag` carries whatever sits left of the pill: the outcome, the stake, the owner's name),
+pill; `flag` carries whatever sits left of the pill: the outcome, the stake, the owner's name; the
+pill and the words beside it come down over the cards only as far as a card's corner begins,
+`--card-index-top` in `cards.css`, so nothing over a hand ever covers a rank or a suit, and a hand
+is its pill's height and `--hand-k` (1.67) card widths tall, which a game sizes its rows by),
 `StackCount` / `StakePill` in `Stakes.tsx` with `stakes.ts` (a stack reads "1,000 chips", or
 just "1,000" beside the hand's total on a compact tile under 100px wide; a stake is always its own gold pill, so the two are never confused: a bet draws the chips
 it breaks into with the figure beside them and is read out as "Bet 10", the pot keeps its word,
@@ -321,7 +324,10 @@ off-white 1%, lime 5%, lilac 25%, ink with a lime edge the whole stack, so at 1,
 chip is one off-white chip, at most three are drawn (two on a compact tile and by split hands side
 by side on a phone's stage, fewer on the narrowest tiles) biggest first with a small plus when more
 are owed, and a bet pill takes `start` from the room's settings; where a pill would crowd its line
-the figure beside the chips reads short, "12k", and the chips tell 1,040 from 1,000), `Deck` (with `corner`: wholly on the felt in its top right corner, inside the felt's
+the figure beside the chips reads short, "12k", and the chips tell 1,040 from 1,000; my stake by my
+hand (`stage`) and the pot read in full, as the seats' pills do, short only by split hands side by
+side on a phone and where the full figure would run the pill or its hand off the stage, measured as
+it lays out), `Deck` (with `corner`: wholly on the felt in its top right corner, inside the felt's
 padding, the count said rather than shown) and `DiscardCorner` (the anchor cards fly to, just past
 the top left corner), `TurnLine`, `TableStage`, `PlayersGrid` / `PlayerTile` / `SeatSheet` (every other player as a tile in seat order
 in a grid that fits its space: [`grid.ts`](../client/src/platform/table/grid.ts) picks the tier
@@ -338,7 +344,13 @@ narrow small tile wears its total as a badge on its corner), keeps a full tile t
 a gentle arc that flattens as the tiles get smaller and a size up on a big screen
 (`--tbl-tile-font`); a tile shows the stack and the
 stake with `StackCount` and `StakePill` wherever it has the room, and with `shortBadge` its total
-stands in for the stack only where the tile is too short for the words (Poker's); the seat on turn gets the lime ring (and the Playing tag where it fits),
+stands in for the stack only where the tile is too short for the words (Poker's); a seat's line
+(`SeatLine`) can carry shorter forms (`short`: "Raise to 12,000", "Raise 12k", "Raise", the pill
+beside it saying the figure) and the tile shows the first that fits (`FitText` in
+[`fit.tsx`](../client/src/platform/table/fit.tsx), measured as it lays out and again as the words
+beside it come and go, so the full form is back once the pill has flown to the pot), as a full tile's stack
+reads short ("100k chips") where its row cannot hold the full figure or it would run under the
+name, so nothing on a tile is ever cut; the badge on the avatar keeps clear of the words beside it; the seat on turn gets the lime ring (and the Playing tag where it fits),
 a settled seat its outcome's colour, and tapping a tile opens its hand in a sheet),
 `PanelShell` / `PanelLabelRow` / `AmountField` / `PanelMoves` / `MoveButton` / `TableButton` (the control panel:
 no status line and no shortcut hint, whose turn it is lives on the table; the amount with the

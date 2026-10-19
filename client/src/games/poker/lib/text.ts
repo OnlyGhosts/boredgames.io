@@ -1,6 +1,6 @@
 import { evaluateBest, handName, rankValue, type HandCategory, type HandRank } from '@shared/games/poker/hands';
 import type { Card, PokerLastAction, PokerPhase, PokerResults, PokerStreet, PokerView } from '@shared/games/poker/protocol';
-import { formatChips } from '../../../platform/lib/format';
+import { formatChips, shortChips } from '../../../platform/lib/format';
 import type { TurnTone } from '../../../platform/table/TurnLine';
 import type { PkFocus } from './focus';
 
@@ -40,28 +40,29 @@ export function ribbonText(view: Pick<PokerView, 'blinds'>): string {
   return `Blinds ${blindsLabel(view)}`;
 }
 
-/** What a seat did last: "Check", "Call 20", "Raise to 80", "All in 300", "BB 10". */
-export function lastActionLabel(action: PokerLastAction | null): string {
-  if (!action) return '';
-  const n = formatChips(action.amount);
-  switch (action.kind) {
-    case 'fold':
-      return 'Fold';
-    case 'check':
-      return 'Check';
-    case 'call':
-      return `Call ${n}`;
-    case 'bet':
-      return `Bet ${n}`;
-    case 'raise':
-      return `Raise to ${n}`;
-    case 'allIn':
-      return `All in ${n}`;
-    case 'smallBlind':
-      return `SB ${n}`;
-    case 'bigBlind':
-      return `BB ${n}`;
-  }
+/** A move with a figure: its word alone, and the words that lead the figure in full ("Raise to 80"). */
+const MOVE_WORDS: Record<Exclude<PokerLastAction['kind'], 'fold' | 'check'>, { word: string; lead: string }> = {
+  call: { word: 'Call', lead: 'Call' },
+  bet: { word: 'Bet', lead: 'Bet' },
+  raise: { word: 'Raise', lead: 'Raise to' },
+  allIn: { word: 'All in', lead: 'All in' },
+  smallBlind: { word: 'SB', lead: 'SB' },
+  bigBlind: { word: 'BB', lead: 'BB' },
+};
+
+/**
+ * What a seat did last ("Check", "Call 20", "Raise to 80", "All in 300", "BB 10") in whole words,
+ * the fullest first, then the shorter forms a narrow tile falls back on: "Raise to 12,000", "Raise
+ * 12k", then the move alone, "Raise" (its bet pill beside it says the figure). "Check" and "Fold"
+ * have one form, and a figure under 1,000 reads the same short ("Call 20", "Call"). Nothing yet: "".
+ */
+export function lastActionForms(action: PokerLastAction | null): string[] {
+  if (!action) return [''];
+  if (action.kind === 'fold') return ['Fold'];
+  if (action.kind === 'check') return ['Check'];
+  const { word, lead } = MOVE_WORDS[action.kind];
+  const forms = [`${lead} ${formatChips(action.amount)}`, `${word} ${shortChips(action.amount)}`, word];
+  return forms.filter((f, i) => forms.indexOf(f) === i);
 }
 
 /** The chips a winner took back ("+300"). */

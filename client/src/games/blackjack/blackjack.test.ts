@@ -623,9 +623,11 @@ describe('the screen', () => {
   it('keeps my stake by each total near the width the word Bet gave it on a phone, so split hands stay side by side', async () => {
     const { stakeOf } = await import('./components/Hand');
     const out = (value: number, start: number) => renderToString(stakeOf(value, start, 'hand-bet'));
-    // A four-digit stake writes both figures, for split hands on a phone's stage to read it short ("1.2k") and a hand on its own in full; from 10,000 it is short everywhere.
+    // A stake of four digits or more writes both figures, for split hands on a phone's stage to read it short ("1.2k") and a hand on its own in
+    // full, at every size: "12,000" by my hand on a desktop beside the seats' "40,500" (it once read "12k" from 10,000 everywhere).
     expect(out(1200, 10_000)).toMatch(/aria-label="Bet 1,200"[^>]*data-chips="4" data-bands="lime lime white"[\s\S]*<span class="tbl-stake__value tbl-figure"><span class="tbl-figure__full">1,200<\/span><span class="tbl-figure__short">1.2k<\/span><\/span>/);
-    expect(out(12_000, 10_000)).toMatch(/<span class="tbl-stake__value">12k<\/span>/);
+    expect(out(12_000, 10_000)).toMatch(/<span class="tbl-stake__value tbl-figure"><span class="tbl-figure__full">12,000<\/span><span class="tbl-figure__short">12k<\/span><\/span>/);
+    expect(out(1_250_000, 100_000)).toMatch(/<span class="tbl-figure__full">1,250,000<\/span><span class="tbl-figure__short">1.3M<\/span>/);
     expect(out(200, 1000)).toMatch(/<span class="tbl-stake__value">200<\/span>/);
     // Split hands side by side on a phone's stage (under 460px) pack the pill tighter, draw two chips at most with the plus for the rest, and read the short figure:
     // two split hands at 320px once folded one into a chip when "1,200" with three chips outgrew a hand's share.
@@ -1148,19 +1150,24 @@ describe("the table’s focus and the stage", () => {
     const css = readFileSync(fileURLToPath(new URL('./blackjack.css', import.meta.url)), 'utf8');
     // The calm table's fixed first and last rows (table.css) are the dealer's and the stage's.
     expect(css).toMatch(/\.bj-table \{[^}]*--tbl-head-h: calc\(var\(--bj-label-h\) \+ var\(--bj-fan-h\)\);\s*--tbl-stage-h: var\(--bj-fan-h\);/);
+    // A hand there is its pill's height and 1.67 card widths (table.css --hand-k): the pill comes down over the cards only as far as
+    // their corners begin, so it never covers a rank or a suit; a row of hands sizes its cards to that rule too.
+    expect(css).toMatch(/--bj-fan-h: calc\(var\(--tbl-pill-h\) \+ var\(--bj-card-w\) \* var\(--hand-k\) \+ 4px\);/);
+    expect(css).toMatch(/--fit-h: calc\(\(100cqh - var\(--tbl-pill-h\) - 4px\) \/ var\(--hand-k\)\);/);
+    expect(css).not.toMatch(/pill-h\) \* 0\.7|\* 1\.77|3\.54/);
     // The cards go by the room the table has (cq units), worked out once on the table.
     expect(css).toMatch(/@property --bj-card-w \{\s*syntax: '<length>';\s*inherits: true;/);
     expect(css).toMatch(/\.bj-table \{\s*--bj-card-w: clamp\(64px, 13cqh, 132px\);/);
     // On a phone the least card is 11% of the table's height, up to 60px (the shortest phones pin it at 30px: their seats need
     // every pixel). Over it the cards take the room the seats leave (--tbl-spare, worked out by the table from the seats the
-    // round was dealt with: room.ts useSeatRoom), shared by the dealer's fan and mine, 1.77 card widths each (3.54px a card
-    // pixel), up to 84px and the widest card whose four in the dealer's row (2.32 card widths from the anchor, 0.72 left of the
-    // middle) still clear the shoe: 73.8px on a 390px phone. --tbl-grow tells the table how much taller the two rows are for it,
-    // so it reads the seats' room with the cards at their least size however big they are.
+    // round was dealt with: room.ts useSeatRoom), shared by the dealer's hand and mine, 1.67 card widths each (table.css --hand-k:
+    // 3.34px a card pixel), up to 84px and the widest card whose four in the dealer's row (2.32 card widths from the anchor, 0.72
+    // left of the middle) still clear the shoe: 73.8px on a 390px phone. --tbl-grow tells the table how much taller the two rows
+    // are for it, so it reads the seats' room with the cards at their least size however big they are.
     expect(css).toMatch(/@property --bj-card-base \{\s*syntax: '<length>';\s*inherits: true;/);
     const phone = css.slice(css.indexOf('@media (max-width: 760px), (min-aspect-ratio: 3/2) and (max-height: 520px)'));
     expect(phone).toMatch(
-      /\.bj-table \{\s*(\/\*[^*]*(\*(?!\/)[^*]*)*\*\/\s*)?--bj-card-base: clamp\(30px, 11cqh, 60px\);\s*--bj-card-w: clamp\(var\(--bj-card-base\), calc\(var\(--bj-card-base\) \+ var\(--tbl-spare\) \/ 3\.54\), max\(var\(--bj-card-base\), min\(84px, calc\(\(50cqw - var\(--tbl-pad\) - 1px - var\(--tbl-deck-w\) \* 1\.5 - 9px\) \/ 1\.6\)\)\)\);\s*--tbl-grow: calc\(\(var\(--bj-card-w\) - var\(--bj-card-base\)\) \* 3\.54\);/,
+      /\.bj-table \{\s*(\/\*[^*]*(\*(?!\/)[^*]*)*\*\/\s*)?--bj-card-base: clamp\(30px, 11cqh, 60px\);\s*--bj-card-w: clamp\(var\(--bj-card-base\), calc\(var\(--bj-card-base\) \+ var\(--tbl-spare\) \/ \(2 \* var\(--hand-k\)\)\), max\(var\(--bj-card-base\), min\(84px, calc\(\(50cqw - var\(--tbl-pad\) - 1px - var\(--tbl-deck-w\) \* 1\.5 - 9px\) \/ 1\.6\)\)\)\);\s*--tbl-grow: calc\(\(var\(--bj-card-w\) - var\(--bj-card-base\)\) \* 2 \* var\(--hand-k\)\);/,
     );
     expect(css.slice(css.indexOf('@media (max-width: 760px) and (max-height: 620px)'))).toMatch(/\.bj-table \{\s*--bj-card-base: 30px;/);
     // Only the phone's rule takes the seats' room: a desktop's cards go by the table alone.
@@ -1200,6 +1207,15 @@ describe("the table’s focus and the stage", () => {
     const html = render(bjRoom(split), 'carol');
     expect(tagsWith(html, 'stage-hand')).toHaveLength(2);
     expect(tagWith(html, 'stage-hands-row')).toContain('style="--hands:2;--fan:3');
+    // Each slot keeps the room its own hand's words reach left of its own fan: by its own cards, not the row's longest hand
+    // (a two-card hand beside a five-card one once let its stake run 23px off the stage), the words ending 3px inside the hand's
+    // box (taken as 6px, two hands with the same words over them ran 2.6px off the stage during the deal).
+    expect(html.match(/<div class="bj-slot" style="--slot-fan:(\d+)">/g)).toEqual(['<div class="bj-slot" style="--slot-fan:3">', '<div class="bj-slot" style="--slot-fan:3">']);
+    const css = readFileSync(fileURLToPath(new URL('./blackjack.css', import.meta.url)), 'utf8');
+    expect(css).toMatch(/\.bj-hands--mine > \.bj-slot,\s*\.bj-hands--stage > \.bj-slot \{\s*\/\*[^*]*\*\/\s*flex: 0 0 var\(--bj-slot\);/);
+    expect(css).toMatch(/\.bj-hands--mine > \.bj-slot,\s*\.bj-hands--stage > \.bj-slot \{\s*--bj-head-room: max\(0px, calc\(var\(--bj-head-w, 0px\) - 3px - var\(--tbl-w\) \* \(1 \+ var\(--fan-step\) \* \(var\(--slot-fan, 2\) - 1\)\)\)\);/);
+    const long = render(bjRoom(acting({ players: { ...acting().players, bob: { chips: 260, bet: 20, hands: [hand([c('8'), c('3')], { total: 11, status: 'stood', fromSplit: true }), hand([c('8'), c('2'), c('A'), c('2'), c('3')], { total: 16, status: 'acting', fromSplit: true })], inRound: true, sittingOut: false, bustedOut: false } }, turn: { playerId: 'bob', handIndex: 1 }, actions: NO_ACTIONS })), 'carol');
+    expect(long.match(/--slot-fan:\d+/g)).toEqual(['--slot-fan:2', '--slot-fan:5']);
     // Their name rides on the hand in play, by its total.
     expect(html).toMatch(/data-testid="stage-hand"[^>]*data-index="1"[\s\S]*?<span class="tbl-hand__owner" data-testid="stage-owner">Pia<\/span>/);
     expect(tagsWith(html, 'stage-owner')).toHaveLength(1);

@@ -6,6 +6,7 @@ import { ChipIcon } from '../components/Chips';
 import { CheckIcon, CloseIcon, SparkIcon } from '../components/Icons';
 import { CardsIcon, OutIcon, StarIcon } from './Icons';
 import { TotalPill, type Tone } from './Outcome';
+import { FitText, TILE_FIT } from './fit';
 import { StackCount } from './Stakes';
 import type { StakeFormat } from './stakes';
 import { ARC_LIFT, GRID_GAP, arcLift, fitGrid, fitsRoom, naturalHeight, shapeOf, tierFor, tileHeight, type Room, type TileTier } from './grid';
@@ -118,6 +119,12 @@ export interface SeatLine {
   state: string;
   text: string;
   tone: SeatLineTone;
+  /**
+   * Shorter forms of the text, each shorter than the one before, for a tile too narrow for it
+   * whole: Poker's "Raise to 12,000" reads "Raise 12k", then "Raise" (the bet pill beside it says
+   * the figure). The tile shows the first form that fits (fit.tsx), never a cut one.
+   */
+  short?: readonly string[];
 }
 
 /**
@@ -170,7 +177,7 @@ interface TileProps {
   mark: SeatMark;
   /** The settled outcome, kept on show until the next deal. */
   outcome?: SeatOutcome | null;
-  /** The stack, in words ("1,000 chips"; "1.2k chips" where a tile is too small for the full figure; the figure alone beside the total on a compact tile under 100px). */
+  /** The stack, in words ("1,000 chips"; "1.2k chips" where a tile is too small for the full figure, or its row too narrow for it whole, or too short for it beside the bet; the figure alone beside the total on a compact tile under 100px). */
   chips?: number;
   /** The stake in front of the seat, as its own pill of chips (StakePill, with tileChips for the tier). */
   bet?: ReactNode;
@@ -238,11 +245,9 @@ export function PlayerTile({ playerId, name, avatar, connected, tier, turn, turn
         {badge}
       </span>
       <span className="tbl-tile__meta">
-        {chips !== undefined && <StackCount value={chips} format={tileFigures(tier)} className="tbl-tile__chips" testId="seat-chips" />}
+        {chips !== undefined && <StackCount value={chips} format={tileFigures(tier)} className="tbl-tile__chips" testId="seat-chips" fit={TILE_FIT} />}
         {bet !== undefined && <span className="tbl-tile__bet">{bet}</span>}
-        <span className={`tbl-tile__line tbl-tile__line--${line.tone}`} data-testid="seat-line">
-          {line.text}
-        </span>
+        <FitText forms={[line.text, ...(line.short ?? [])]} className={`tbl-tile__line tbl-tile__line--${line.tone}`} testId="seat-line" />
       </span>
       {total && (
         <span className="tbl-tile__total">

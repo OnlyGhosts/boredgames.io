@@ -11,6 +11,8 @@ export interface TableBot {
   id: string | null;
   /** Keeps the turn instead of playing it; letting go plays it at once. */
   setHold(hold: boolean): void;
+  /** Sends a move of the spec's own choosing (a held bot plays only these): a call, a fold, a raise. */
+  move(msg: object): void;
   /** Errors the server sent back, for a failing spec to print. */
   errors: string[];
   /** Leaves the room for good, as the Leave button does (closing the socket only drops the connection, and the seat waits). */
@@ -102,6 +104,7 @@ export function tableBot(name: string, code: string, base: string, { game: kind,
       held = next;
       if (!next) step();
     },
+    move: (msg) => void send(msg),
     leave: () => send({ t: 'leave' }),
     close: () => socket.close(),
   };

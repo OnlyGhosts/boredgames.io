@@ -2,6 +2,7 @@ import type { BlackjackRoomState, BlackjackView } from '@shared/games/blackjack/
 import type { Tone } from '../../../platform/table/Outcome';
 import { PlayerTile, PlayersGrid, SeatSheet, tileChips, tileFigures, type SeatLine, type SeatMark } from '../../../platform/table/PlayersGrid';
 import { StackCount, StakePill } from '../../../platform/table/Stakes';
+import { shortChips } from '../../../platform/lib/format';
 import { playerOf } from '../hooks';
 import { seatOutcome } from '../lib/focus';
 import { totalText, type TableHand, type TableModel } from '../lib/table';
@@ -50,7 +51,9 @@ export function seatLine(view: BlackjackView, id: string, hands: TableHand[], se
     const staked = hands.reduce((sum, h) => sum + h.bet, 0);
     const outcome = hands.length === 1 && hands[0].outcome ? outcomeLabel(hands[0].outcome) : back > staked ? 'Win' : back === staked ? 'Push' : 'Lost';
     // A push only hands the stake back: no "+N", which would read as a win.
-    return { state: 'settled', text: back > 0 && outcome !== 'Push' ? `${outcome} ${payoutText(back)}` : outcome, tone: 'strong' };
+    if (back === 0 || outcome === 'Push') return { state: 'settled', text: outcome, tone: 'strong' };
+    // A narrow tile falls back on "Win +12k", then "Win": the line never cuts a figure.
+    return { state: 'settled', text: `${outcome} ${payoutText(back)}`, tone: 'strong', short: back >= 1000 ? [`${outcome} +${shortChips(back)}`, outcome] : [outcome] };
   }
   if (view.phase === 'acting' && hands.length > 0) {
     const order = view.order.indexOf(id);

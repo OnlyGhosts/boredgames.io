@@ -2,7 +2,7 @@ import { expect, test, type Browser, type BrowserContext, type Locator, type Pag
 import { BLACKJACK_FINAL_HOLD_MS } from '../shared/games/blackjack/deal';
 import { closeResults, createParty, expectReadyCount, joinByCode, readyAll } from './party';
 import { tableBots, type TableBot } from './tableBots';
-import { tilesReadable } from './tableFit';
+import { cornersClear, tilesReadable } from './tableFit';
 
 /**
  * Blackjack the Stake way, between a desktop host and two phones (390x844, touch): no rounds, no
@@ -65,7 +65,7 @@ async function boxOf(locator: Locator): Promise<{ x: number; y: number; width: n
   return box;
 }
 
-/** The phone layout holds: no sideways scroll, the whole panel on screen, every control a 44px target. */
+/** The phone layout holds: no sideways scroll, the whole panel on screen, every control a 44px target, every card's rank and suit whole. */
 async function phoneLayoutHolds(p: Player, size: { width: number; height: number }): Promise<void> {
   await expect.poll(() => p.page.evaluate(() => document.documentElement.scrollWidth), { message: `${p.name}: document.scrollWidth` }).toBeLessThanOrEqual(size.width);
   // The table's height follows --app-height, which a resize listener sets a frame or so after a
@@ -96,6 +96,8 @@ async function phoneLayoutHolds(p: Player, size: { width: number; height: number
   expect(await amount.evaluate((el) => (el as HTMLInputElement).scrollWidth <= (el as HTMLInputElement).clientWidth), `${p.name}: seven digits fit the field`).toBe(true);
   await amount.fill(was);
   await nothingScrolls(p.page, p.name);
+  // Every rank and suit of my cards and the dealer's reads whole: nothing over a card's corner.
+  await cornersClear(p.page, p.name, { dealer: true });
 }
 
 /** My chips, the truth behind the balance. */
@@ -612,8 +614,9 @@ async function nothingScrolls(page: Page, label: string): Promise<void> {
 }
 
 /**
- * At every phone size and both desktops: nothing scrolls, and every tile's total is inside its
- * tile; a desktop's tiles are never squeezed under 28px. The page ends at its own size.
+ * At every phone size and both desktops: nothing scrolls, every tile's total is inside its tile,
+ * a desktop's tiles are never squeezed under 28px, and every rank and suit of my cards and the
+ * dealer's reads whole. The page ends at its own size.
  */
 async function fitsEverySize(page: Page, sizes: { width: number; height: number }[], label: string): Promise<void> {
   const own = page.viewportSize();
@@ -621,6 +624,7 @@ async function fitsEverySize(page: Page, sizes: { width: number; height: number 
     await page.setViewportSize(size);
     await nothingScrolls(page, `${label} at ${size.width}x${size.height}`);
     await tilesReadable(page, `${label} at ${size.width}x${size.height}`, size.width > 760 ? 28 : 0);
+    await cornersClear(page, `${label} at ${size.width}x${size.height}`, { dealer: true });
   }
   if (own) await page.setViewportSize(own);
 }
@@ -744,11 +748,20 @@ async function bigTable(browser: Browser, base: string, size: number): Promise<v
     const tiers: Record<number, string> = { 2: 'full', 6: 'compact', 12: 'small', 24: 'small', 50: 'dense' };
     await expect(phone.getByTestId('seats')).toHaveAttribute('data-tier', tiers[size]);
     // The cards take the room the seats leave (room.ts useSeatRoom): a table of two leaves the dealer's row and my hand big
-    // (55.5px when the cards went by the table's height alone), a table of twelve or more needs all its room, so its cards keep
-    // their least size (11% of the table's height) and its tiles the tier above.
-    const cards = await phone.getByTestId('bj-table').evaluate((el) => ({ w: parseFloat(getComputedStyle(el).getPropertyValue('--bj-card-w')), base: parseFloat(getComputedStyle(el).getPropertyValue('--bj-card-base')) }));
+    // (55.5px when the cards went by the table's height alone); a table of twelve leaves them 1px, its small tiles taking their
+    // 158px and the 8px kept over them, and the two rows at the least card (a pill's height and 1.67 card widths each) leaving
+    // 167.95px, just under the 168px compact tiles would need: 0.3px of card (3.34px of the rows a card pixel) over the least;
+    // a table of twenty-four or more needs all its room, so its cards keep their least size (11% of the table's height).
+    const cards = await phone.getByTestId('bj-table').evaluate((el) => {
+      const style = getComputedStyle(el);
+      return { w: parseFloat(style.getPropertyValue('--bj-card-w')), base: parseFloat(style.getPropertyValue('--bj-card-base')), spare: style.getPropertyValue('--tbl-spare') };
+    });
     if (size === 2) expect(cards.w, '2 players: the cards').toBeGreaterThanOrEqual(70);
-    if (size >= 12) expect(Math.abs(cards.w - cards.base), `${size} players: the cards at their least size`).toBeLessThanOrEqual(0.1);
+    if (size === 12) {
+      expect(cards.spare, '12 players: the room the seats leave the cards').toBe('1px');
+      expect(Math.abs(cards.w - (cards.base + 1 / 3.34)), '12 players: the cards that pixel over their least size').toBeLessThanOrEqual(0.01);
+    }
+    if (size >= 24) expect(Math.abs(cards.w - cards.base), `${size} players: the cards at their least size`).toBeLessThanOrEqual(0.1);
     expect(errors).toEqual([]);
   } finally {
     for (const b of bots) b.close();

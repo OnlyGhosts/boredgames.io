@@ -477,8 +477,9 @@ describe('the components', () => {
     for (const part of ['chips', 'bet', 'line']) expect(block).toMatch(new RegExp(`\\.tbl-tile--full \\.tbl-tile__${part} \\{\\s*grid-area: ${part};`));
     // The full tier is never squeezed short enough to need a layout without the cards: those rules are gone.
     expect(css).not.toMatch(/@container tile \(max-height: 91px\)/);
-    // A stack that still does not fit its row ends in an ellipsis, never cut mid-letter.
-    expect(block).toMatch(/\.tbl-tile--full \.tbl-tile__chips \{\s*grid-area: chips;\s*min-width: 0;\s*overflow: hidden;\s*text-overflow: ellipsis;/);
+    // A stack too long for its row reads short, measured as it lays out (StackCount, fit.tsx): an ellipsis never showed on it, its
+    // box being a flex one, and "100,000 chips" was simply cut on a full tile three across a 360px phone.
+    expect(block).toMatch(/\.tbl-tile--full \.tbl-tile__chips \{\s*grid-area: chips;\s*min-width: 0;\s*overflow: hidden;\s*\}/);
   });
 
   it('the line under the ribbon: whose turn it is in its tone, the quieter second part, the clock before it', () => {
@@ -592,6 +593,105 @@ describe('a spectator of the whole game', () => {
     expect(rule).toContain('text-wrap: pretty');
     expect(rule).not.toContain('nowrap');
     expect(WATCHING_TEXT).not.toContain('\u2014');
+  });
+});
+
+describe('the words on a table read whole', () => {
+  it('steps a text to its next, shorter form only while its box overflows, and keeps the last', async () => {
+    const F = await import('./fit');
+    expect(F.overflows({ scrollWidth: 80, clientWidth: 80 })).toBe(false);
+    expect(F.overflows({ scrollWidth: 80.4, clientWidth: 80 })).toBe(false);
+    expect(F.overflows({ scrollWidth: 81, clientWidth: 80 })).toBe(true);
+    const steps: [number, number, boolean, number][] = [
+      [0, 3, true, 1],
+      [1, 3, true, 2],
+      [2, 3, true, 2],
+      [0, 3, false, 0],
+      [1, 3, false, 1],
+      [0, 1, true, 0],
+      [0, 2, true, 1],
+    ];
+    for (const [at, count, cut, next] of steps) expect(F.nextForm(at, count, cut), `${at} of ${count}, cut ${cut}`).toBe(next);
+  });
+
+  it('starts a text over only where its row may have given it more room, never for a shorter form of its own', async () => {
+    const F = await import('./fit');
+    const pill = {};
+    const name = {};
+    const then = { width: 47, kin: [{ el: pill, width: 81, height: 20 }, { el: name, width: 60, height: 14 }] };
+    // The same row: nothing freed. A shorter form shrinks the text's own box and lets its siblings grow: still nothing.
+    expect(F.freed(then, then)).toBe(false);
+    expect(F.freed(then, { width: 40, kin: then.kin })).toBe(false);
+    expect(F.freed(then, { width: 47, kin: [{ el: pill, width: 90, height: 22 }, { el: name, width: 60, height: 14 }] })).toBe(false);
+    expect(F.freed(then, { width: 47.4, kin: then.kin })).toBe(false);
+    // The text's own box wider (the bet pill shrank to its chips, the street closed), a sibling narrower, shorter or gone: freed.
+    expect(F.freed(then, { width: 100, kin: then.kin })).toBe(true);
+    expect(F.freed(then, { width: 47, kin: [{ el: pill, width: 28, height: 20 }, { el: name, width: 60, height: 14 }] })).toBe(true);
+    expect(F.freed(then, { width: 47, kin: [{ el: pill, width: 81, height: 14 }, { el: name, width: 60, height: 14 }] })).toBe(true);
+    expect(F.freed(then, { width: 47, kin: [{ el: name, width: 60, height: 14 }] })).toBe(true);
+    // A new sibling takes room, it never frees any.
+    expect(F.freed(then, { width: 47, kin: [...then.kin, { el: {}, width: 30, height: 20 }] })).toBe(false);
+  });
+
+  it('counts two boxes as lying over each other only past a half-pixel touch both ways', async () => {
+    const F = await import('./fit');
+    const box = { left: 0, right: 100, top: 0, bottom: 20 };
+    const meets: [{ left: number; right: number; top: number; bottom: number }, boolean][] = [
+      [{ left: 50, right: 150, top: 10, bottom: 30 }, true],
+      [{ left: 99.6, right: 150, top: 0, bottom: 20 }, false],
+      [{ left: 99, right: 150, top: 0, bottom: 20 }, true],
+      [{ left: 0, right: 100, top: 19.5, bottom: 40 }, false],
+      [{ left: 0, right: 100, top: 19, bottom: 40 }, true],
+      [{ left: 120, right: 150, top: 0, bottom: 20 }, false],
+    ];
+    for (const [other, over] of meets) expect(F.meets(box, other), JSON.stringify(other)).toBe(over);
+  });
+
+  it('a tile shows the fullest form of its line and its stack on the server render, keeping the shorter ones for a narrow tile', async () => {
+    const avatar = { color: 1, emoji: 2 };
+    const props = { playerId: 'p1', name: 'Ravi', avatar, connected: true, tier: 'full' as const, turn: false, mark: 'done' as const, chips: 100_000, onOpen: noop };
+    const raised = html(createElement(PlayerTile, { ...props, line: { state: 'acted', text: 'Raise to 12,000', tone: 'quiet', short: ['Raise 12k', 'Raise'] } }));
+    expect(raised).toContain('<span class="tbl-tile__line tbl-tile__line--quiet" data-testid="seat-line" data-fit="0">Raise to 12,000</span>');
+    // The stack writes both figures; the stylesheet picks one by the tile's width, and the measured fit the short one where that is still cut.
+    expect(raised).toContain('data-testid="seat-chips" data-chips="100000" data-long=""><span class="tbl-stackcount__value tbl-figure"><span class="tbl-figure__full">100,000</span><span class="tbl-figure__short">100k</span></span>');
+    // The open button's label (what a screen reader gets) says the line in full, whatever form the tile shows.
+    expect(raised).toContain('aria-label="Ravi: Raise to 12,000. Show details" data-testid="seat-open"');
+    const plain = html(createElement(PlayerTile, { ...props, line: { state: 'waiting', text: 'Waiting', tone: 'quiet' } }));
+    expect(plain).toContain('<span class="tbl-tile__line tbl-tile__line--quiet" data-testid="seat-line">Waiting</span>');
+    // A stake by my hand on the stage, and a tile's stack, render as any: in full where it fits, measured as they lay out.
+    const F = await import('./fit');
+    expect(html(createElement(StakePill, { value: 12_000, start: 100_000, format: 'fit', fit: F.STAGE_FIT }))).toBe(html(createElement(StakePill, { value: 12_000, start: 100_000, format: 'fit' })));
+    expect(html(createElement(StackCount, { value: 1_250_000, format: 'fit', fit: F.TILE_FIT }))).toBe(html(createElement(StackCount, { value: 1_250_000, format: 'fit' })));
+    expect(F.TILE_FIT.box).toBe(F.tileOf);
+  });
+
+  it('keeps a crushed compact tile’s total inside it', () => {
+    const css = readFileSync(join(import.meta.dirname, '../styles/table.css'), 'utf8');
+    // Ten players on a 375x667 phone leave compact tiles 16px tall: the total's 18px pill shrinks to keep inside the tile.
+    const short = css.slice(css.indexOf('@container tile (max-height: 46px) {\n  .tbl-tile--compact,'));
+    expect(short).toMatch(/^@container tile \(max-height: 46px\) \{[^@]*\.tbl-tile--compact \.tbl-tile__total \.tbl-pill \{\s*height: min\(18px, calc\(100cqh - 2px\)\);/);
+  });
+
+  it('keeps every card’s corner clear: a hand’s words come down over its cards only as far as their corners begin', () => {
+    const cards = readFileSync(join(import.meta.dirname, '../styles/cards.css'), 'utf8');
+    const css = readFileSync(join(import.meta.dirname, '../styles/table.css'), 'utf8');
+    // The corner (rank and suit) begins 0.1 card widths below the top edge; the words over a hand come down that far and no further.
+    expect(cards).toMatch(/:root \{\s*--card-index-top: 0\.1;/);
+    expect(cards).toMatch(/\.playing-card__corner \{\s*position: absolute;\s*top: calc\(var\(--card-w\) \* var\(--card-index-top\)\);/);
+    expect(css).toMatch(/\.tbl-hand \{\s*--pill-h: var\(--tbl-pill-h, 26px\);\s*--head-over: calc\(var\(--tbl-w\) \* var\(--card-index-top\)\);[^}]*padding: calc\(var\(--pill-h\) - var\(--head-over\)\) 3px 3px;/);
+    expect(css).toMatch(/\.tbl-hand__head \{\s*position: absolute;\s*top: 0;/);
+    // A hand is its pill's height and 1.67 card widths tall (the fan's 1.77 less that overlap): the games size their rows by it.
+    expect(css).toMatch(/:root \{\s*--fan-step: 0\.44;\s*\/\*[^*]*\*\/\s*--hand-k: calc\(1\.77 - var\(--card-index-top\)\);/);
+    expect(css).not.toMatch(/--pill-h\) \* 0\.7/);
+    // The badge on a tile's avatar reaches 2px past it, inside the 4px a full tile keeps between the face and the words (6px on a
+    // wide one), so a tick never runs into the stack's first figure (e2e tilesReadable measures it on every tier).
+    expect(css).toMatch(/\.tbl-tile__mark \{\s*position: absolute;\s*right: -2px;\s*bottom: -3px;/);
+    expect(css).toMatch(/\n\.tbl-tile \{[^}]*column-gap: 6px;/);
+    expect(css.slice(css.indexOf('@container tile (max-width: 199px) {\n  .tbl-tile--full {'))).toMatch(/^@container tile \(max-width: 199px\) \{\s*\.tbl-tile--full \{\s*--face: 24px;\s*column-gap: 4px;/);
+    // Where the stack's line runs under the face (a narrow compact tile) the badge keeps to the avatar's height; the small tiles'
+    // dot keeps clear of the name under it.
+    expect(css).toMatch(/\.tbl-tile--compact \.tbl-tile__mark \{\s*bottom: 0;/);
+    expect(css).toMatch(/\.tbl-tile--small \.tbl-tile__mark,\s*\.tbl-tile--dense \.tbl-tile__mark \{[^}]*left: -3px;\s*right: auto;\s*bottom: 0;/);
   });
 });
 

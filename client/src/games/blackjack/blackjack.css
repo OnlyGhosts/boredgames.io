@@ -8,7 +8,9 @@
  * between take what is left. On a phone the cards take the room the seats leave (--tbl-spare, the
  * phone blocks at the end), worked out as the round on the table begins: a player who leaves in the
  * middle of a round leaves the cards as they are until the next deal. Every card here is 2:3; a
- * hand is a stepped fan 1.77 card widths tall with its pill over the top right corner (HandFan).
+ * hand is a stepped fan 1.77 card widths tall with its pill over the top right corner (HandFan),
+ * coming down over the cards only as far as their corners begin (table.css --hand-k), so the
+ * pill and the words beside it never cover a rank or a suit, the dealer's or mine.
  *
  * --bj-card-w: a card's width on the dealer's row and the stage; --bj-card-base: its least on a
  * phone; --bj-label-h: the word Dealer's line. --tbl-pill-h: the totals' pill.
@@ -33,8 +35,8 @@
   --tbl-pill-h: clamp(28px, 3.9cqh, 36px);
   --tbl-deck-w: clamp(48px, 7cqh, 72px);
   --tbl-row-gap: var(--space-4);
-  /* A fan's height with its pill (overlapping by 30%) and its outline's room. */
-  --bj-fan-h: calc(var(--tbl-pill-h) * 0.7 + var(--bj-card-w) * 1.77 + 4px);
+  /* A hand's height: its pill, its fan under the pill's overlap (table.css --hand-k) and its outline's room. */
+  --bj-fan-h: calc(var(--tbl-pill-h) + var(--bj-card-w) * var(--hand-k) + 4px);
   --tbl-head-h: calc(var(--bj-label-h) + var(--bj-fan-h));
   --tbl-stage-h: var(--bj-fan-h);
 }
@@ -104,7 +106,7 @@
 .bj-hands--stage {
   --bj-slot: calc((100cqw - (var(--hands, 1) - 1) * 8px) / var(--hands, 1));
   --fit-w: max(14px, calc((var(--bj-slot) - 8px) / (1 + var(--fan-step) * (var(--fan, 2) - 1))));
-  --fit-h: calc((100cqh - var(--tbl-pill-h) * 0.7 - 4px) / 1.77);
+  --fit-h: calc((100cqh - var(--tbl-pill-h) - 4px) / var(--hand-k));
   --tbl-w: min(var(--bj-card-w), var(--fit-w), var(--fit-h));
   --bj-anchor: calc((var(--tbl-w) * (1 + var(--fan-step)) + 6px) / 2);
   justify-content: flex-start;
@@ -116,7 +118,8 @@
 
 .bj-hands--mine > .bj-slot,
 .bj-hands--stage > .bj-slot {
-  flex: 1 1 0;
+  /* Every slot its equal share of the row, however much room its own words keep before its cards. */
+  flex: 0 0 var(--bj-slot);
   display: flex;
   align-items: flex-end;
   justify-content: flex-start;
@@ -127,12 +130,17 @@
 }
 
 /*
- * The words over a hand's corner (its stake and total) reach left of a narrow fan: the slot keeps
- * that room before the cards, so they never run into the hand beside it or off the table.
+ * The words over a hand's corner (its stake and total) reach left of a narrow fan: each slot keeps
+ * that room before its cards, by its own hand's fan (--slot-fan, its cards: HandRow), so they never
+ * run into the hand beside it or off the table. The row's widest words (--bj-head-w) end 3px inside
+ * the hand's box, at its fan's right edge (table.css .tbl-hand__head), so the room is their width
+ * less that and the fan. Measured by the row's widest fan, a two-card hand beside a five-card one
+ * once let its stake run up to 23px off the stage's left edge; taken as 6px inside the box, two
+ * hands with the same words over them ran 2.6px off it during the deal.
  */
-.bj-hands--mine,
-.bj-hands--stage {
-  --bj-head-room: max(0px, calc(var(--bj-head-w, 0px) - 6px - var(--tbl-w) * (1 + var(--fan-step) * (var(--fan, 2) - 1))));
+.bj-hands--mine > .bj-slot,
+.bj-hands--stage > .bj-slot {
+  --bj-head-room: max(0px, calc(var(--bj-head-w, 0px) - 3px - var(--tbl-w) * (1 + var(--fan-step) * (var(--slot-fan, 2) - 1))));
 }
 
 /* Split hands not in play step back a little: the one in play reads first. */
@@ -171,8 +179,9 @@
  * each total keeps to the width the word Bet gave it, so the hands still share the row (two on a
  * 320px phone, three on a 414px one; HandRow folds a hand into a chip once its stake and total
  * outgrow its share): packed tighter, two chips at most, the plus saying the rest, and a four-digit
- * figure short ("1.2k"), as Poker's stage reads it on a phone. A hand on its own has the room, and
- * keeps three chips and its figure in full ("1,250").
+ * figure short ("1.2k"). A hand on its own has the room, and keeps three chips and its figure in
+ * full ("1,250"), as Poker's stage reads my stake (short there only where the full figure would
+ * run the pill, or my hand, off the stage: fit.tsx STAGE_FIT).
  */
 @container (max-width: 459px) {
   .bj-hands--side .tbl-hand__head:has(> .tbl-hand__stake) {
@@ -399,15 +408,15 @@
     /*
      * The least card is 11% of the table's height, up to 60px. Over it the cards take the room the
      * seats leave them (--tbl-spare: the table works it out from the seats the round was dealt
-     * with, room.ts useSeatRoom), shared by the dealer's fan and mine, 1.77 card widths each: a
-     * card pixel takes 3.54px. They stop at 84px, and where the dealer's four cards (2.32 card
+     * with, room.ts useSeatRoom), shared by the dealer's hand and mine, 1.67 card widths each
+     * (--hand-k): a card pixel takes 3.34px. They stop at 84px, and where the dealer's four cards (2.32 card
      * widths from the anchor, 0.72 left of the middle) would no longer clear the shoe. A crowd
      * that needs all its room keeps the least card; a few players leave the cards the felt.
      * --tbl-grow tells the table how much taller the two rows are for it.
      */
     --bj-card-base: clamp(30px, 11cqh, 60px);
-    --bj-card-w: clamp(var(--bj-card-base), calc(var(--bj-card-base) + var(--tbl-spare) / 3.54), max(var(--bj-card-base), min(84px, calc((50cqw - var(--tbl-pad) - 1px - var(--tbl-deck-w) * 1.5 - 9px) / 1.6))));
-    --tbl-grow: calc((var(--bj-card-w) - var(--bj-card-base)) * 3.54);
+    --bj-card-w: clamp(var(--bj-card-base), calc(var(--bj-card-base) + var(--tbl-spare) / (2 * var(--hand-k))), max(var(--bj-card-base), min(84px, calc((50cqw - var(--tbl-pad) - 1px - var(--tbl-deck-w) * 1.5 - 9px) / 1.6))));
+    --tbl-grow: calc((var(--bj-card-w) - var(--bj-card-base)) * 2 * var(--hand-k));
     --bj-label-h: 18px;
     --tbl-mini-w: 22px;
     --tbl-pill-h: 24px;
