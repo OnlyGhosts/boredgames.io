@@ -19,7 +19,12 @@
   width: 100%;
 }
 
-/* The game is phone-first by design: one column, never wider than a phone and a half. */
+/*
+ * The game is phone-first by design: one column, never wider than a phone and a half on a desktop,
+ * centred with clear room either side. Narrower than a desktop (see below) it spans the bar's width,
+ * its edges in line with the bar's as every game's content is: a 720px column there would sit a
+ * few pixels in from them, which reads as a slip.
+ */
 .quip__main {
   grid-row: 2;
   grid-column: 1;
@@ -32,6 +37,13 @@
   gap: var(--space-3);
   padding: 2px;
   scrollbar-width: thin;
+}
+
+/* A tablet (and anything narrower): the column is the bar's width. */
+@media (max-width: 1023px) {
+  .quip__main {
+    width: 100%;
+  }
 }
 
 /* ---------- Shared pieces ---------- */

@@ -571,7 +571,7 @@ button.game-tile:active {
   font-weight: 700;
 }
 
-/* The rules, scrolling inside the card when the window is short. The box has no padding of its own (the rules carry it), so the fades below reach its edges. */
+/* The rules, scrolling inside the card when the window is short, each end with more to read fading into the card (the scroll-fade box in components.css). The box has no padding of its own (the rules carry it), so the fades reach its edges. */
 .how-to-play__scroll {
   flex: 1 1 auto;
   min-height: 0;
@@ -581,40 +581,6 @@ button.game-tile:active {
 
 .how-to-play__scroll > .rules {
   padding: var(--space-4);
-}
-
-/*
- * Each end with more to read fades into the card (data-fade, set as it scrolls), so a cut line
- * reads as a scroll: a band of the card's surface stuck to that edge of the box, over the rules.
- * The bands sit inside the box, beside its scrollbar, which keeps its full strength.
- */
-.how-to-play__scroll::before,
-.how-to-play__scroll::after {
-  content: '';
-  position: sticky;
-  z-index: 1;
-  display: block;
-  pointer-events: none;
-  opacity: 0;
-}
-
-.how-to-play__scroll::before {
-  top: 0;
-  height: 32px;
-  margin-bottom: -32px;
-  background: linear-gradient(var(--color-surface), transparent);
-}
-
-.how-to-play__scroll::after {
-  bottom: 0;
-  height: 48px;
-  margin-top: -48px;
-  background: linear-gradient(transparent, var(--color-surface));
-}
-
-.how-to-play__scroll[data-fade~='top']::before,
-.how-to-play__scroll[data-fade~='bottom']::after {
-  opacity: 1;
 }
 
 /* The close button sits over the hero's top right corner: the name stops short of it. */

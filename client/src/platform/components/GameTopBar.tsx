@@ -1,4 +1,4 @@
-import { Fragment, useState, type ReactNode } from 'react';
+import { Fragment, useCallback, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type { GameMeta } from '@shared/platform/games';
 import type { RoomState } from '@shared/platform/protocol';
 import { TABLET_QUERY, useMediaQuery } from '../lib/media';
@@ -7,7 +7,7 @@ import { registeredGame } from '../registry';
 import { selectIsHost } from '../store/selectors';
 import { usePlatformStore } from '../store/usePlatformStore';
 import { BottomSheet } from './BottomSheet';
-import { EndGameButton, EndGameConfirm, EndingNote, ExitActions, LeaveButton, LeaveConfirm, canEndGame, type ExitKind } from './GameExit';
+import { EndGameButton, EndGameConfirm, EndingNote, ExitActions, LeaveButton, LeaveConfirm, canEndGame, type ExitKind, type MenuPlayers } from './GameExit';
 import { MenuIcon, UsersIcon } from './Icons';
 import { PlayerChips } from './PlayerChips';
 import { PreferenceRows } from './Preferences';
@@ -52,9 +52,43 @@ interface Props {
   /**
    * One row only (a card table, whose players are all on the table; The Spy Game on a phone,
    * which lists its players below): the player chips give way to a players button with the
-   * count, and the clock, if any, sits small in the row.
+   * count, and the clock, if any, sits small in the row. On a phone the logo folds while the
+   * name beside it would be cut (brandGivesWay), and only then.
    */
   compact?: boolean;
+  /**
+   * A one-row bar with no room for the players button beside its clock (The Spy Game on a phone,
+   * whose page lists every player with their points anyway): the button goes, so the game's name
+   * reads whole, and the options sheet has the way to the players instead (GameMenuSheet's `players`).
+   */
+  playersInMenu?: boolean;
+}
+
+/** The width a box's text lays out at, whatever its box clips (an ellipsis hides what scrollWidth rounds away). */
+function textWidth(el: Element): number {
+  const range = document.createRange();
+  range.selectNodeContents(el);
+  return range.getBoundingClientRect().width;
+}
+
+/** Half a pixel either way: a name that fits by less than that is left as it is, so the logo never flickers between its two states. */
+const FOLD_SLACK = 0.5;
+
+/**
+ * Whether a one-row phone bar's logo gives way, read from the bar's first row: shown, it folds
+ * when the name (or the status under it) would be cut beside it; folded, it comes back only when
+ * the name fits with the logo and the row's gap beside it. The two ask the same question of the
+ * same room, so the answer never oscillates.
+ */
+export function brandGivesWay(row: HTMLElement, folded: boolean): boolean {
+  const brand = row.querySelector<HTMLElement>('.gbar__brand');
+  const title = row.querySelector<HTMLElement>('.gbar__title');
+  if (!brand || !title) return false;
+  const need = Math.max(0, ...Array.from(title.children, textWidth));
+  const have = title.getBoundingClientRect().width;
+  if (!folded) return need > have + FOLD_SLACK;
+  const gap = parseFloat(getComputedStyle(row).columnGap) || 0;
+  return need + brand.offsetWidth + gap + FOLD_SLACK > have;
 }
 
 /**
@@ -67,7 +101,7 @@ interface Props {
  * first row is full, so the status moves down to the players row (a card table has none to move),
  * and a card table's "Ending soon", once the host asked, goes under the name.
  */
-export function GameTopBar({ meta, room, isPhone, testId, className, status, statusTestId = 'round-indicator', statusData, clock, players, menu, middle, below, compact = false }: Props) {
+export function GameTopBar({ meta, room, isPhone, testId, className, status, statusTestId = 'round-indicator', statusData, clock, players, menu, middle, below, compact = false, playersInMenu = false }: Props) {
   const game = registeredGame(room.gameId);
   const meId = useLive(usePlatformStore, (s) => s.playerId);
   const isHost = useLive(usePlatformStore, selectIsHost);
@@ -83,6 +117,31 @@ export function GameTopBar({ meta, room, isPhone, testId, className, status, sta
   const statusBelow = tablet && !isPhone && peopleRow;
   // A card table's tablet bar has no room for the "Ending soon" note beside the code: it goes under the name.
   const endingUnderName = hostCanEnd && Boolean(room.endRequested) && tablet && !isPhone && compact;
+  // A one-row phone bar reads its own room: the logo folds while the name beside it would be cut
+  // (brandGivesWay), measured after every render (the status changes) and again whenever the row's
+  // size or the page's fonts change.
+  const rowRef = useRef<HTMLDivElement | null>(null);
+  const [brandFolded, setBrandFolded] = useState(false);
+  const foldable = compact && isPhone;
+  const fold = useCallback(() => {
+    const row = rowRef.current;
+    if (row) setBrandFolded((folded) => brandGivesWay(row, folded));
+  }, []);
+  useLayoutEffect(() => {
+    if (foldable) fold();
+    else setBrandFolded(false);
+  });
+  useLayoutEffect(() => {
+    const row = rowRef.current;
+    if (!foldable || !row) return;
+    const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(fold) : null;
+    observer?.observe(row);
+    document.fonts?.addEventListener('loadingdone', fold);
+    return () => {
+      observer?.disconnect();
+      document.fonts?.removeEventListener('loadingdone', fold);
+    };
+  }, [foldable, fold]);
   const statusEl =
     status === undefined ? null : (
       <span className="gbar__status" data-testid={statusTestId} {...statusData}>
@@ -92,8 +151,8 @@ export function GameTopBar({ meta, room, isPhone, testId, className, status, sta
   return (
     <>
       <header className={`gbar card${isPhone ? ' gbar--phone' : ''}${compact ? ' gbar--compact' : ''}${className ? ` ${className}` : ''}`} data-testid={testId} data-game={meta.id}>
-        <div className="gbar__row">
-          <div className="gbar__brand" data-testid="game-brand">
+        <div className="gbar__row" ref={rowRef}>
+          <div className={`gbar__brand${brandFolded ? ' gbar__brand--folded' : ''}`} data-testid="game-brand" aria-hidden={brandFolded || undefined}>
             {isPhone ? <Wordmark variant="icon" /> : <Logo leave={{ open: exit === 'brand', onOpen: () => setExit('brand') }} />}
           </div>
           {!isPhone && <span className="gbar__divider" aria-hidden="true" />}
@@ -108,7 +167,7 @@ export function GameTopBar({ meta, room, isPhone, testId, className, status, sta
           </div>
           <div className="gbar__side">
             {compact && clock && <div className="gbar__clock gbar__clock--row">{clock}</div>}
-            {compact && (
+            {compact && !playersInMenu && (
               <button
                 type="button"
                 className="gbar__count"
@@ -181,9 +240,11 @@ export function StatusParts({ parts }: { parts: ReactNode[] }) {
 
 /**
  * The phone's options sheet behind the top bar's menu button: preferences, the game's own rows,
- * then the ways out (End game for the host, Leave room), each behind its confirm step.
+ * then the ways out (End game for the host, Leave room), each behind its confirm step. A bar with
+ * no players button (GameTopBar's `playersInMenu`) passes `players`: a row for the players sheet
+ * comes first among those tall rows (ExitActions).
  */
-export function GameMenuSheet({ open, onClose, children }: { open: boolean; onClose(): void; children?: ReactNode }) {
+export function GameMenuSheet({ open, onClose, players, children }: { open: boolean; onClose(): void; players?: MenuPlayers; children?: ReactNode }) {
   const room = useLive(usePlatformStore, (s) => s.room);
   const meId = useLive(usePlatformStore, (s) => s.playerId);
   const isHost = useLive(usePlatformStore, selectIsHost);
@@ -206,7 +267,7 @@ export function GameMenuSheet({ open, onClose, children }: { open: boolean; onCl
           <>
             <PreferenceRows />
             {children}
-            <ExitActions room={room} isHost={isHost} onPick={setConfirm} />
+            <ExitActions room={room} isHost={isHost} onPick={setConfirm} players={players} />
           </>
         )}
       </div>

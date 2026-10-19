@@ -294,9 +294,87 @@
   text-align: center;
 }
 
-@media (max-width: 1100px) {
+/*
+ * ---------- Tablets (and windows) narrower than 1280px: the canvas first ----------
+ * The players and the guesses only sit either side of the canvas on a desktop's width: narrower,
+ * the canvas between them would get a sliver (204x153 on a 768px tablet). On its side (wider than
+ * tall; never a phone on its side, which is 3:2 or wider and at most 520px tall), the canvas takes
+ * the left and the players sit over the guesses in one column at the right. Held upright (or
+ * square: the two blocks meet at 1:1 and at 3:2, so no window falls between them), the canvas
+ * spans the screen under the bar and the players and the guesses share a row under it. A phone
+ * has its own layout (below).
+ *
+ * In both, the players panel takes what its list needs, in whole rows, up to a cap: the Screen
+ * publishes the list's height, a row's pitch, where the first row starts and what the panel adds
+ * around its body, its padding and border (--list-need, --list-pitch, --list-head, --list-chrome),
+ * the layout sets the cap (--list-cap: six rows, or a share of the screen, whichever is less), and
+ * --list-rows is the panel's height for the whole rows that fit. More players scroll under the
+ * panel's fade (scroll-fade), with the cut row under the band; the panel never shows a row cut
+ * through at its cap.
+ */
+.game {
+  --list-room: calc(var(--list-cap, 999px) - var(--list-head, 0px) - var(--list-chrome, 26px));
+  --list-rows: calc(round(down, min(var(--list-need, 0px) - var(--list-head, 0px), var(--list-room)), max(var(--list-pitch, 1px), 1px)) + var(--list-head, 0px) + var(--list-chrome, 26px));
+}
+
+@media (min-width: 761px) and (max-width: 1279px) and (min-aspect-ratio: 1/1) and (min-height: 521px),
+  (min-width: 761px) and (max-width: 1279px) and (min-aspect-ratio: 1/1) and (max-aspect-ratio: 3/2) {
   .game {
-    grid-template-columns: 220px minmax(0, 1fr) 280px;
+    /* The players take their whole rows, up to six and up to 46% of the screen (six rows, 346px, on a 1024x768 tablet, where 45% would fall half a pixel short); the guesses take the rest of the column. */
+    --list-cap: min(46dvh, calc(6 * var(--list-pitch, 1px) + var(--list-head, 0px) + var(--list-chrome, 26px)));
+    grid-template-columns: minmax(0, 1fr) 300px;
+    grid-template-rows: auto var(--list-rows) minmax(0, 1fr);
+  }
+
+  .game__center {
+    grid-column: 1;
+    grid-row: 2 / 4;
+  }
+
+  .game__players {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  .game__guesses {
+    grid-column: 2;
+    grid-row: 3;
+  }
+}
+
+@media (min-width: 761px) and (max-width: 1279px) and (max-aspect-ratio: 1/1) {
+  .game {
+    --stage-max: calc((100vw - 2 * var(--gutter)) * 0.75);
+    /*
+     * The canvas row stops at what the 4:3 canvas (and the drawer's toolbar) can use across the
+     * screen. The row under it is at least 240px and at least the players' whole rows, up to six
+     * and up to 35% of the screen (six rows take about 345px, which leaves a 768x1024 tablet's
+     * drawer a 458px canvas, still more than half the width); whatever height is left after the
+     * canvas row goes to it too.
+     */
+    --list-cap: min(35dvh, calc(6 * var(--list-pitch, 1px) + var(--list-head, 0px) + var(--list-chrome, 26px)));
+    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+    grid-template-rows: auto minmax(0, var(--stage-max)) minmax(max(240px, var(--list-rows)), 1fr);
+  }
+
+  /* The drawer's toolbar (two rows) and its gap go under the canvas. */
+  .game--drawer {
+    --stage-max: calc((100vw - 2 * var(--gutter)) * 0.75 + 110px);
+  }
+
+  .game__center {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .game__players {
+    grid-column: 1;
+    grid-row: 3;
+  }
+
+  .game__guesses {
+    grid-column: 2;
+    grid-row: 3;
   }
 }
 

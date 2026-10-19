@@ -5,6 +5,7 @@ import WebSocket from 'ws';
  * bets a chip when the bets open (Blackjack) and plays its turn when it comes (a stand, or a check
  * or call in Poker), so a table can be filled to the room limit without a browser per seat. A bot
  * can hold its turn (`hold`) until the spec lets it go, to keep the table on someone else's turn.
+ * With `game: 'crowd'` a bot only joins and readies, in any game, and never plays: a big room.
  */
 export interface TableBot {
   name: string;
@@ -35,7 +36,7 @@ type BotRoom = {
 };
 
 export interface BotOptions {
-  game: 'blackjack' | 'poker';
+  game: 'blackjack' | 'poker' | 'crowd';
   /** How long the bot thinks before it moves. */
   thinkMs?: number;
   /** Start holding every turn. */
@@ -82,7 +83,7 @@ export function tableBot(name: string, code: string, base: string, { game: kind,
     }
     readied = false;
     const g = room.game;
-    if (room.phase !== 'playing' || !g) return;
+    if (room.phase !== 'playing' || !g || kind === 'crowd') return;
     const round = g.round ?? 0;
     if (kind === 'blackjack' && g.phase === 'betting' && g.order.includes(id) && g.players[id]?.bet === 0 && betRound !== round) {
       betRound = round;

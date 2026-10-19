@@ -1,5 +1,6 @@
 import { expect, test, type Browser, type BrowserContext, type Locator, type Page } from '@playwright/test';
-import { closeResults, createParty, enterNameIfAsked, expectRulesReadCleanly, gameBarFits, readyAll } from './party';
+import { locationsForMode } from '../shared/games/spygame/locations';
+import { closeResults, createParty, enterNameIfAsked, expectRulesReadCleanly, gameBarFits, menuSheetFits, openPlayers, readyAll } from './party';
 
 /**
  * A whole two-round Spy Game between a desktop host and two phones (390x844, touch): roles, the
@@ -131,9 +132,100 @@ async function atPhoneSize(p: Player, check: () => Promise<void>): Promise<void>
   }
 }
 
-/** Reads a score from the platform player list, which lives in the scores sheet. */
+/**
+ * Every screen the place grids are checked on: upright and sideways phones, tablets both ways up
+ * and desktops, 320 to 1920 wide.
+ */
+const GRID_SIZES = [
+  { width: 320, height: 568 },
+  { width: 360, height: 740 },
+  { width: 430, height: 932 },
+  { width: 568, height: 320 },
+  { width: 667, height: 375 },
+  { width: 844, height: 390 },
+  { width: 768, height: 1024 },
+  { width: 820, height: 1180 },
+  { width: 900, height: 1200 },
+  { width: 1024, height: 768 },
+  { width: 1024, height: 1366 },
+  { width: 1180, height: 820 },
+  { width: 1280, height: 800 },
+  { width: 1920, height: 1080 },
+];
+
+/** Every place of the family pack: the round's 24 are a draw from it, so every tile is checked with every name. */
+const FAMILY_PLACES = locationsForMode('family').map((l) => l.name);
+
+/**
+ * At every size in GRID_SIZES, every place tile of `testId` shows its name whole: some of it in view,
+ * no word cut at its side or broken inside itself (a line of "Kindergarte"), no line clamped away,
+ * and none of it under the tile's mark (the agents' tick on the real place). The round's places
+ * first, then every place of the family pack written into every tile (and put back), so no draw
+ * misses a long name.
+ */
+async function everyNameWhole(p: Player, testId: string): Promise<void> {
+  const before = p.page.viewportSize() ?? DESKTOP;
+  try {
+    for (const size of GRID_SIZES) {
+      await p.page.setViewportSize(size);
+      const cut = () =>
+        p.page.evaluate(
+          ({ id, places }) => {
+            const out = new Set<string>();
+            const range = document.createRange();
+            const check = (tile: HTMLElement, name: HTMLElement) => {
+              const text = name.textContent ?? '';
+              const r = name.getBoundingClientRect();
+              // A whole number of pixels either way: a fractional line box rounds scrollHeight up by one, a clamped third line adds a dozen.
+              if (r.width < 8 || name.scrollWidth > name.clientWidth + 0.5 || name.scrollHeight > name.clientHeight + 1) out.add(`${text} is cut (${Math.round(r.width)}px)`);
+              const node = name.firstChild;
+              if (!node) return;
+              // A word whose letters sit on more than one line was broken inside itself.
+              let at = 0;
+              for (const word of text.split(' ')) {
+                range.setStart(node, at);
+                range.setEnd(node, at + word.length);
+                if (new Set([...range.getClientRects()].filter((g) => g.width > 0).map((g) => Math.round(g.top))).size > 1) out.add(`"${word}" breaks inside itself in ${text}`);
+                at += word.length + 1;
+              }
+              const mark = tile.querySelector('.spy-tile__mark')?.getBoundingClientRect();
+              if (!mark) return;
+              // The mark is a disc: none of it on any letter's own box (a space that hangs past a wrapped line's end is no ink).
+              const [cx, cy, radius] = [(mark.left + mark.right) / 2, (mark.top + mark.bottom) / 2, mark.width / 2];
+              for (let i = 0; i < text.length; i++) {
+                if (/\s/.test(text[i] ?? '')) continue;
+                range.setStart(node, i);
+                range.setEnd(node, i + 1);
+                for (const glyph of range.getClientRects()) {
+                  const nearest = Math.hypot(Math.max(glyph.left, Math.min(cx, glyph.right)) - cx, Math.max(glyph.top, Math.min(cy, glyph.bottom)) - cy);
+                  if (nearest < radius - 0.5) out.add(`the mark covers ${text}`);
+                }
+              }
+            };
+            const tiles = [...document.querySelectorAll<HTMLElement>(`[data-testid="${id}"]`)].map((tile) => ({ tile, name: tile.querySelector<HTMLElement>('.spy-tile__name') }));
+            if (tiles.some(({ name }) => !name)) return ['a tile with no name'];
+            const named = tiles as { tile: HTMLElement; name: HTMLElement }[];
+            for (const { tile, name } of named) check(tile, name);
+            const own = named.map(({ name }) => name.textContent);
+            for (const place of places) {
+              for (const { name } of named) name.textContent = place;
+              for (const { tile, name } of named) check(tile, name);
+            }
+            named.forEach(({ name }, i) => (name.textContent = own[i]));
+            return [...out].slice(0, 12);
+          },
+          { id: testId, places: FAMILY_PLACES },
+        );
+      await expect.poll(cut, { message: `${p.name}: every place name whole at ${size.width}x${size.height}` }).toEqual([]);
+    }
+  } finally {
+    await p.page.setViewportSize(before);
+  }
+}
+
+/** Reads a score from the platform player list, which lives in the scores sheet (on a phone, behind the options sheet's Scores). */
 async function scoreOf(p: Player, name: string): Promise<number> {
-  await p.page.getByTestId('players-toggle').click();
+  await openPlayers(p.page);
   const raw = await p.page.locator(`[data-testid="player-item"][data-name="${name}"]`).getAttribute('data-score');
   await p.page.getByTestId('players-sheet-close').click();
   return Number(raw ?? 'NaN');
@@ -191,15 +283,30 @@ test('the host creates a Spy Game room, two phones join by code and the host set
     await expect(clock(p)).toBeVisible();
   }
   for (const p of players) await expect(p.page.getByTestId('round-indicator')).toContainText('1/2');
-  // The top bar fits from the narrowest phone to a desktop, for a guest and for the host with End game. A phone's one row
-  // (the logo, the name and round, the code, the clock, the players and the menu) is the fullest line of any game: there the
-  // name gives way, with an ellipsis, and nothing else does (on the narrowest phones the logo makes way so the round stays
-  // whole); from a tablet up it is whole.
-  await gameBarFits(pia.page, { nameMayCutBelow: 768 });
-  await gameBarFits(host.page, { nameMayCutBelow: 768 });
-  await expect(pia.page.getByTestId('spygame-header').locator('.gbar__name')).toBeVisible();
+  // The top bar fits from the narrowest phone to a desktop, for a guest and for the host with End game, the game's name
+  // whole on every one. A phone's one row (the logo, the name and round, the code, the clock and the options) is the fullest
+  // line of any game: it has no players button (on the narrowest phones the logo makes way too).
+  await gameBarFits(pia.page);
+  await gameBarFits(host.page);
+  // The options sheet (with its Scores row, and the host's End game) holds every row on a phone on its side too: nothing scrolls, nothing is cut.
+  await menuSheetFits(pia.page);
+  await menuSheetFits(host.page);
+  await expect(pia.page.getByTestId('spygame-header').locator('.gbar__name')).toHaveText('The Spy Game');
   await expect(pia.page.getByTestId('round-indicator')).toBeVisible();
   await expect(clock(pia)).toBeVisible();
+  // The page lists the players with their points; the options sheet opens the scores, its first tall row.
+  await expect(pia.page.getByTestId('spygame-header').getByTestId('players-toggle')).toHaveCount(0);
+  await pia.page.getByTestId('game-menu').click();
+  const scores = pia.page.getByTestId('menu-players');
+  await expect(scores).toContainText('Scores');
+  await expect(scores).toContainText('3 players');
+  expect((await boxOf(scores)).height).toBeGreaterThanOrEqual(MIN_TARGET);
+  await scores.click();
+  await expect(pia.page.getByTestId('menu-sheet')).toHaveCount(0);
+  await expect(pia.page.getByTestId('players-sheet')).toContainText('Scores (3)');
+  await expect(pia.page.getByTestId('players-sheet').getByTestId('player-item')).toHaveCount(3);
+  await pia.page.getByTestId('players-sheet-close').click();
+  await expect(pia.page.getByTestId('players-sheet')).toHaveCount(0);
 });
 
 test('exactly one spy; the agents share the location, the spy sees none and gets 24 tiles in three columns of eight on a phone', async () => {
@@ -243,6 +350,10 @@ test('exactly one spy; the agents share the location, the spy sees none and gets
     await allPlacesInView(agents[0], 'candidate-tile', size, 40);
     await allPlacesInView(spy, 'guess-tile', size, MIN_TARGET);
   }
+  // Every place's name reads whole from 320 to 1920 wide, upright and on its side: the grid takes the columns its card has
+  // room for (a tablet's half-width column two, not four) and the agents' ticked place keeps its name clear of the tick.
+  await everyNameWhole(agents[0], 'candidate-tile');
+  await everyNameWhole(spy, 'guess-tile');
   // The spy's player list is read-only: no accuse buttons.
   await expect(spy.page.locator('button[data-testid="accuse-row"]')).toHaveCount(0);
   await expect(spy.page.getByTestId('accuse-row')).toHaveCount(3);

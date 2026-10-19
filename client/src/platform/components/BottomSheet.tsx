@@ -1,5 +1,6 @@
 import { useRef, type ReactNode } from 'react';
 import { useModalFocus } from '../lib/useModalFocus';
+import { useScrollFade } from '../lib/useScrollFade';
 import { CloseIcon } from './Icons';
 
 interface Props {
@@ -22,11 +23,15 @@ interface Props {
 /**
  * Phone-style bottom sheet: dimmed backdrop, close button, tap outside or Escape to dismiss.
  * A modal dialog for keyboard and screen-reader users too: it takes the focus when it opens,
- * keeps Tab inside the panel and hands the focus back to the control that opened it.
+ * keeps Tab inside the panel and hands the focus back to the control that opened it. Its body
+ * scrolls when the sheet is full (a long players list, a short screen), each end with more to
+ * read fading into the sheet, so a row cut at the edge reads as a scroll.
  */
 export function BottomSheet({ open, title, onClose, children, testId, className, label, hideTitle = false }: Props) {
   const panelRef = useRef<HTMLDivElement | null>(null);
   useModalFocus(panelRef, open, onClose);
+  const bodyRef = useRef<HTMLDivElement | null>(null);
+  const [fade] = useScrollFade(bodyRef, open);
 
   if (!open) return null;
   return (
@@ -40,7 +45,9 @@ export function BottomSheet({ open, title, onClose, children, testId, className,
             <CloseIcon size={18} />
           </button>
         </header>
-        <div className="sheet__body">{children}</div>
+        <div className="sheet__body scroll-fade" ref={bodyRef} data-fade={fade}>
+          {children}
+        </div>
       </div>
     </div>
   );

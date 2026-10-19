@@ -39,8 +39,8 @@ const { GAME_LIST } = await import('@shared/platform/games');
 const { AVATAR_COLORS, AVATAR_FACES } = await import('@shared/platform/avatar');
 const { Avatar } = await import('./Avatar');
 const { arcFraction, remainingMs } = await import('../lib/useCountdown');
-const { GameMenuSheet, GameTopBar, RoundStatus, StatusParts } = await import('./GameTopBar');
-const { CHIP_GAP, CHIP_WIDTH, chipCapacity, chipLayout, chipOrder, chipStatus } = await import('./PlayerChips');
+const { GameMenuSheet, GameTopBar, RoundStatus, StatusParts, brandGivesWay } = await import('./GameTopBar');
+const { CHIP_SIZES, chipCapacity, chipFit, chipLayout, chipOrder, chipStatus } = await import('./PlayerChips');
 const { ResultNext, ResultPoints, earnersOf } = await import('./RoundResult');
 
 /** The z-index of the first rule whose selector list starts with `selector`. */
@@ -1567,10 +1567,42 @@ describe('the ways out of a game', () => {
     expect(host.indexOf('data-testid="sound-toggle"')).toBeGreaterThan(-1);
     expect(host.indexOf('data-testid="sound-toggle"')).toBeLessThan(host.indexOf('data-testid="end-game"'));
     expect(host).toContain('data-testid="leave-room"');
+    // No players row unless the game's bar gave its players button up.
+    expect(host).not.toContain('data-testid="menu-players"');
     usePlatformStore.getState().handleServerMessage(welcome('bob', playing()));
     const guest = renderToString(createElement(GameMenuSheet, { open: true, onClose: () => undefined }));
     expect(guest).not.toContain('data-testid="end-game"');
     expect(guest).toContain('data-testid="leave-room"');
+  });
+
+  it('opens the players from the options sheet when the bar has no players button: first among the tall rows, saying how many are in', () => {
+    usePlatformStore.getState().handleServerMessage(welcome('host', playing()));
+    const html = renderToString(createElement(GameMenuSheet, { open: true, onClose: () => undefined, players: { label: 'Scores', onOpen: () => undefined } }));
+    const order = ['sound-toggle', 'exit-actions', 'menu-players', 'end-game', 'leave-room'].map((id) => html.indexOf(`data-testid="${id}"`));
+    expect(order.every((i) => i > -1)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    expect(tagWith(html, 'menu-players')).toContain('class="exit-action"');
+    expect(tagWith(html, 'menu-players')).toContain('aria-haspopup="dialog"');
+    expect(html).toMatch(/data-testid="menu-players"[^]*<strong>Scores<\/strong><small>4 players<\/small>/);
+    // One column of tall rows: the players row is one of the ways out's own rows, with nothing of its own to space.
+    const css = stylesheet('components.css');
+    expect(css).not.toContain('.menu-sheet__actions');
+  });
+
+  it('fits the options sheet on a phone on its side: the tall rows share one 48px line, each as wide as its words need', () => {
+    const css = stylesheet('components.css');
+    const sideways = mediaBlock(css, '(min-aspect-ratio: 3/2) and (max-height: 520px)');
+    expect(sideways).toMatch(/\.exit-actions \{\s*flex-direction: row;/);
+    expect(sideways).toMatch(/\.exit-action \{[^}]*flex: 1 1 auto;/);
+    expect(sideways).toMatch(/\.exit-action \{[^}]*width: auto;/);
+    expect(sideways).toMatch(/\.exit-action \{[^}]*min-width: 0;/);
+    expect(sideways).toMatch(/\.exit-action \{[^}]*min-height: 48px;/);
+    expect(sideways).toMatch(/\.exit-action__icon \{\s*width: 36px;\s*height: 36px;/);
+    // The sheet's body fades at an edge with more to read (BottomSheet's scroll-fade box), should a game's own rows ever fill it.
+    const sheet = renderToString(createElement(BottomSheet, { open: true, title: 'Options', onClose: () => undefined, testId: 'menu-sheet', children: 'rows' }));
+    expect(sheet).toContain('class="sheet__body scroll-fade"');
+    expect(ruleOf(css, '.scroll-fade::after')).toContain('position: sticky');
+    expect(css).toContain(".scroll-fade[data-fade~='top']::before,\n.scroll-fade[data-fade~='bottom']::after {\n  opacity: 1;\n}");
   });
 
   it('puts End game and Leave at the right of the desktop top bar for the host, Leave alone for a guest; the logo’s gear holds nothing but the preferences', () => {
@@ -1804,6 +1836,26 @@ describe('GameTopBar', () => {
     expect([...withClock].sort((x, y) => x - y)).toEqual(withClock);
     expect(tagsWith(clocked, 'player-chip')).toHaveLength(0);
     expect(ruleOf(stylesheet('gamebar.css'), '.gbar .gbar__clock--row .timer--lg')).toContain('width: 44px');
+    // The Spy Game's phone bar gives its players button up (its options sheet opens the scores), so its name reads whole.
+    const inMenu = renderToString(
+      createElement(GameTopBar, {
+        meta: gameById('spygame'),
+        room: room({ gameId: 'spygame', phase: 'playing', players }),
+        isPhone: true,
+        testId: 'spygame-header',
+        status: 'Round 2/5',
+        clock: createElement('span', { 'data-testid': 'clock' }),
+        players: { label: 'Scores', open: false, onOpen: noop },
+        menu: { open: false, onOpen: noop },
+        compact: true,
+        playersInMenu: true,
+      }),
+    );
+    expect(inMenu).not.toContain('data-testid="players-toggle"');
+    expect(inMenu).not.toContain('gbar__count');
+    const spyOrder = ['game-brand', 'round-indicator', 'game-code', 'clock', 'game-menu'].map((id) => inMenu.indexOf(`data-testid="${id}"`));
+    expect(spyOrder.every((i) => i >= 0)).toBe(true);
+    expect([...spyOrder].sort((x, y) => x - y)).toEqual(spyOrder);
   });
 
   it('has the waiting room’s logo on a desktop: its gear “o” the settings button, the logo itself asking before it leaves; no options button, back arrow or chat button', () => {
@@ -1856,10 +1908,77 @@ describe('GameTopBar', () => {
     // The name adds nothing to the title's width, so the status sets its least width and the name's ellipsis takes the rest.
     expect(ruleOf(css, '.gbar--phone .gbar__name')).toContain('contain: inline-size');
     expect(ruleOf(css, '.gbar__status')).toContain('white-space: nowrap');
-    // The Spy Game's one row on the narrowest phones: the clock a size down, then the logo's two phones make way for "Round 10/10".
+    // A one-row bar up to 380px (a 375px phone): the name a size down and the players pill tighter, so the longest name has room to spare.
+    const upTo380 = mediaBlock(css, '(max-width: 380px)');
+    expect(upTo380).toMatch(/\.gbar--compact\.gbar--phone \.gbar__name \{\s*font-size: 1\.0625rem/);
+    expect(upTo380).toMatch(/\.gbar--compact\.gbar--phone \.gbar__count-pill \{[^}]*padding: 0 7px 0 6px/);
+    // The Spy Game's one row on the narrowest phones: the clock a size down.
     expect(mediaBlock(css, '(max-width: 360px)')).toMatch(/\.gbar \.gbar__clock--row \.timer--lg \{[^}]*width: 40px/);
-    const narrowest = css.slice(css.indexOf('@container gbar (max-width: 320px) {'));
-    expect(narrowest).toMatch(/\.gbar--compact\.gbar--phone:has\(\.gbar__clock--row\) \.gbar__brand \{\s*display: none/);
+    // The logo folds by measure (brandGivesWay), never by a width alone: out of the row, kept for its width.
+    expect(css).not.toContain('@container gbar (max-width: 320px)');
+    expect(ruleOf(css, '.gbar__brand--folded')).toContain('position: absolute');
+    expect(ruleOf(css, '.gbar__brand--folded')).toContain('visibility: hidden');
+    expect(ruleOf(css, '.gbar__brand--folded')).toContain('pointer-events: none');
+    // Nothing on a phone's one row was ever tuned to a players pill beside the clock: The Spy Game's bar has none.
+    expect(css).not.toContain(':has(.gbar__clock--row) .gbar__count-pill');
+  });
+
+  it('folds a one-row bar’s logo only while the name beside it would be cut, and brings it back only once it fits with the logo', () => {
+    // A first row laid out: the title's box, the laid-out width of each of its lines, the logo's width and the row's gap.
+    const row = (have: number, lines: number[], brand = 29, gap = 4) => {
+      const title = { children: lines.map((width) => ({ width })), getBoundingClientRect: () => ({ width: have }) };
+      const logo = { offsetWidth: brand };
+      const g = globalThis as Record<string, unknown>;
+      g.getComputedStyle = () => ({ columnGap: `${gap}px` });
+      (g.document as Record<string, unknown>).createRange = () => {
+        let el: { width: number } | null = null;
+        return { selectNodeContents: (node: { width: number }) => (el = node), getBoundingClientRect: () => ({ width: el?.width ?? 0 }) };
+      };
+      return { querySelector: (selector: string) => (selector === '.gbar__brand' ? logo : selector === '.gbar__title' ? title : null) } as unknown as HTMLElement;
+    };
+    // Blackjack at 320px with four players: "Blackjack" (80px) has 83px beside the logo: it stays. Twelve players: 74px: it folds.
+    expect(brandGivesWay(row(83, [80]), false)).toBe(false);
+    expect(brandGivesWay(row(74, [80]), false)).toBe(true);
+    // Folded, the title has the logo's room (74 + 29 + 4 = 107): the name fits, but not with the logo back, so it stays folded.
+    expect(brandGivesWay(row(107, [80]), true)).toBe(true);
+    // A wider phone (the title 124px with the logo shown, 157px without): the logo is back, and stays.
+    expect(brandGivesWay(row(157, [80]), true)).toBe(false);
+    expect(brandGivesWay(row(124, [80]), false)).toBe(false);
+    // The status under the name counts too ("Round 10/10" wider than "Poker"), and half a pixel either way changes nothing.
+    expect(brandGivesWay(row(60, [41, 70]), false)).toBe(true);
+    expect(brandGivesWay(row(80.3, [80]), false)).toBe(false);
+    expect(brandGivesWay(row(113.2, [80]), true)).toBe(true);
+    // A row without the two (a bar still mounting) leaves the logo alone.
+    expect(brandGivesWay({ querySelector: () => null } as unknown as HTMLElement, true)).toBe(false);
+  });
+
+  it('ends a sideways phone’s bar with the options button: one line where it fits, the first row’s parts straight in the bar', () => {
+    const css = stylesheet('gamebar.css');
+    const sideways = mediaBlock(css, '(min-aspect-ratio: 3/2) and (max-height: 520px)');
+    // A side column (Scribble's) keeps the halves: the first row with the options button at its end, the players row under it.
+    expect(sideways).toMatch(/\.gbar--phone \.gbar__row \{\s*flex: 1 1 273px/);
+    expect(sideways).toMatch(/\.gbar--phone \.gbar__people \{\s*flex: 1 1 200px/);
+    // The halves share a line from exactly where the one line starts (their bases and the gap between them add up to the
+    // container query's width), so no bar ever shows the two boxes side by side with the options button mid-line.
+    const rowBasis = Number(sideways.match(/\.gbar--phone \.gbar__row \{\s*flex: 1 1 (\d+)px/)?.[1]);
+    const peopleBasis = Number(sideways.match(/\.gbar--phone \.gbar__people \{\s*flex: 1 1 (\d+)px/)?.[1]);
+    const gap = Number(sideways.match(/\.gbar--phone \{[^}]*gap: 4px (\d+)px/)?.[1]);
+    const oneLineFrom = Number(sideways.match(/@container gbar \(min-width: (\d+)px\)/)?.[1]);
+    expect(rowBasis + gap + peopleBasis).toBe(oneLineFrom);
+    expect(oneLineFrom).toBe(481);
+    // One line: the row's box gives way, the players come next and the options button last.
+    const oneLine = sideways.slice(sideways.indexOf('@container gbar (min-width: 481px) {'));
+    expect(oneLine).toMatch(/\.gbar--phone \.gbar__row:has\(~ \.gbar__people\) \{\s*display: contents/);
+    // The name counts on the one line and the title keeps its width: the chips give way (down to two), never the name.
+    expect(oneLine).toMatch(/\.gbar--phone \.gbar__name \{\s*contain: none/);
+    expect(oneLine).toMatch(/\.gbar--phone \.gbar__title \{\s*flex: 0 0 auto/);
+    // The players row's base on the one line is its least: two chips at their width with their gap, the row's gap and the clock.
+    expect(oneLine).toMatch(/\.gbar--phone \.gbar__people \{\s*order: 1;\s*flex-basis: 186px/);
+    expect(ruleOf(css, '.chips')).toContain('min-width: calc(2 * var(--chip-w) + var(--chip-gap))');
+    expect(2 * CHIP_SIZES.w + CHIP_SIZES.gap + 8 + 44).toBe(186);
+    expect(oneLine).toMatch(/\.gbar--phone \.gbar__side \{\s*order: 2/);
+    // Whatever else is in the bar (Scribble's word) goes after both, on its own line.
+    expect(sideways).toMatch(/\.gbar--phone > :not\(\.gbar__row, \.gbar__people\) \{\s*order: 3;\s*flex-basis: 100%/);
   });
 
   it('writes a status of several parts (a round and a turn) as parts: one line with a dot between where there is room, stacked where there is not', () => {
@@ -1902,15 +2021,73 @@ describe('GameTopBar', () => {
 });
 
 describe('player chips', () => {
-  it('fit as many chips as the row holds and fold the rest into "+K"', () => {
-    expect(chipCapacity(CHIP_WIDTH)).toBe(1);
-    expect(chipCapacity(4 * CHIP_WIDTH + 3 * CHIP_GAP)).toBe(4);
-    expect(chipCapacity(4 * CHIP_WIDTH + 3 * CHIP_GAP - 1)).toBe(3);
-    expect(chipCapacity(0)).toBe(1);
+  it('fit as many chips as the row holds at their narrowest and fold the rest into "+K"', () => {
+    const { min, gap } = CHIP_SIZES;
+    expect(chipCapacity(min, min, gap)).toBe(1);
+    expect(chipCapacity(4 * min + 3 * gap, min, gap)).toBe(4);
+    expect(chipCapacity(4 * min + 3 * gap - 1, min, gap)).toBe(3);
+    expect(chipCapacity(0, min, gap)).toBe(1);
     expect(chipLayout(4, 4)).toEqual({ shown: 4, more: 0 });
     expect(chipLayout(5, 4)).toEqual({ shown: 3, more: 2 });
     expect(chipLayout(50, 4)).toEqual({ shown: 3, more: 47 });
     expect(chipLayout(3, 1)).toEqual({ shown: 0, more: 3 });
+  });
+
+  it('name every player while all of them fit, show faces otherwise, and use the room: four named at 360px, never "+2" beside an empty slot', () => {
+    // A 360px phone's row (262px): four 64px chips need 274, so they share it at 61px each, all named.
+    expect(chipFit(262, 4)).toEqual({ faces: false, shown: 4, more: 0 });
+    // Twelve cannot all be named: faces, five of them and "+7" (six slots of 40 to 44px).
+    expect(chipFit(262, 12)).toEqual({ faces: true, shown: 5, more: 7 });
+    // A short screen (an SE, a phone on its side) has faces whatever the room.
+    expect(chipFit(262, 4, CHIP_SIZES, true)).toEqual({ faces: true, shown: 4, more: 0 });
+    expect(chipFit(234, 12, CHIP_SIZES, true)).toEqual({ faces: true, shown: 4, more: 8 });
+  });
+
+  it('never shows fewer players on a wider row, and with a "+K" leaves less room than one more face', () => {
+    const { min, gap, faceMin, faceGap } = CHIP_SIZES;
+    const problems: string[] = [];
+    for (const forced of [false, true]) {
+      for (let count = 1; count <= 60; count++) {
+        let lastShown = 0;
+        let wasNamed = false;
+        for (let width = 2 * faceMin + faceGap; width <= 1600; width++) {
+          const fit = chipFit(width, count, CHIP_SIZES, forced);
+          const slots = fit.shown + (fit.more > 0 ? 1 : 0);
+          const [least, between] = fit.faces ? [faceMin, faceGap] : [min, gap];
+          if (fit.shown < lastShown) problems.push(`${count} players: ${fit.shown} shown at ${width}px after ${lastShown} narrower`);
+          if (wasNamed && fit.faces) problems.push(`${count} players: faces at ${width}px after names on a narrower row`);
+          if (fit.shown + fit.more !== count) problems.push(`${count} players: ${fit.shown} + ${fit.more} at ${width}px`);
+          if (slots * least + (slots - 1) * between > width) problems.push(`${count} players: ${slots} slots overflow ${width}px`);
+          if (fit.more > 0 && (slots + 1) * faceMin + slots * faceGap <= width) problems.push(`${count} players: room for one more face at ${width}px`);
+          if (forced && !fit.faces) problems.push(`${count} players: names on a short screen at ${width}px`);
+          lastShown = fit.shown;
+          wasNamed = !fit.faces;
+        }
+      }
+    }
+    expect(problems.slice(0, 5)).toEqual([]);
+    // A 320x568 phone's faces (its row 234px) never show more players than a 360x740 phone's taller row (262px), whatever the room.
+    for (let count = 1; count <= 60; count++) expect(chipFit(262, count).shown, `${count} players`).toBeGreaterThanOrEqual(chipFit(234, count, CHIP_SIZES, true).shown);
+  });
+
+  it('size both looks in the stylesheet as PlayerChips counts them: named chips share the row down to their least, faces on a short screen', () => {
+    const css = stylesheet('gamebar.css');
+    const chips = ruleOf(css, '.chips');
+    for (const [name, value] of [['--chip-w', CHIP_SIZES.w], ['--chip-min', CHIP_SIZES.min], ['--chip-gap', CHIP_SIZES.gap], ['--chip-face-w', CHIP_SIZES.faceW], ['--chip-face-min', CHIP_SIZES.faceMin], ['--chip-face-gap', CHIP_SIZES.faceGap]] as const) {
+      expect(chips, name).toContain(`${name}: ${value}px;`);
+    }
+    expect(chips).toContain('gap: var(--chip-gap)');
+    const chip = css.match(/\n\.chip \{([^}]*)\}/)?.[1] ?? '';
+    expect(chip).toContain('flex: 0 1 var(--chip-w)');
+    expect(chip).toContain('min-width: var(--chip-min)');
+    expect(ruleOf(css, '.chips--faces')).toContain('gap: var(--chip-face-gap)');
+    expect(ruleOf(css, '.chips--faces .chip')).toContain('flex-basis: var(--chip-face-w)');
+    expect(ruleOf(css, '.chips--faces .chip')).toContain('min-width: var(--chip-face-min)');
+    expect(ruleOf(css, '.chips--faces .chip__name')).toContain('display: none');
+    // A short phone asks for faces; it no longer redefines the sizes PlayerChips reads.
+    const short = mediaBlock(css, '(max-width: 760px) and (max-height: 640px), (min-aspect-ratio: 3/2) and (max-height: 520px)');
+    expect(short).toMatch(/\.gbar--phone \.chips \{\s*--chip-look: faces;\s*\}/);
+    expect(short).not.toContain('--chip-w');
   });
 
   it('put the players taking part first, in join order', () => {

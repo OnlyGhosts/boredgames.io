@@ -2,10 +2,16 @@ import { gameById } from '@shared/platform/games';
 import type { RoomState } from '@shared/platform/protocol';
 import { endGame, leaveRoom } from '../net/actions';
 import { registeredGame } from '../registry';
-import { EndIcon, LogoutIcon } from './Icons';
+import { EndIcon, LogoutIcon, UsersIcon } from './Icons';
 
 /** Which way out a confirm step is about. */
 export type ExitKind = 'end' | 'leave';
+
+/** The options sheet's way to the players, for a bar with no players button (GameTopBar's `playersInMenu`): the sheet's name ('Scores') and what opens it. */
+export interface MenuPlayers {
+  label: string;
+  onOpen(): void;
+}
 
 /** Only the host ends a game, and only one that is running. */
 export function canEndGame(room: RoomState | null, isHost: boolean): boolean {
@@ -90,12 +96,26 @@ export function LeaveConfirm({ room, meId, onCancel, testId }: ConfirmProps & { 
 
 /**
  * The ways out of a game as the options sheet's last rows: End game for the host (a serious
- * action, in the danger colour) and Leave room for everyone. Each opens its confirm step.
+ * action, in the danger colour) and Leave room for everyone. Each opens its confirm step. A bar
+ * with no players button passes `players`: the way to the players sheet comes first among them, in
+ * the same tall row shape (the people icon, the sheet's name and how many are in).
  */
-export function ExitActions({ room, isHost, onPick }: { room: RoomState | null; isHost: boolean; onPick(kind: ExitKind): void }) {
+export function ExitActions({ room, isHost, onPick, players }: { room: RoomState | null; isHost: boolean; onPick(kind: ExitKind): void; players?: MenuPlayers }) {
   const ending = room?.endRequested === true;
+  const count = room?.players.length ?? 0;
   return (
     <div className="exit-actions" data-testid="exit-actions">
+      {players && room && (
+        <button type="button" className="exit-action" onClick={players.onOpen} aria-haspopup="dialog" data-testid="menu-players">
+          <span className="exit-action__icon" aria-hidden="true">
+            <UsersIcon size={18} />
+          </span>
+          <span className="exit-action__text">
+            <strong>{players.label}</strong>
+            <small>{count === 1 ? '1 player' : `${count} players`}</small>
+          </span>
+        </button>
+      )}
       {canEndGame(room, isHost) &&
         (ending ? (
           <p className="exit-action exit-action--end exit-action--pending" data-testid="end-game-requested">

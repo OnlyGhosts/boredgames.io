@@ -378,6 +378,77 @@ describe('the top bar', () => {
   });
 });
 
+describe('the layout', () => {
+  const css = readFileSync(fileURLToPath(new URL('./styles/scribble.css', import.meta.url)), 'utf8');
+  /** The `@media <query> { ... }` block, braces balanced. */
+  const block = (query: string): string => {
+    const start = css.indexOf(`@media ${query} {`);
+    expect(start, query).toBeGreaterThan(-1);
+    let depth = 0;
+    for (let i = css.indexOf('{', start); i < css.length; i++) {
+      if (css[i] === '{') depth++;
+      else if (css[i] === '}' && --depth === 0) return css.slice(start, i + 1);
+    }
+    return '';
+  };
+
+  it('keeps the players and the guesses either side of the canvas from a desktop’s width only', () => {
+    expect(css).toMatch(/\n\.game \{[^}]*grid-template-columns: 264px minmax\(0, 1fr\) 320px;/);
+    // The old squeeze (220px and 280px panels around the canvas on a tablet) is gone.
+    expect(css).not.toContain('220px minmax(0, 1fr) 280px');
+    expect(css).not.toContain('@media (max-width: 1100px)');
+  });
+
+  const UPRIGHT = '(min-width: 761px) and (max-width: 1279px) and (max-aspect-ratio: 1/1)';
+  const SIDEWAYS =
+    '(min-width: 761px) and (max-width: 1279px) and (min-aspect-ratio: 1/1) and (min-height: 521px),\n  (min-width: 761px) and (max-width: 1279px) and (min-aspect-ratio: 1/1) and (max-aspect-ratio: 3/2)';
+  const PHONE = '(max-width: 760px), (min-aspect-ratio: 3/2) and (max-height: 520px)';
+
+  it('gives an upright tablet’s canvas the width: the players and the guesses share a row under it, at least 240px and the players’ whole rows tall', () => {
+    const upright = block(UPRIGHT);
+    // The canvas row stops at what the 4:3 canvas can use across the screen (and the drawer's toolbar); the rest goes to the row under it.
+    expect(upright).toMatch(/--stage-max: calc\(\(100vw - 2 \* var\(--gutter\)\) \* 0\.75\);/);
+    expect(upright).toMatch(/\.game--drawer \{\s*--stage-max: calc\(\(100vw - 2 \* var\(--gutter\)\) \* 0\.75 \+ 110px\);/);
+    // The players' list may take up to six whole rows, and up to 35% of the screen, from the canvas; the row never under 240px.
+    expect(upright).toMatch(/--list-cap: min\(35dvh, calc\(6 \* var\(--list-pitch, 1px\) \+ var\(--list-head, 0px\) \+ var\(--list-chrome, 26px\)\)\);/);
+    expect(upright).toMatch(/grid-template-rows: auto minmax\(0, var\(--stage-max\)\) minmax\(max\(240px, var\(--list-rows\)\), 1fr\);/);
+    expect(upright).toMatch(/\.game__center \{\s*grid-column: 1 \/ -1;\s*grid-row: 2;/);
+    expect(upright).toMatch(/\.game__players \{\s*grid-column: 1;\s*grid-row: 3;/);
+    expect(upright).toMatch(/\.game__guesses \{\s*grid-column: 2;\s*grid-row: 3;/);
+  });
+
+  it('sizes the players panel to whole rows from what the Screen measures, and fades it where more rows scroll', () => {
+    // The rows that fit the cap (the list's own height at most), rounded down to the row's pitch, plus where the first row starts and the panel's padding and border.
+    expect(css).toMatch(/\n\.game \{\s*--list-room: calc\(var\(--list-cap, 999px\) - var\(--list-head, 0px\) - var\(--list-chrome, 26px\)\);/);
+    expect(css).toContain(
+      '--list-rows: calc(round(down, min(var(--list-need, 0px) - var(--list-head, 0px), var(--list-room)), max(var(--list-pitch, 1px), 1px)) + var(--list-head, 0px) + var(--list-chrome, 26px));',
+    );
+    // The Screen publishes the four on the game's root and gives the panel's body the fading box.
+    const screen = readFileSync(fileURLToPath(new URL('./Screen.tsx', import.meta.url)), 'utf8');
+    for (const name of ['--list-need', '--list-pitch', '--list-head', '--list-chrome']) expect(screen).toContain(`root.style.setProperty('${name}'`);
+    expect(screen).toContain('className="game__players-body scroll-fade" ref={playersRef} data-fade={playersFade}');
+    expect(screen).toContain('useScrollFade(playersRef, !isPhone)');
+  });
+
+  it('gives a tablet on its side the canvas at the left and one column at the right, the players over the guesses; never a phone on its side', () => {
+    const sideways = block(SIDEWAYS);
+    expect(sideways).toMatch(/grid-template-columns: minmax\(0, 1fr\) 300px;/);
+    // The players' whole rows, up to six and up to 46% of the screen; the guesses take the rest.
+    expect(sideways).toMatch(/--list-cap: min\(46dvh, calc\(6 \* var\(--list-pitch, 1px\) \+ var\(--list-head, 0px\) \+ var\(--list-chrome, 26px\)\)\);/);
+    expect(sideways).toMatch(/grid-template-rows: auto var\(--list-rows\) minmax\(0, 1fr\);/);
+    expect(sideways).toMatch(/\.game__center \{\s*grid-column: 1;\s*grid-row: 2 \/ 4;/);
+    // A phone on its side is 3:2 or wider and at most 520px tall (PHONE_QUERY): neither branch matches it.
+    expect(SIDEWAYS).not.toMatch(/max-height/);
+  });
+
+  it('leaves no window between the layouts: the blocks meet at 1:1 (the upright one, later, wins) and at 3:2 (the phone one, later, wins)', () => {
+    expect(css.indexOf(`@media ${SIDEWAYS} {`)).toBeLessThan(css.indexOf(`@media ${UPRIGHT} {`));
+    expect(css.indexOf(`@media ${UPRIGHT} {`)).toBeLessThan(css.indexOf(`@media ${PHONE} {`));
+    expect(css).not.toContain('1001/1000');
+    expect(css).not.toContain('1499/1000');
+  });
+});
+
 describe('platform hold', () => {
   it('renders the screen with a neutral paused top bar and a frozen timer while the game waits for players', () => {
     const holding = inTurn(drawingPhase('bob'), {}, { waiting: { reason: 'players', missing: ['bob'], needed: 2, connected: 1 } });

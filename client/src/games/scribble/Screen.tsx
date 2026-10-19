@@ -8,6 +8,7 @@ import { Timer } from '../../platform/components/Timer';
 import type { GameScreenProps } from '../../platform/game';
 import { PHONE_QUERY, useMediaQuery } from '../../platform/lib/media';
 import { useCountdownSeconds } from '../../platform/lib/useCountdown';
+import { useScrollFade } from '../../platform/lib/useScrollFade';
 import { useAppMode } from '../../platform/lib/useViewport';
 import { useActiveGame } from '../../platform/store/selectors';
 import { usePlatformStore } from '../../platform/store/usePlatformStore';
@@ -35,6 +36,43 @@ export function ScribbleScreen({ room, meId, isHost }: GameScreenProps<ScribbleV
   const isPhone = useMediaQuery(PHONE_QUERY);
   useAppMode(isPhone);
   const rootRef = useRef<HTMLDivElement | null>(null);
+
+  // A tablet's players panel (under the canvas, or beside it) takes what its list needs in whole
+  // rows, up to a cap the stylesheet sets: the list's height, a row's pitch, where the first row
+  // starts and what the panel adds around its body (its padding and border) are published as CSS
+  // vars (--list-need, --list-pitch, --list-head, --list-chrome; scribble.css has the arithmetic).
+  // The panel's body fades at an edge with more rows, so a cut row reads as a scroll.
+  const playersRef = useRef<HTMLDivElement | null>(null);
+  const [playersFade] = useScrollFade(playersRef, !isPhone);
+  useLayoutEffect(() => {
+    const root = rootRef.current;
+    const body = playersRef.current;
+    const panel = body?.parentElement;
+    const list = body?.firstElementChild;
+    if (isPhone || !root || !panel || !(list instanceof HTMLElement)) return;
+    const publish = () => {
+      const rows = list.querySelectorAll<HTMLElement>('.player');
+      const top = list.getBoundingClientRect().top;
+      const first = rows[0]?.getBoundingClientRect();
+      const second = rows[1]?.getBoundingClientRect();
+      const head = first ? first.top - top : 0;
+      // Rows sit one pitch apart (a row and its divider); a list of one row is that row and the list's own edges.
+      const pitch = second && first ? second.top - first.top : list.getBoundingClientRect().height - head;
+      const style = getComputedStyle(panel);
+      const chrome = ['paddingTop', 'paddingBottom', 'borderTopWidth', 'borderBottomWidth'].reduce((sum, side) => sum + (parseFloat(style[side as 'paddingTop']) || 0), 0);
+      root.style.setProperty('--list-need', `${head + rows.length * pitch}px`);
+      root.style.setProperty('--list-pitch', `${Math.max(pitch, 1)}px`);
+      root.style.setProperty('--list-head', `${head}px`);
+      root.style.setProperty('--list-chrome', `${chrome}px`);
+    };
+    publish();
+    const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(publish) : null;
+    observer?.observe(list);
+    return () => {
+      observer?.disconnect();
+      for (const name of ['--list-need', '--list-pitch', '--list-head', '--list-chrome']) root.style.removeProperty(name);
+    };
+  }, [isPhone]);
 
   // Phones show the turn summary as a fixed overlay. It must leave the header (and in landscape
   // the whole side column) uncovered so the players and menu buttons stay reachable; the header's
@@ -130,7 +168,9 @@ export function ScribbleScreen({ room, meId, isHost }: GameScreenProps<ScribbleV
 
       {!isPhone && (
         <aside className="game__players card" aria-label="Players">
-          <div className="game__players-body">{players}</div>
+          <div className="game__players-body scroll-fade" ref={playersRef} data-fade={playersFade}>
+            {players}
+          </div>
         </aside>
       )}
 

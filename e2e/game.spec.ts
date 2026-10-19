@@ -1,5 +1,6 @@
 import { expect, test, type Browser, type BrowserContext, type Locator, type Page } from '@playwright/test';
 import { closeResults, createParty, endGameAsHost, enterNameIfAsked, expectResults, expectRulesReadCleanly, gameBarFits, joinByLink, leaveLobby, readyAll } from './party';
+import { tableBots, type TableBot } from './tableBots';
 
 /**
  * One browser, three contexts = three players sharing a room on the real production server.
@@ -442,6 +443,102 @@ test('a long phrase never pushes the players out of the bar: on a tablet the wor
   await box.fill('');
   await box.blur();
   await expect(host.page.getByTestId('settings-customWords-count')).toHaveText('0 words');
+});
+
+/** The tablets the canvas is checked on: upright and on their sides. */
+const TABLETS = [
+  { width: 768, height: 1024 },
+  { width: 820, height: 1180 },
+  { width: 1024, height: 768 },
+  { width: 1024, height: 1366 },
+];
+
+/**
+ * At each tablet size the canvas has the room: at least half the screen's width, its 4:3 kept, and
+ * the page still never scrolls, with the drawer's toolbar (44px targets), the players and the
+ * guesses all on the screen, none of them over the canvas. The players panel lists the room's
+ * `count` players: at least six of them (all of them in a smaller room) as whole rows, the first
+ * row whole, and where rows are left over it scrolls with its bottom fade on (none otherwise), the
+ * only row not whole being the one the fade covers; upright, the two panels end on one line.
+ */
+async function canvasHasTheRoom(p: Player, drawing: boolean, count: number): Promise<void> {
+  const own = p.page.viewportSize();
+  for (const size of TABLETS) {
+    await p.page.setViewportSize(size);
+    const problems = () =>
+      p.page.evaluate(
+        ([drawer, players]) => {
+          const out: string[] = [];
+          const box = (selector: string) => document.querySelector(selector)?.getBoundingClientRect() ?? null;
+          const canvas = box('.canvas-frame');
+          if (!canvas) return ['no canvas'];
+          if (canvas.width < window.innerWidth / 2) out.push(`the canvas is ${Math.round(canvas.width)}x${Math.round(canvas.height)}`);
+          if (Math.abs(canvas.width / canvas.height - 4 / 3) > 0.02) out.push('the canvas is not 4:3');
+          if (document.documentElement.scrollHeight > window.innerHeight + 1 || document.documentElement.scrollWidth > window.innerWidth + 1) out.push('the page scrolls');
+          const parts: [string, string][] = [['.game__players', 'the players'], ['.game__guesses', 'the guesses'], ['[data-testid="guess-input"], .guess-idle', 'the guess bar']];
+          if (drawer) parts.push(['.toolbar', 'the toolbar']);
+          for (const [selector, what] of parts) {
+            const r = box(selector);
+            if (!r) {
+              out.push(`no ${what}`);
+              continue;
+            }
+            if (r.top < -0.5 || r.left < -0.5 || r.bottom > window.innerHeight + 0.5 || r.right > window.innerWidth + 0.5) out.push(`${what} off the screen`);
+            if (what !== 'the toolbar' && r.left < canvas.right && r.right > canvas.left && r.top < canvas.bottom && r.bottom > canvas.top) out.push(`${what} over the canvas`);
+          }
+          if (drawer) for (const b of document.querySelectorAll('.toolbar .tool-btn')) if (b.getBoundingClientRect().height < 43.5) out.push('a tool under 44px');
+          const body = document.querySelector<HTMLElement>('.game__players-body');
+          const panel = box('.game__players');
+          const guesses = box('.game__guesses');
+          if (!body || !panel || !guesses) return [...out, 'no players panel'];
+          const b = body.getBoundingClientRect();
+          const rows = [...body.querySelectorAll('[data-testid="player-item"]')].map((row) => row.getBoundingClientRect());
+          if (rows.length !== players) out.push(`${rows.length} rows for ${players} players`);
+          const whole = rows.filter((r) => r.top >= b.top - 0.5 && r.bottom <= b.bottom + 0.5);
+          if (whole.length < Math.min(6, players)) out.push(`only ${whole.length} whole rows`);
+          if (rows[0] && rows[0].top < b.top - 0.5) out.push('the first row is cut');
+          const cut = rows.filter((r) => r.top < b.bottom - 0.5 && r.bottom > b.bottom + 0.5);
+          if (cut.length > 1) out.push(`${cut.length} rows cut`);
+          const scrolls = body.scrollHeight > body.clientHeight + 1;
+          const fade = body.getAttribute('data-fade') ?? '';
+          if (scrolls && !/\bbottom\b/.test(fade)) out.push(`rows scroll with no fade (${body.scrollHeight}px in ${body.clientHeight}px)`);
+          if (!scrolls && fade) out.push(`a fade (${fade}) with nothing to scroll`);
+          if (window.innerWidth < window.innerHeight && Math.abs(panel.bottom - guesses.bottom) > 1) out.push(`the panels end ${Math.round(panel.bottom)} and ${Math.round(guesses.bottom)}`);
+          return out;
+        },
+        [drawing, count] as const,
+      );
+    await expect.poll(problems, { message: `${p.name}: the canvas at ${size.width}x${size.height}` }).toEqual([]);
+  }
+  if (own) await p.page.setViewportSize(own);
+}
+
+test('a tablet gives the canvas the room, upright and on its side, for the drawer and a guesser, with twelve players listed in whole rows', async ({ baseURL }) => {
+  // Nine more on bare sockets: a big room, whose list is taller than the panel under the canvas.
+  const bots: TableBot[] = await tableBots(9, roomCode, baseURL ?? 'http://localhost:4173', { game: 'crowd' });
+  await expect(host.page.getByTestId('player-item')).toHaveCount(12);
+  await readyAll([bob.page, carol.page]);
+  await expect(host.page.getByTestId('start-game')).toHaveAttribute('data-ready', '12');
+  await host.page.getByTestId('start-game').click();
+  await expect.poll(findDrawer, { timeout: 10_000 }).not.toBeNull();
+  const drawer = await findDrawer();
+  if (!drawer) throw new Error('no drawer');
+  await drawer.page.getByTestId('word-choice').first().click();
+  const guesser = players.find((p) => p !== drawer);
+  if (!guesser) throw new Error('unreachable');
+  await expect(drawer.page.locator('.toolbar')).toBeVisible();
+  await expect(guesser.page.getByTestId('word-mask')).toBeVisible();
+  await canvasHasTheRoom(drawer, true, 12);
+  await canvasHasTheRoom(guesser, false, 12);
+
+  await endGameAsHost(host.page);
+  for (const p of players) {
+    await expectResults(p.page);
+    await closeResults(p.page);
+  }
+  for (const bot of bots) bot.leave();
+  expect(bots.flatMap((b) => b.errors)).toEqual([]);
+  await expect(host.page.getByTestId('player-item')).toHaveCount(3);
 });
 
 test('leaving removes the player and tells the others', async () => {

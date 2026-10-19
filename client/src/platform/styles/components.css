@@ -1304,6 +1304,43 @@
   }
 }
 
+/*
+ * ---------- A scrolling box whose cut edges read as a scroll ----------
+ * Each end with more to read (data-fade, which useScrollFade keeps as the box scrolls) fades into
+ * the surface: a band of it stuck to that edge of the box, over the content (never a mask on the
+ * box, which would fade its scrollbar too). The bands sit inside the box, beside its scrollbar;
+ * the box carries no padding of its own, so they reach its edges. The How to play card, a sheet's
+ * body and Scribble's players panel are such boxes; a surface of another colour sets --fade-bg.
+ */
+.scroll-fade::before,
+.scroll-fade::after {
+  content: '';
+  position: sticky;
+  z-index: 1;
+  display: block;
+  pointer-events: none;
+  opacity: 0;
+}
+
+.scroll-fade::before {
+  top: 0;
+  height: 32px;
+  margin-bottom: -32px;
+  background: linear-gradient(var(--fade-bg, var(--color-surface)), transparent);
+}
+
+.scroll-fade::after {
+  bottom: 0;
+  height: 48px;
+  margin-top: -48px;
+  background: linear-gradient(transparent, var(--fade-bg, var(--color-surface)));
+}
+
+.scroll-fade[data-fade~='top']::before,
+.scroll-fade[data-fade~='bottom']::after {
+  opacity: 1;
+}
+
 /* ---------- Bottom sheet (phones): 20px top corners, max 90dvh, scrolls its own content ---------- */
 .sheet {
   position: fixed;
@@ -1394,7 +1431,7 @@
   margin-top: var(--space-3);
 }
 
-/* A tall row: an icon on a tinted square, the action in bold and what it does under it. */
+/* A tall row: an icon on a tinted square, the action in bold and what it does under it (the ways out, and the players row above them for a bar with no players button). */
 .exit-action {
   display: flex;
   align-items: center;
@@ -1473,6 +1510,32 @@ button.exit-action--end:hover {
 .exit-action--pending {
   border-style: dashed;
   background: transparent;
+}
+
+/*
+ * A phone on its side has little height for the sheet (261px of body at 844x390, 199px at 568x320):
+ * the tall rows share one 48px line, each as wide as its words need (the players row, End game,
+ * Leave room, their descriptions on one line too), so the sheet holds every row without scrolling.
+ */
+@media (min-aspect-ratio: 3/2) and (max-height: 520px) {
+  .exit-actions {
+    flex-direction: row;
+  }
+
+  .exit-action {
+    /* Each as wide as its words (never the column's full width as its basis, which would squeeze the three alike and wrap a description). */
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
+    min-height: 48px;
+    gap: 8px;
+    padding: 6px 10px 6px 6px;
+  }
+
+  .exit-action__icon {
+    width: 36px;
+    height: 36px;
+  }
 }
 
 /* The confirm step: an icon, the question, what it does, then the action and the way back. */

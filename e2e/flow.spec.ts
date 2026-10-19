@@ -1,6 +1,7 @@
 import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test';
 import { GAME_LIST, gameById, type GameId } from '../shared/platform/games';
-import { closeResults, createParty, endGameAsHost, expectConfirmReadsOnce, expectGameBar, expectResults, gameBarFits, joinByCode, readyAll } from './party';
+import { closeResults, createParty, endGameAsHost, expectConfirmReadsOnce, expectGameBar, expectResults, gameBarFits, joinByCode, joinByLink, readyAll } from './party';
+import { tableBots, type TableBot } from './tableBots';
 
 /**
  * How a game ends and how a player leaves, in every game: the host's End game ends it for
@@ -117,8 +118,8 @@ for (const [index, gameId] of LIVE.entries()) {
       await expect(popover).toHaveCount(0);
       await expect(gear).toBeFocused();
     }
-    // The host's bar (End game in it, the fullest) fits at every width; The Spy Game's long name may give way on a phone's one row.
-    await gameBarFits(host.page, { nameMayCutBelow: gameId === 'spygame' ? 768 : 0 });
+    // The host's bar (End game in it, the fullest) fits at every width, the game's name whole on every one.
+    await gameBarFits(host.page);
     await pia.page.getByTestId('game-menu').click();
     await expect(pia.page.getByTestId('leave-room')).toBeVisible();
     await expect(pia.page.getByTestId('end-game')).toHaveCount(0);
@@ -222,6 +223,47 @@ test('the spy drops: the host gets the waiting card naming the spy with Remove, 
   }
   await endGameAsHost(remover.page);
   for (const p of others) await closeResults(p.page);
+});
+
+/**
+ * A big room: twelve players (a host on a desktop, a guest on a phone and ten more on bare sockets),
+ * where the players count runs to two figures and the chips fold into faces and a "+K". Every
+ * game's bar, the host's and the guest's, still reads whole from the narrowest phone to a desktop
+ * and on its side.
+ */
+const crowd: { host: Player | null; guest: Player | null; bots: TableBot[]; code: string } = { host: null, guest: null, bots: [], code: '' };
+
+test('a big room gathers: twelve players in the waiting room', async ({ browser, baseURL }) => {
+  const bigHost = await newPlayer(browser, 'Wren');
+  const guest = await newPlayer(browser, 'Yuki', { viewport: PORTRAIT, isMobile: true, hasTouch: true });
+  crowd.host = bigHost;
+  crowd.guest = guest;
+  crowd.code = await createParty(bigHost.page, bigHost.name);
+  await joinByLink(guest.page, guest.name, `/${crowd.code}`, crowd.code);
+  crowd.bots = await tableBots(10, crowd.code, baseURL ?? 'http://localhost:4173', { game: 'crowd' });
+  for (const p of [bigHost, guest]) await expect(p.page.getByTestId('player-item')).toHaveCount(12);
+});
+
+for (const gameId of LIVE) {
+  test(`${gameId} in a big room: the host's bar and a guest's read whole at every width`, async () => {
+    const { host: bigHost, guest } = crowd;
+    if (!bigHost || !guest) throw new Error('no big room');
+    await bigHost.page.getByTestId('game-picker').locator(`[data-testid="game-tile"][data-game="${gameId}"]`).click();
+    await expect(guest.page.getByTestId('game-picker')).toHaveAttribute('data-game', gameId);
+    await readyAll([guest.page]);
+    await expect(bigHost.page.getByTestId('start-game')).toHaveAttribute('data-ready', '12');
+    await bigHost.page.getByTestId('start-game').click();
+    for (const p of [bigHost, guest]) await expectGameBar(p.page, gameById(gameId).name, crowd.code);
+    await gameBarFits(bigHost.page);
+    await gameBarFits(guest.page);
+    await endGameAsHost(bigHost.page);
+    for (const p of [bigHost, guest]) await closeResults(p.page);
+  });
+}
+
+test('the big room breaks up', async () => {
+  for (const bot of crowd.bots) bot.close();
+  expect(crowd.bots.flatMap((b) => b.errors)).toEqual([]);
 });
 
 test('no page errors were raised in any browser', async () => {

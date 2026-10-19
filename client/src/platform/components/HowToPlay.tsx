@@ -4,6 +4,7 @@ import type { GameRules } from '../game';
 import { noOrphan } from '../lib/format';
 import { DESKTOP_QUERY, useMediaQuery } from '../lib/media';
 import { rulesProse, rulesSections } from '../lib/rules';
+import { useScrollFade } from '../lib/useScrollFade';
 import { BottomSheet } from './BottomSheet';
 import { CloseIcon, HelpIcon } from './Icons';
 import { RulesHeroArt } from './RulesHero';
@@ -295,15 +296,6 @@ interface PopoverProps {
   id?: string;
 }
 
-/** Which ends of the scrolling rules have more to read: each fades out there, so a cut line reads as a scroll. */
-type Fade = '' | 'top' | 'bottom' | 'top bottom';
-
-function fadeOf(el: HTMLElement): Fade {
-  const top = el.scrollTop > 1;
-  const bottom = el.scrollTop + el.clientHeight < el.scrollHeight - 1;
-  return top && bottom ? 'top bottom' : top ? 'top' : bottom ? 'bottom' : '';
-}
-
 function Popover({ meta, rules, label, onClose, anchorRef, keepOpenIn, id }: PopoverProps) {
   const panelRef = useRef<HTMLDivElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -313,7 +305,8 @@ function Popover({ meta, rules, label, onClose, anchorRef, keepOpenIn, id }: Pop
     onCloseRef.current = onClose;
   }, [onClose]);
   const [placement, setPlacement] = useState<PopoverPlacement | null>(null);
-  const [fade, setFade] = useState<Fade>('');
+  // Each end of the rules with more to read fades into the card, so a cut line reads as a scroll.
+  const [fade, refade] = useScrollFade(scrollRef);
 
   // Measured before the first paint, again on a resize and when the host switches the game (another card, another height).
   useLayoutEffect(() => {
@@ -368,7 +361,7 @@ function Popover({ meta, rules, label, onClose, anchorRef, keepOpenIn, id }: Pop
     return () => window.removeEventListener('resize', place);
   }, [anchorRef, keepOpenIn, meta.id]);
 
-  // The fades follow the scroll and the box's size (a new placement, the card settling); another game's rules start from their top.
+  // The fades follow a new placement (the card settling); another game's rules start from their top.
   const shownGame = useRef(meta.id);
   useLayoutEffect(() => {
     const scroll = scrollRef.current;
@@ -377,16 +370,8 @@ function Popover({ meta, rules, label, onClose, anchorRef, keepOpenIn, id }: Pop
       shownGame.current = meta.id;
       scroll.scrollTop = 0;
     }
-    setFade(fadeOf(scroll));
-  }, [placement, meta.id]);
-  useEffect(() => {
-    const scroll = scrollRef.current;
-    if (!scroll || typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(() => setFade(fadeOf(scroll)));
-    observer.observe(scroll);
-    if (scroll.firstElementChild) observer.observe(scroll.firstElementChild);
-    return () => observer.disconnect();
-  }, []);
+    refade();
+  }, [placement, meta.id, refade]);
 
   useEffect(() => {
     panelRef.current?.focus({ preventScroll: true });
@@ -433,7 +418,7 @@ function Popover({ meta, rules, label, onClose, anchorRef, keepOpenIn, id }: Pop
           <CloseIcon size={18} />
         </button>
       </div>
-      <div className="how-to-play__scroll" ref={scrollRef} data-fade={fade || undefined} onScroll={(e) => setFade(fadeOf(e.currentTarget))}>
+      <div className="how-to-play__scroll scroll-fade" ref={scrollRef} data-fade={fade}>
         <RulesCard meta={meta} rules={rules} mode="popover" />
       </div>
     </div>

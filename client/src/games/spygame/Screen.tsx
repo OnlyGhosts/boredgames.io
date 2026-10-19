@@ -22,10 +22,11 @@ import { useSpygame } from './store';
 const meta = gameById('spygame');
 
 /**
- * The Spy Game screen. Phones: a one-row header (the name and round, the code, the clock, players,
- * menu) over one scrolling column. Its first screen holds the notices, the role card, the vote and
- * every candidate place (a portrait phone fits all 24 without scrolling); the players to accuse
- * follow below. Desktop: the same column on the left, the players to accuse on the right.
+ * The Spy Game screen. Phones: a one-row header (the name and round, the code, the clock, the
+ * options) over one scrolling column. Its first screen holds the notices, the role card, the vote
+ * and every candidate place (a portrait phone fits all 24 without scrolling); the players to
+ * accuse, with their points, follow below, and the options sheet opens the scores. Desktop: the
+ * same column on the left, the players to accuse on the right.
  */
 export function SpyGameScreen({ room, meId, isHost }: GameScreenProps<SpygameView, SpygameSettings>) {
   const game = useActiveGame();
@@ -60,6 +61,7 @@ export function SpyGameScreen({ room, meId, isHost }: GameScreenProps<SpygameVie
         players={{ label: 'Scores', open: playersOpen, onOpen: () => openSheet('players') }}
         menu={{ open: menuOpen, onOpen: () => openSheet('menu') }}
         compact={isPhone}
+        playersInMenu={isPhone}
       />
 
       <div className="spy__stage">
@@ -93,7 +95,7 @@ export function SpyGameScreen({ room, meId, isHost }: GameScreenProps<SpygameVie
       <BottomSheet open={playersOpen} title={`Scores (${room.players.length})`} onClose={closeSheet} testId="players-sheet">
         {players}
       </BottomSheet>
-      {isPhone && <GameMenuSheet open={menuOpen} onClose={closeSheet} />}
+      {isPhone && <GameMenuSheet open={menuOpen} onClose={closeSheet} players={{ label: 'Scores', onOpen: () => openSheet('players') }} />}
       {/* Last, so it stacks above the other sheets should one be open. */}
       <VoteSheet room={room} view={view} meId={meId} />
     </div>

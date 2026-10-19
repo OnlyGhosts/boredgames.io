@@ -360,6 +360,15 @@ button.spy-tile:disabled {
   font-size: 0.82rem;
 }
 
+/*
+ * The card is a container: the agents' reference grid takes as many columns as the card has room
+ * for tiles that keep their picture (172px each, below): two of twelve, three of eight from 528px,
+ * four of six from 706px. The spy's grid keeps two columns. A portrait phone has its own grid (below).
+ */
+.spy-grid-card {
+  container: spy-grid / inline-size;
+}
+
 /* Two columns of twelve, filled column first so the list reads top to bottom. */
 .spy-grid {
   list-style: none;
@@ -370,8 +379,118 @@ button.spy-tile:disabled {
   gap: 6px;
 }
 
+@container spy-grid (min-width: 528px) {
+  .spy-grid--reference {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-rows: repeat(8, auto);
+  }
+}
+
+@container spy-grid (min-width: 706px) {
+  .spy-grid--reference {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-rows: repeat(6, auto);
+  }
+}
+
+/*
+ * Each tile lays itself out by its own width (its cell is a container), so every place's name
+ * reads whole on at most two lines, whatever the pack (the longest, two lines of about 101px at
+ * 0.8rem): the mark inside the tile's end while there is room for it, then on the tile's corner
+ * (16px at -6px, reaching no further into the tile than its border and right padding, so never
+ * over the name); a guess tile's picture and name a size down; then the picture gives way and the
+ * name takes the tile.
+ */
 .spy-grid li {
   min-width: 0;
+  container: spy-tile / inline-size;
+}
+
+@container spy-tile (max-width: 227.98px) {
+  .spy-grid .spy-tile--md.spy-tile--ruledOut .spy-tile__body {
+    padding-right: 0;
+  }
+
+  .spy-grid .spy-tile--md .spy-tile__mark {
+    top: -6px;
+    right: -6px;
+    transform: none;
+    width: 16px;
+    height: 16px;
+  }
+
+  .spy-grid .spy-tile--md .spy-tile__mark svg {
+    width: 10px;
+    height: 10px;
+  }
+}
+
+@container spy-tile (max-width: 199.98px) {
+  .spy-grid .spy-tile--sm.spy-tile--real .spy-tile__body,
+  .spy-grid .spy-tile--sm.spy-tile--ruledOut .spy-tile__body {
+    padding-right: 0;
+  }
+
+  .spy-grid .spy-tile--sm .spy-tile__mark {
+    top: -6px;
+    right: -6px;
+    transform: none;
+    width: 16px;
+    height: 16px;
+  }
+
+  .spy-grid .spy-tile--sm .spy-tile__mark svg {
+    width: 10px;
+    height: 10px;
+  }
+
+  .spy-grid .spy-tile--md .spy-tile__picture {
+    width: 52px;
+    height: 39px;
+  }
+
+  .spy-grid .spy-tile--md .spy-tile__name {
+    font-size: 0.8rem;
+  }
+}
+
+@container spy-tile (max-width: 179.98px) {
+  .spy-grid .spy-tile--md {
+    min-height: 44px;
+    padding: 4px 8px 4px 6px;
+  }
+
+  .spy-grid .spy-tile--md .spy-tile__picture {
+    display: none;
+  }
+
+  .spy-grid .spy-tile--md .spy-tile__name {
+    font-size: 0.75rem;
+  }
+
+  /* The confirm hint would take a line the name needs: the grid's head says it instead. */
+  .spy-grid .spy-tile--md .spy-tile__hint {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+@container spy-tile (max-width: 171.98px) {
+  .spy-grid .spy-tile--sm {
+    padding: 4px 8px 4px 6px;
+  }
+
+  .spy-grid .spy-tile--sm .spy-tile__picture {
+    display: none;
+  }
+
+  .spy-grid .spy-tile--sm .spy-tile__name {
+    font-size: 0.75rem;
+  }
 }
 
 /* ---------- Players to accuse ---------- */
@@ -701,16 +820,6 @@ button.spy-accuse__row:disabled {
   background: var(--color-text-faint);
 }
 
-/*
- * The agents' reference grid has room for four columns of six on a desktop. Keyed on the layout
- * class rather than the width: a landscape phone is wider than the breakpoint but shows the grid in
- * half a column, where four columns would truncate every name.
- */
-.spy:not(.spy--phone) .spy-grid--reference {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  grid-template-rows: repeat(6, auto);
-}
-
 @media (max-width: 1100px) {
   .spy {
     grid-template-columns: minmax(0, 1fr) 300px;
@@ -866,9 +975,9 @@ button.spy-accuse__row:disabled {
     gap: 5px;
   }
 
-  /* Each tile is a size container: its picture shows only when the tile is tall enough for it. */
+  /* Each tile is a size container: its picture shows only when the tile is tall enough for it. Not the width ladder above: these tiles are laid out here. */
   .spy--phone .spy-grid li {
-    container-type: size;
+    container: none / size;
   }
 
   .spy--phone .spy-grid .spy-tile {
@@ -878,7 +987,7 @@ button.spy-accuse__row:disabled {
     align-items: stretch;
     justify-content: center;
     gap: 3px;
-    padding: 4px 6px;
+    padding: 4px 8px 4px 6px;
   }
 
   .spy--phone .spy-grid .spy-tile__picture {
@@ -888,6 +997,20 @@ button.spy-accuse__row:disabled {
   .spy--phone .spy-grid .spy-tile__name {
     font-size: 0.75rem;
     line-height: 1.15;
+  }
+
+  /*
+   * The narrowest phones (320 to 340px wide: a tile under 98px, its name under 80px): the name a
+   * size down, 11px with the letters a touch closer, so the family pack's longest words
+   * ("Kindergarten", "Supermarket", "Construction") stay whole rather than breaking inside
+   * themselves. Two lines of 13px keep the box a whole number of pixels tall.
+   */
+  @container (max-width: 97.98px) {
+    .spy--phone .spy-grid .spy-tile__name {
+      font-size: 0.6875rem;
+      line-height: 13px;
+      letter-spacing: -0.01em;
+    }
   }
 
   /* The confirm hint would take a line the name needs: the grid's head says it instead. */
@@ -900,7 +1023,7 @@ button.spy-accuse__row:disabled {
     white-space: nowrap;
   }
 
-  /* The marks sit on the tile's corner, clear of the name. */
+  /* The marks sit on the tile's corner, clear of the name: 16px at -6px reaches 10px in, the tile's border and right padding. */
   .spy--phone .spy-grid .spy-tile--real .spy-tile__body,
   .spy--phone .spy-grid .spy-tile--ruledOut .spy-tile__body {
     padding-right: 0;
@@ -910,13 +1033,13 @@ button.spy-accuse__row:disabled {
     top: -6px;
     right: -6px;
     transform: none;
-    width: 20px;
-    height: 20px;
+    width: 16px;
+    height: 16px;
   }
 
   .spy--phone .spy-grid .spy-tile__mark svg {
-    width: 12px;
-    height: 12px;
+    width: 10px;
+    height: 10px;
   }
 
   @container (min-height: 64px) {

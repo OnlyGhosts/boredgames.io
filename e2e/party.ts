@@ -309,6 +309,17 @@ export async function expectRulesReadCleanly(page: Page, name: string, label: st
   await expect(dialog).toHaveCount(0);
 }
 
+/**
+ * Opens the players sheet: the bar's players row or button, or, on a bar with neither (The Spy Game
+ * on a phone, whose page lists the players), the players row of the options sheet.
+ */
+export async function openPlayers(page: Page): Promise<void> {
+  const toggle = page.getByTestId('players-toggle');
+  if (await toggle.isVisible()) return toggle.click();
+  await page.getByTestId('game-menu').click();
+  await page.getByTestId('menu-players').click();
+}
+
 /** The results popup is up over the lobby (the room's code under it). */
 export async function expectResults(page: Page): Promise<void> {
   await expect(page.getByTestId('overlay-game-end')).toBeVisible();
@@ -338,36 +349,46 @@ export async function expectGameBar(page: Page, name: string, code: string): Pro
 }
 
 /**
- * The screens the game bar is checked on: the narrowest phones, a common phone, a tablet, a small
- * and a large desktop, and phones on their side (where Scribble's bar sits in a side column).
+ * The screens the game bar is checked on: the narrowest phones up to the widest (320 to 430), a
+ * tablet, a small and a large desktop, and phones on their side (where Scribble's bar sits in a
+ * side column), with two windows either side of the seam where a sideways bar's halves give way to
+ * one line (the bar's content 481px, which on a phone's sideways page, 8px gutters and the bar's
+ * own 8px padding and 1px border each side, is a 515px window: 505 is under the seam, 515 on it).
+ * Portrait phones are listed narrowest first.
  */
 export const BAR_SIZES = [
   { width: 320, height: 568 },
   { width: 360, height: 740 },
+  { width: 375, height: 667 },
   { width: 390, height: 844 },
+  { width: 430, height: 932 },
   { width: 768, height: 1024 },
   { width: 1024, height: 768 },
   { width: 1440, height: 900 },
   { width: 844, height: 390 },
   { width: 667, height: 375 },
   { width: 568, height: 320 },
+  { width: 515, height: 320 },
+  { width: 505, height: 320 },
 ];
 
 /**
  * The game's top bar fits on every screen in BAR_SIZES: nothing in it overflows the bar or the
  * screen, nothing on its first line or in its players row overlaps, every button in it is a 44px
- * target, the code's tiles are whole, the players row keeps at least one player's chip and cuts
- * none, a game's word stays inside its own room, and the status is whole: one line, or a status in parts
- * (StatusParts) stacked a part to a line, never cut. The game's name is whole; below
- * `nameMayCutBelow` (a line too full for a long name, The Spy Game's phone bar) it may give way,
- * the only thing that does, and only with an ellipsis. Back to the page's own size after.
+ * target, the code's tiles are whole, the game's name reads whole, the options button ends its
+ * line (a phone on its side too), a game's word stays inside its own room, and the status is
+ * whole: one line, or a status in parts (StatusParts) stacked a part to a line, never cut. The
+ * players row keeps at least one player's chip and cuts none: named chips only while every
+ * player fits named (their status words whole), and a "+K" only with no room left for one more
+ * face; a wider phone never shows fewer players than a narrower one. Back to the page's own size after.
  */
-export async function gameBarFits(page: Page, { nameMayCutBelow = 0 }: { nameMayCutBelow?: number } = {}): Promise<void> {
+export async function gameBarFits(page: Page): Promise<void> {
   const own = page.viewportSize();
+  const shownAt = new Map<number, number>();
   for (const size of BAR_SIZES) {
     await page.setViewportSize(size);
     const problems = () =>
-      page.evaluate((mayCut) => {
+      page.evaluate(() => {
         const out: string[] = [];
         const bar = document.querySelector('.gbar');
         if (!bar) return ['no bar'];
@@ -390,13 +411,38 @@ export async function gameBarFits(page: Page, { nameMayCutBelow = 0 }: { nameMay
         for (let i = 1; i < parts.length; i++) {
           const prev = parts[i - 1].getBoundingClientRect();
           const next = parts[i].getBoundingClientRect();
-          if (prev.right > next.left + 0.5) out.push(`${parts[i - 1].className} overlaps ${parts[i].className}`);
+          if (prev.bottom > next.top && prev.right > next.left + 0.5) out.push(`${parts[i - 1].className} overlaps ${parts[i].className}`);
         }
         for (const el of bar.querySelectorAll('button')) {
           if (!shown(el)) continue;
           const r = el.getBoundingClientRect();
           if (r.height < 44 - 0.5 || r.width < 44 - 0.5) out.push(`${el.getAttribute('data-testid')} is ${Math.round(r.width)}x${Math.round(r.height)}`);
         }
+        // The options button (a phone's) ends its line: nothing the bar shows on that line sits after it.
+        const menu = bar.querySelector('[data-testid="game-menu"]');
+        if (menu && shown(menu)) {
+          const m = menu.getBoundingClientRect();
+          for (const el of bar.querySelectorAll('.gbar__brand, .gbar__title, .gbar__code, .gbar__count, .gbar__clock, .chips, .gbar__middle')) {
+            if (!shown(el)) continue;
+            const r = el.getBoundingClientRect();
+            if (r.bottom > m.top + 0.5 && r.top < m.bottom - 0.5 && r.right > m.left + 0.5) out.push(`${el.className} comes after the options button`);
+          }
+        }
+        // The logo shows wherever the name (and the status under it) has room beside it; a one-row phone bar folds it only when
+        // the name would otherwise be cut (the folded logo keeps its width out of the row, so the room it would take is known).
+        const brand = bar.querySelector<HTMLElement>('.gbar__brand');
+        const title = bar.querySelector<HTMLElement>('.gbar__title');
+        if (!brand || !title) out.push('no logo');
+        else if (brand.classList.contains('gbar__brand--folded')) {
+          const laidOut = (el: Element) => {
+            const range = document.createRange();
+            range.selectNodeContents(el);
+            return range.getBoundingClientRect().width;
+          };
+          const need = Math.max(0, ...[...title.children].map(laidOut));
+          const gap = parseFloat(getComputedStyle(brand.parentElement as Element).columnGap) || 0;
+          if (need + brand.offsetWidth + gap + 0.5 <= title.getBoundingClientRect().width) out.push(`the logo gave way with ${Math.round(title.getBoundingClientRect().width - need - brand.offsetWidth - gap)}px to spare for it`);
+        } else if (!shown(brand)) out.push('the logo is hidden');
         const tiles = bar.querySelectorAll('[data-testid="game-code"] .room-card__char');
         if (tiles.length !== 4 || ![...tiles].every(shown)) out.push('the code is not four whole tiles');
         // The players row: nothing in it overlaps or runs past its own box (a word too long for its room), and the strip
@@ -407,10 +453,24 @@ export async function gameBarFits(page: Page, { nameMayCutBelow = 0 }: { nameMay
           if (below[i].scrollWidth > below[i].clientWidth + 1 && !below[i].matches('.gbar__status')) out.push(`${below[i].className} overflows`);
           if (i > 0 && below[i - 1].getBoundingClientRect().right > below[i].getBoundingClientRect().left + 0.5) out.push(`${below[i - 1].className} overlaps ${below[i].className}`);
         }
-        const chips = bar.querySelector('.chips');
+        const chips = bar.querySelector<HTMLElement>('.chips');
         if (chips && shown(chips)) {
           if (chips.scrollWidth > chips.clientWidth + 1) out.push('a player chip is cut');
           if (!chips.querySelector('[data-testid="player-chip"]')) out.push('no player chip shows');
+          const css = getComputedStyle(chips);
+          const more = chips.querySelector('[data-testid="chips-more"]');
+          const slots = [...chips.children];
+          if (chips.dataset.look === 'named') {
+            // Named chips only while every player fits named; each status word whole.
+            if (more) out.push('named chips beside a "+K"');
+            for (const status of chips.querySelectorAll('.chip__status')) if (status.scrollWidth > status.clientWidth + 1) out.push(`the status "${status.textContent}" is cut`);
+          }
+          if (more) {
+            // A "+K" never sits beside room for one more face (each at its least, with its gap: 40px and 4px unless the stylesheet says).
+            const faceMin = parseFloat(css.getPropertyValue('--chip-face-min')) || 40;
+            const faceGap = parseFloat(css.getPropertyValue('--chip-face-gap')) || 4;
+            if ((slots.length + 1) * faceMin + slots.length * faceGap <= chips.clientWidth) out.push(`room for one more face beside "${more.textContent}"`);
+          }
         }
         // Cut text: its own laid-out width past its box (an ellipsis can hide a fraction of a pixel that scrollWidth rounds away).
         const cut = (el: Element) => {
@@ -421,10 +481,7 @@ export async function gameBarFits(page: Page, { nameMayCutBelow = 0 }: { nameMay
         const oneLine = (el: Element) => el.getBoundingClientRect().height <= parseFloat(getComputedStyle(el).lineHeight) * 1.5;
         const name = bar.querySelector('.gbar__name');
         if (!name || !shown(name)) out.push('no name');
-        else if (cut(name)) {
-          if (window.innerWidth >= mayCut) out.push(`the name is cut at ${window.innerWidth}px`);
-          if (getComputedStyle(name).textOverflow !== 'ellipsis') out.push('the name is clipped without an ellipsis');
-        }
+        else if (cut(name)) out.push(`the name is cut at ${window.innerWidth}px`);
         const status = bar.querySelector('.gbar__status');
         if (status && shown(status)) {
           const pieces = [...status.querySelectorAll('.gbar__part')];
@@ -432,8 +489,91 @@ export async function gameBarFits(page: Page, { nameMayCutBelow = 0 }: { nameMay
           if (cut(status) || pieces.some(cut)) out.push(`the status is cut at ${window.innerWidth}px`);
         }
         return out;
-      }, nameMayCutBelow);
+      });
     await expect.poll(problems, { message: `the game bar fits at ${size.width}x${size.height}` }).toEqual([]);
+    if (size.width < size.height && size.width <= 430) shownAt.set(size.width, await page.locator('.gbar [data-testid="player-chip"]').count());
+  }
+  // A wider phone never shows fewer players (a bar with chips: a card table's or The Spy Game's phone bar has none).
+  const counts = [...shownAt.entries()].sort((a, c) => a[0] - c[0]);
+  for (let i = 1; i < counts.length; i++) expect(counts[i][1], `players shown at ${counts[i][0]}px against ${counts[i - 1][0]}px`).toBeGreaterThanOrEqual(counts[i - 1][1]);
+  if (own) await page.setViewportSize(own);
+}
+
+/**
+ * The game's content lines up with its top bar at each of `sizes`: the first card under the bar
+ * (`content`) starts and ends within 3px of the bar's own edges, as every game's does on a phone
+ * and a tablet.
+ */
+export async function contentLinesUpWithBar(page: Page, content: string, sizes: { width: number; height: number }[]): Promise<void> {
+  const own = page.viewportSize();
+  for (const size of sizes) {
+    await page.setViewportSize(size);
+    const edges = () =>
+      page.evaluate((selector) => {
+        const bar = document.querySelector('.gbar')?.getBoundingClientRect();
+        const card = document.querySelector(selector)?.getBoundingClientRect();
+        if (!bar || !card) return 'missing';
+        return { left: Math.round(Math.abs(card.left - bar.left)) <= 3, right: Math.round(Math.abs(card.right - bar.right)) <= 3 };
+      }, content);
+    await expect.poll(edges, { message: `${content} lines up with the bar at ${size.width}x${size.height}` }).toEqual({ left: true, right: true });
+  }
+  if (own) await page.setViewportSize(own);
+}
+
+/**
+ * The screens a phone's options sheet is checked on: phones on their side (the shortest, where
+ * the sheet's body has 261px at most) and upright.
+ */
+export const SHEET_SIZES = [
+  { width: 844, height: 390 },
+  { width: 667, height: 375 },
+  { width: 568, height: 320 },
+  { width: 390, height: 844 },
+  { width: 320, height: 568 },
+];
+
+/**
+ * The phone's options sheet holds every row at each of SHEET_SIZES: its body never scrolls, each
+ * preference row and tall row (the players row, End game, Leave room) lies wholly inside the body
+ * and on the screen, every tall row is a 44px target with its words on one line and whole, and the
+ * close button is on the screen. Opens the sheet through the bar's options button and closes it
+ * again; back to the page's own size after.
+ */
+export async function menuSheetFits(page: Page): Promise<void> {
+  const own = page.viewportSize();
+  for (const size of SHEET_SIZES) {
+    await page.setViewportSize(size);
+    await page.getByTestId('game-menu').click();
+    await expect(page.getByTestId('menu-sheet')).toBeVisible();
+    const problems = () =>
+      page.evaluate(() => {
+        const out: string[] = [];
+        const sheet = document.querySelector('[data-testid="menu-sheet"]');
+        const body = sheet?.querySelector<HTMLElement>('.sheet__body');
+        if (!sheet || !body) return ['no sheet'];
+        if (body.scrollHeight > body.clientHeight + 1) out.push(`the sheet scrolls (${body.scrollHeight}px in ${body.clientHeight}px)`);
+        const b = body.getBoundingClientRect();
+        const name = (el: Element) => el.getAttribute('data-testid') ?? el.className;
+        const inside = (r: DOMRect, box: { top: number; bottom: number; left: number; right: number }) =>
+          r.top >= box.top - 0.5 && r.bottom <= box.bottom + 0.5 && r.left >= box.left - 0.5 && r.right <= box.right + 0.5;
+        const screen = { top: 0, bottom: window.innerHeight, left: 0, right: window.innerWidth };
+        for (const el of body.querySelectorAll('.pref-row, .exit-action')) {
+          const r = el.getBoundingClientRect();
+          if (!inside(r, b)) out.push(`${name(el)} is cut by the sheet's edge`);
+          if (!inside(r, screen)) out.push(`${name(el)} is off the screen`);
+          if (el.matches('.exit-action') && r.height < 44 - 0.5) out.push(`${name(el)} is ${Math.round(r.height)}px tall`);
+          for (const text of el.querySelectorAll('strong, small')) {
+            const line = parseFloat(getComputedStyle(text).lineHeight);
+            if (text.scrollWidth > text.clientWidth + 1 || text.getBoundingClientRect().height > line * 1.5) out.push(`"${text.textContent}" wraps or is cut`);
+          }
+        }
+        const close = sheet.querySelector('[data-testid="menu-sheet-close"]');
+        if (!close || !inside(close.getBoundingClientRect(), screen)) out.push('the close button is off the screen');
+        return out;
+      });
+    await expect.poll(problems, { message: `the options sheet fits at ${size.width}x${size.height}` }).toEqual([]);
+    await page.getByTestId('menu-sheet-close').click();
+    await expect(page.getByTestId('menu-sheet')).toHaveCount(0);
   }
   if (own) await page.setViewportSize(own);
 }

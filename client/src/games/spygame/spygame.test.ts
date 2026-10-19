@@ -471,9 +471,64 @@ describe('settings rows', () => {
 describe('the stylesheet', () => {
   const css = readFileSync(fileURLToPath(new URL('./spygame.css', import.meta.url)), 'utf8');
 
-  it('keys the four-column reference grid on the layout class, not the viewport width (landscape phones are wide too)', () => {
-    expect(css).toContain('.spy:not(.spy--phone) .spy-grid--reference {');
+  it('sizes the reference grid’s columns from the room its card has, never from the screen or the layout class', () => {
+    // The card is a container: three columns from three tiles that keep their picture (and their gaps), four from four.
+    expect(css).toMatch(/\n\.spy-grid-card \{\s*container: spy-grid \/ inline-size;/);
+    const tile = Number(css.match(/@container spy-tile \(max-width: (\d+)\.98px\) \{\s*\.spy-grid \.spy-tile--sm \{/)?.[1]) + 1;
+    const gap = Number(css.match(/\n\.spy-grid \{[^}]*gap: (\d+)px/)?.[1]);
+    expect(tile).toBe(172);
+    for (const [cols, rows] of [
+      [3, 8],
+      [4, 6],
+    ]) {
+      const at = cols * tile + (cols - 1) * gap;
+      expect(css, `${cols} columns`).toMatch(new RegExp(`@container spy-grid \\(min-width: ${at}px\\) \\{\\s*\\.spy-grid--reference \\{\\s*grid-template-columns: repeat\\(${cols}, minmax\\(0, 1fr\\)\\);\\s*grid-template-rows: repeat\\(${rows}, auto\\);`));
+    }
+    expect(css).not.toContain('.spy:not(.spy--phone) .spy-grid--reference');
     expect(css).not.toMatch(/min-width: 761px/);
+  });
+
+  it('lays each tile out by its own width so every name of every pack reads whole on two lines: the mark, then the picture give way', () => {
+    // The widest name of every pack takes two lines of 101px at 0.8rem bold (Inter), 113px at 0.9rem: room for 104 and 116.
+    const NAME_ROOM = { sm: 104, md: 116, mdSmall: 104 };
+    const px = (re: RegExp) => Number(css.match(re)?.[1]);
+    const border = px(/\n\.spy-tile \{[^}]*border: (\d+)px solid transparent/);
+    const [padLeft, padRight] = [4, 8];
+    expect(css).toMatch(/\n\.spy-tile \{[^}]*padding: 4px 8px 4px 4px;/);
+    const gap = px(/\n\.spy-tile \{[^}]*gap: (\d+)px/);
+    const mark = px(/\.spy-tile--real:not\(\.spy-tile--lg\) \.spy-tile__body,\s*\.spy-tile--ruledOut:not\(\.spy-tile--lg\) \.spy-tile__body \{\s*padding-right: (\d+)px/);
+    const smPicture = px(/\n\.spy-tile--sm \.spy-tile__picture \{\s*width: (\d+)px/);
+    const mdPicture = px(/\n\.spy-tile--md \.spy-tile__picture \{\s*width: (\d+)px/);
+    const least = (picture: number, name: number) => 2 * border + padLeft + picture + gap + name + padRight;
+    const ladder = (max: number) => {
+      const start = css.indexOf(`@container spy-tile (max-width: ${max - 1}.98px) {`);
+      expect(start, `a tile rule under ${max}px`).toBeGreaterThan(-1);
+      return css.slice(start, css.indexOf('\n}\n', start));
+    };
+    // A reference tile: the mark inside its end down to 200px, on its corner below; the picture until 172px, then the name alone.
+    // On the corner the mark reaches no further into the tile than its border and right padding: never over the name.
+    const corner = ladder(least(smPicture, NAME_ROOM.sm) + mark);
+    const markRule = corner.match(/\.spy-grid \.spy-tile--sm \.spy-tile__mark \{([^}]*)\}/)?.[1] ?? '';
+    const reach = (rule: string) => Number(rule.match(/width: (\d+)px/)?.[1]) - Number(rule.match(/right: -(\d+)px/)?.[1]);
+    expect(reach(markRule)).toBeLessThanOrEqual(border + padRight);
+    expect(markRule).toMatch(/top: -6px/);
+    const nameOnlyPad = Number(ladder(least(smPicture, NAME_ROOM.sm)).match(/\.spy-grid \.spy-tile--sm \{\s*padding: 4px (\d+)px 4px 6px;/)?.[1]);
+    expect(reach(markRule)).toBeLessThanOrEqual(border + nameOnlyPad);
+    const portraitMark = css.match(/\.spy--phone \.spy-grid \.spy-tile__mark \{([^}]*)\}/)?.[1] ?? '';
+    expect(reach(portraitMark)).toBeLessThanOrEqual(border + Number(css.match(/\.spy--phone \.spy-grid \.spy-tile \{[^}]*padding: 4px (\d+)px 4px 6px;/)?.[1]));
+    expect(css).not.toContain('::before');
+    expect(ladder(least(smPicture, NAME_ROOM.sm))).toMatch(/\.spy-grid \.spy-tile--sm \.spy-tile__picture \{\s*display: none/);
+    // A guess tile: the mark to the corner under 228px, the picture and the name a size down under 200, the name alone under 180.
+    expect(ladder(least(mdPicture, NAME_ROOM.md) + mark)).toMatch(/\.spy-grid \.spy-tile--md \.spy-tile__mark \{[^}]*top: -6px/);
+    const smaller = ladder(least(mdPicture, NAME_ROOM.md));
+    expect(smaller).toMatch(/\.spy-grid \.spy-tile--md \.spy-tile__picture \{\s*width: 52px/);
+    expect(smaller).toMatch(/\.spy-grid \.spy-tile--md \.spy-tile__name \{\s*font-size: 0\.8rem/);
+    expect(ladder(least(52, NAME_ROOM.mdSmall))).toMatch(/\.spy-grid \.spy-tile--md \.spy-tile__picture \{\s*display: none/);
+    // The name alone: the phone's own size, never under 11px, the confirm hint left to the grid's head.
+    for (const size of ['sm', 'md']) expect(css).toMatch(new RegExp(`\\.spy-grid \\.spy-tile--${size} \\.spy-tile__name \\{\\s*font-size: 0\\.75rem`));
+    // Every cell is a container, but a portrait phone's, whose tiles are laid out by their height.
+    expect(css).toMatch(/\n\.spy-grid li \{[^}]*container: spy-tile \/ inline-size;/);
+    expect(css).toMatch(/\.spy--phone \.spy-grid li \{\s*container: none \/ size;/);
   });
 
   it('wraps place names at spaces only and keeps the mark off the name', () => {
@@ -490,6 +545,10 @@ describe('the stylesheet', () => {
     // The picture shows only in a tile tall enough for it; the name is never under 11px.
     expect(portrait).toMatch(/@container \(min-height: 64px\)/);
     expect(portrait).toMatch(/\.spy--phone \.spy-grid \.spy-tile__name \{[^}]*font-size: 0\.75rem/);
+    // The narrowest phones' tiles (under 98px: a 320 to 340px phone) take the name a size down, 11px on 13px lines, so the
+    // family pack's longest words ("Kindergarten", "Supermarket") stay whole rather than breaking inside themselves.
+    expect(portrait).toMatch(/@container \(max-width: 97\.98px\) \{\s*\.spy--phone \.spy-grid \.spy-tile__name \{\s*font-size: 0\.6875rem;\s*line-height: 13px;\s*letter-spacing: -0\.01em;\s*\}/);
+    expect(portrait).not.toMatch(/font-size: 0\.6(?!875rem)/);
     // Elsewhere the first screen's parts sit straight in the column.
     expect(css).toMatch(/\n\.spy__first \{\s*display: contents;/);
   });

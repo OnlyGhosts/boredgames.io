@@ -36,6 +36,17 @@
   align-items: center;
 }
 
+/*
+ * A one-row phone bar (The Spy Game's, a card table's) folds its logo when the name (or the status
+ * under it) would be cut beside it, and only then: GameTopBar measures (brandGivesWay). The folded
+ * logo leaves the row but keeps its box, so its width is known for the way back.
+ */
+.gbar__brand--folded {
+  position: absolute;
+  visibility: hidden;
+  pointer-events: none;
+}
+
 /* The wordmark's ink sits high in its box (the mascots and ascenders above, only the g's tail below): a nudge down centres it on the bar by eye, as in the waiting room. */
 .gbar .logo .wordmark {
   transform: translateY(2px);
@@ -163,9 +174,18 @@
 }
 
 .chips {
-  /* PlayerChips reads these two to count how many chips fit. */
+  /*
+   * PlayerChips reads these to pick the chips' look and count how many fit (chipFit): named chips
+   * (64px, never under 60, where the widest status, "Watching", still fits) while every player
+   * fits with a name, otherwise faces (44px, never under 40), the last a "+K" when not even every
+   * face fits. The chips share what the row has.
+   */
   --chip-w: 64px;
+  --chip-min: 60px;
   --chip-gap: 6px;
+  --chip-face-w: 44px;
+  --chip-face-min: 40px;
+  --chip-face-gap: 4px;
   flex: 1 1 auto;
   /* Never fewer than one player's chip and the "+K" chip: something long beside them (Scribble's word) gives way instead. */
   min-width: calc(2 * var(--chip-w) + var(--chip-gap));
@@ -180,8 +200,8 @@
 
 .chip {
   position: relative;
-  flex: none;
-  width: var(--chip-w);
+  flex: 0 1 var(--chip-w);
+  min-width: var(--chip-min);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -273,7 +293,41 @@
   font-size: 1.125rem;
 }
 
-/* ---------- Compact: one row (a card table, The Spy Game on a phone), the players as a button with the count ---------- */
+/* Faces: the avatar alone with the status icon on its corner (the row's label and the players sheet say the rest). */
+.chips--faces {
+  gap: var(--chip-face-gap);
+}
+
+.chips--faces .chip {
+  flex-basis: var(--chip-face-w);
+  min-width: var(--chip-face-min);
+  height: 44px;
+  padding: 0;
+  justify-content: center;
+}
+
+.chips--faces .chip .avatar--md {
+  width: 32px;
+  height: 32px;
+  font-size: 19px;
+}
+
+.chips--faces .chip__name {
+  display: none;
+}
+
+.chips--faces .chip__status {
+  position: absolute;
+  right: 1px;
+  bottom: 1px;
+  font-size: 0;
+}
+
+.chips--faces .chip--more {
+  font-size: 0.9375rem;
+}
+
+/* ---------- Compact: one row (a card table, The Spy Game on a phone), the players as a button with the count (The Spy Game's phone bar has none: its options sheet opens the scores) ---------- */
 /* A 44px target around a smaller pill: the people icon and the count, side by side. */
 .gbar__count {
   display: inline-grid;
@@ -481,7 +535,7 @@
   font-size: 1.375rem;
 }
 
-/* One row with the players button (a card table, The Spy Game): a slimmer bar, the logo, the tiles and the status a size down. */
+/* One row (a card table, The Spy Game): a slimmer bar, the logo, the tiles and the status a size down. */
 .gbar--compact.gbar--phone {
   padding: 2px 6px;
 }
@@ -508,15 +562,25 @@
   padding: 0 10px 0 8px;
 }
 
-/* Beside a clock (The Spy Game): the pill tighter still, so the name keeps what room it can. */
-.gbar--compact.gbar--phone:has(.gbar__clock--row) .gbar__count-pill {
-  gap: 3px;
-  padding: 0 7px 0 6px;
-}
+/*
+ * A one-row bar (The Spy Game's, a card table's) on a phone up to 380px wide (a 375px phone): the
+ * name a size down and the players pill tighter, so the longest name stays whole, with room to
+ * spare, beside the code, the clock or a two-figure players count, and the options.
+ */
+@media (max-width: 380px) {
+  .gbar--compact.gbar--phone .gbar__name {
+    font-size: 1.0625rem;
+  }
 
-.gbar--compact.gbar--phone:has(.gbar__clock--row) .gbar__count-pill svg {
-  width: 16px;
-  height: 16px;
+  .gbar--compact.gbar--phone .gbar__count-pill {
+    gap: 3px;
+    padding: 0 7px 0 6px;
+  }
+
+  .gbar--compact.gbar--phone .gbar__count-pill svg {
+    width: 16px;
+    height: 16px;
+  }
 }
 
 @media (max-width: 360px) {
@@ -550,27 +614,16 @@
   }
 }
 
-/* The very narrowest (320px): a one-row bar's gaps and players pill a touch tighter again, so the name keeps what it can. */
+/* The very narrowest (320px): a one-row bar's gaps a touch tighter again. */
 @media (max-width: 340px) {
   .gbar--compact.gbar--phone .gbar__row {
     gap: 4px;
   }
-
-  .gbar--compact.gbar--phone .gbar__count-pill {
-    gap: 3px;
-    padding: 0 7px 0 6px;
-  }
-
-  .gbar--compact.gbar--phone .gbar__count-pill svg {
-    width: 16px;
-    height: 16px;
-  }
 }
 
 /*
- * Short phones (an SE in portrait, any phone on its side) have little height: the chips shrink to
- * the avatar with the status icon in its corner (the row's label and the players sheet say the
- * rest) and the ring to 44px.
+ * Short phones (an SE in portrait, any phone on its side) have little height: the chips are faces
+ * whatever the room (PlayerChips reads --chip-look) and the ring is 44px.
  */
 @media (max-width: 760px) and (max-height: 640px), (min-aspect-ratio: 3/2) and (max-height: 520px) {
   .gbar--phone {
@@ -579,35 +632,7 @@
   }
 
   .gbar--phone .chips {
-    --chip-w: 44px;
-    --chip-gap: 4px;
-  }
-
-  .gbar--phone .chip {
-    height: 44px;
-    padding: 0;
-    justify-content: center;
-  }
-
-  .gbar--phone .chip .avatar--md {
-    width: 32px;
-    height: 32px;
-    font-size: 19px;
-  }
-
-  .gbar--phone .chip__name {
-    display: none;
-  }
-
-  .gbar--phone .chip__status {
-    position: absolute;
-    right: 1px;
-    bottom: 1px;
-    font-size: 0;
-  }
-
-  .gbar--phone .chip--more {
-    font-size: 0.9375rem;
+    --chip-look: faces;
   }
 
   .gbar--phone .timer--lg {
@@ -617,7 +642,17 @@
   }
 }
 
-/* A phone on its side: one row where the bar is wide enough; the halves wrap when it sits in a side column. */
+/*
+ * A phone on its side: one line where the bar is wide enough, ending with the options button as a
+ * one-row bar does; whatever else the game puts in the bar (Scribble's word) takes a line of its own
+ * under it. In a side column (Scribble's, 240 to 360px wide) the halves wrap: the first row, the
+ * options button at its end, then the players row.
+ *
+ * The one line starts where its parts fit (the bar's content 481px: the logo, the longest name,
+ * the code, two chips, the clock, the options button and their gaps), and the halves' bases are
+ * sized to wrap until then (273 + 8 + 200 = 481): below it the two boxes never share a line, which
+ * would put the options button between the code and the chips.
+ */
 @media (min-aspect-ratio: 3/2) and (max-height: 520px) {
   .gbar--phone {
     flex-direction: row;
@@ -628,7 +663,7 @@
   }
 
   .gbar--phone .gbar__row {
-    flex: 1 1 260px;
+    flex: 1 1 273px;
   }
 
   .gbar--phone .gbar__people {
@@ -637,11 +672,43 @@
   }
 
   .gbar--phone > :not(.gbar__row, .gbar__people) {
+    order: 3;
     flex-basis: 100%;
   }
 
   .gbar--phone .gbar__name {
     font-size: 1.125rem;
+  }
+
+  /*
+   * One line: the first row's parts sit straight in the bar (its box gives way), so the chips and
+   * the clock come between the code and the options button. The name counts here (a phone's name
+   * adds nothing to its title's width elsewhere, giving way with an ellipsis) and the title keeps
+   * its width: the chips give way instead, down to two. The line starts where the longest name
+   * fits with them.
+   */
+  @container gbar (min-width: 481px) {
+    .gbar--phone .gbar__row:has(~ .gbar__people) {
+      display: contents;
+    }
+
+    .gbar--phone .gbar__name {
+      contain: none;
+    }
+
+    .gbar--phone .gbar__title {
+      flex: 0 0 auto;
+    }
+
+    /* The players row's base is its least: two chips (134px), the gap and the clock (44px), so the line holds from 481px with the longest name (31 + 8 + 90 + 8 + 95 + 8 + 186 + 8 + 44 = 478). */
+    .gbar--phone .gbar__people {
+      order: 1;
+      flex-basis: 186px;
+    }
+
+    .gbar--phone .gbar__side {
+      order: 2;
+    }
   }
 }
 
@@ -712,17 +779,5 @@
 
   .gbar--phone .gbar__status {
     font-size: 0.6875rem;
-  }
-}
-
-/*
- * The fullest one-row bar (The Spy Game: the clock and the players button beside the code and the
- * options) on the narrowest phones (the bar's content 320px or less: a phone 350px wide or less):
- * the logo's two phones give way, so the round ("Round 10/10") stays whole beside the name. On a
- * 360px phone the logo is back.
- */
-@container gbar (max-width: 320px) {
-  .gbar--compact.gbar--phone:has(.gbar__clock--row) .gbar__brand {
-    display: none;
   }
 }

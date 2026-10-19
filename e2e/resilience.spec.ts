@@ -1,5 +1,5 @@
 import { expect, test, type Browser, type BrowserContext, type Page, type WebSocketRoute } from '@playwright/test';
-import { closeResults, createParty, joinByCode, readyAll } from './party';
+import { closeResults, createParty, joinByCode, openPlayers, readyAll } from './party';
 
 /**
  * Phones that go dark must not end the game. Part one (Scribble, two players): a guesser's link
@@ -299,8 +299,8 @@ test.describe('Spy Game holds for a dropped phone and the host may remove it', (
     test.setTimeout(90_000);
     const others = players().filter((p) => p !== offline);
     const guest = others.find((p) => p !== host) ?? pia;
-    // The other phone is looking at the scores when the hold starts.
-    await guest.page.getByTestId('players-toggle').click();
+    // The other phone is looking at the scores when the hold starts (its options sheet opens them).
+    await openPlayers(guest.page);
     await expect(guest.page.getByTestId('players-sheet')).toBeVisible();
 
     await goOffline(offline, links.get(offline) as Link);
@@ -410,7 +410,7 @@ test.describe('the waiting overlay fits a small phone with three long names', ()
     // Three tabs discarded at once (the seats stay for the reconnect grace).
     for (const g of guests) await g.page.close();
     // The phone host keeps the player list in a sheet: every drop must have reached the server before the boundary.
-    await host.page.getByTestId('players-toggle').click();
+    await openPlayers(host.page);
     for (const g of guests) await expect(host.page.locator(`[data-testid="player-item"][data-name="${g.name}"]`)).toHaveClass(/player--offline/, { timeout: 20_000 });
     await host.page.getByTestId('players-sheet-close').click();
     const overlay = host.page.getByTestId('overlay-waiting');

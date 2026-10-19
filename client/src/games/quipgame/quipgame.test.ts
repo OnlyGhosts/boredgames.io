@@ -505,6 +505,11 @@ describe('the stylesheet', () => {
     expect((light + 0.05) / (dark + 0.05)).toBeGreaterThanOrEqual(4.5);
   });
 
+  it('lines the column up with the bar below a desktop’s width, and keeps a desktop’s centred 720px column', () => {
+    expect(css).toMatch(/\n\.quip__main \{[^}]*width: min\(720px, 100%\);/);
+    expect(css).toMatch(/@media \(max-width: 1023px\) \{\s*\.quip__main \{\s*width: 100%;\s*\}\s*\}/);
+  });
+
   it('never overrides a platform class unprefixed, and leaves the bar timer to the shared top bar', () => {
     expect(css).not.toMatch(/\n {2}\.timer--lg \{/);
     expect(css).not.toContain('.quip .timer--lg {');

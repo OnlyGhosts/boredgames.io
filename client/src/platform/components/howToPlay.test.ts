@@ -16,6 +16,7 @@ const { templateRules } = await import('../../games/template/rules');
 const { pokerRules } = await import('../../games/poker/rules');
 
 const lobbyCss = readFileSync(fileURLToPath(new URL('../styles/lobby.css', import.meta.url)), 'utf8');
+const componentsCss = readFileSync(fileURLToPath(new URL('../styles/components.css', import.meta.url)), 'utf8');
 
 /** The body of the first rule for exactly `selector`. */
 function ruleOf(css: string, selector: string): string {
@@ -336,30 +337,34 @@ describe('the How to play card', () => {
     expect(ruleOf(lobbyCss, '.how-to-play__head')).toContain('position: absolute');
     expect(ruleOf(lobbyCss, '.how-to-play__popover--scrolls .how-to-play__head')).toContain('position: static');
     expect(ruleOf(lobbyCss, '.how-to-play__popover--scrolls .how-to-play__head')).toContain('border-bottom: 1px solid var(--color-border)');
-    // Each end with more to read fades into the card, so a line cut at the edge reads as a scroll: a band of the card's surface
-    // stuck to that edge inside the scroll box (no mask on the box, which would fade its scrollbar too), the box without padding
-    // of its own so the bands reach its edges.
+    // Each end with more to read fades into the card, so a line cut at the edge reads as a scroll: the scroll box is the
+    // platform's scroll-fade box (useScrollFade keeps its data-fade), a band of the card's surface stuck to that edge inside
+    // the box (no mask on the box, which would fade its scrollbar too), the box without padding of its own so the bands reach
+    // its edges.
     const scroll = ruleOf(lobbyCss, '.how-to-play__scroll');
     expect(scroll).toContain('overflow-y: auto');
     expect(scroll).toContain('min-height: 0');
     expect(scroll).not.toContain('mask');
     expect(scroll).not.toContain('padding');
+    expect(lobbyCss).not.toContain('.how-to-play__scroll::');
     expect(ruleOf(lobbyCss, '.how-to-play__scroll > .rules')).toContain('padding: var(--space-4)');
-    const bands = lobbyCss.slice(lobbyCss.indexOf('\n.how-to-play__scroll::before,\n.how-to-play__scroll::after {'));
-    expect(ruleOf(bands, '.how-to-play__scroll::after')).toContain('position: sticky');
-    expect(ruleOf(bands, '.how-to-play__scroll::after')).toContain('pointer-events: none');
-    expect(ruleOf(bands, '.how-to-play__scroll::after')).toContain('opacity: 0');
-    const top = ruleOf(lobbyCss, '.how-to-play__scroll::before');
+    const popover = renderToString(createElement(HowToPlayDialog, { meta: gameById('poker'), rules: pokerRules, open: true, mode: 'popover', onClose: () => undefined }));
+    expect(popover).toContain('class="how-to-play__scroll scroll-fade"');
+    const bands = componentsCss.slice(componentsCss.indexOf('\n.scroll-fade::before,\n.scroll-fade::after {'));
+    expect(ruleOf(bands, '.scroll-fade::after')).toContain('position: sticky');
+    expect(ruleOf(bands, '.scroll-fade::after')).toContain('pointer-events: none');
+    expect(ruleOf(bands, '.scroll-fade::after')).toContain('opacity: 0');
+    const top = ruleOf(componentsCss, '.scroll-fade::before');
     expect(top).toContain('top: 0');
     expect(top).toContain('height: 32px');
     expect(top).toContain('margin-bottom: -32px');
-    expect(top).toContain('background: linear-gradient(var(--color-surface), transparent)');
-    const bottom = ruleOf(lobbyCss.slice(lobbyCss.indexOf('\n.how-to-play__scroll::before {')), '.how-to-play__scroll::after');
+    expect(top).toContain('background: linear-gradient(var(--fade-bg, var(--color-surface)), transparent)');
+    const bottom = ruleOf(componentsCss.slice(componentsCss.indexOf('\n.scroll-fade::before {')), '.scroll-fade::after');
     expect(bottom).toContain('bottom: 0');
     expect(bottom).toContain('height: 48px');
     expect(bottom).toContain('margin-top: -48px');
-    expect(bottom).toContain('background: linear-gradient(transparent, var(--color-surface))');
-    expect(lobbyCss).toContain(".how-to-play__scroll[data-fade~='top']::before,\n.how-to-play__scroll[data-fade~='bottom']::after {\n  opacity: 1;\n}");
+    expect(bottom).toContain('background: linear-gradient(transparent, var(--fade-bg, var(--color-surface)))');
+    expect(componentsCss).toContain(".scroll-fade[data-fade~='top']::before,\n.scroll-fade[data-fade~='bottom']::after {\n  opacity: 1;\n}");
     // Two columns from 640px wide: the hero across the top, the four facts in one row under it (their values a step down to keep
     // to the narrower tiles), then the sections down two columns the browser balances, each section whole in one of them, the
     // prose a step smaller; the sheet is no such container, so it keeps one column.
