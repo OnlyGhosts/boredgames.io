@@ -1161,15 +1161,22 @@ describe("the table’s focus and the stage", () => {
     // On a phone the least card is 11% of the table's height, up to 60px (the shortest phones pin it at 30px: their seats need
     // every pixel). Over it the cards take the room the seats leave (--tbl-spare, worked out by the table from the seats the
     // round was dealt with: room.ts useSeatRoom), shared by the dealer's hand and mine, 1.67 card widths each (table.css --hand-k:
-    // 3.34px a card pixel), up to 84px and the widest card whose four in the dealer's row (2.32 card widths from the anchor, 0.72
-    // left of the middle) still clear the shoe: 73.8px on a 390px phone. --tbl-grow tells the table how much taller the two rows
-    // are for it, so it reads the seats' room with the cards at their least size however big they are.
+    // 3.34px a card pixel), up to 76px and the widest card whose four in the dealer's row (1.6 card widths right of the middle)
+    // and the shoe beside them, as wide as a card, fit the half of the table right of the middle with 18px to spare: 61.9px on a
+    // 390px phone (73.8px beside the 34px shoe before). --tbl-grow tells the table how much taller the two rows are for it, so it
+    // reads the seats' room with the cards at their least size however big they are.
     expect(css).toMatch(/@property --bj-card-base \{\s*syntax: '<length>';\s*inherits: true;/);
     const phone = css.slice(css.indexOf('@media (max-width: 760px), (min-aspect-ratio: 3/2) and (max-height: 520px)'));
     expect(phone).toMatch(
-      /\.bj-table \{\s*(\/\*[^*]*(\*(?!\/)[^*]*)*\*\/\s*)?--bj-card-base: clamp\(30px, 11cqh, 60px\);\s*--bj-card-w: clamp\(var\(--bj-card-base\), calc\(var\(--bj-card-base\) \+ var\(--tbl-spare\) \/ \(2 \* var\(--hand-k\)\)\), max\(var\(--bj-card-base\), min\(84px, calc\(\(50cqw - var\(--tbl-pad\) - 1px - var\(--tbl-deck-w\) \* 1\.5 - 9px\) \/ 1\.6\)\)\)\);\s*--tbl-grow: calc\(\(var\(--bj-card-w\) - var\(--bj-card-base\)\) \* 2 \* var\(--hand-k\)\);/,
+      /\.bj-table \{\s*(\/\*[^*]*(\*(?!\/)[^*]*)*\*\/\s*)?--bj-card-base: clamp\(30px, 11cqh, 60px\);\s*--bj-card-w: clamp\(var\(--bj-card-base\), calc\(var\(--bj-card-base\) \+ var\(--tbl-spare\) \/ \(2 \* var\(--hand-k\)\)\), max\(var\(--bj-card-base\), min\(76px, calc\(\(50cqw - var\(--tbl-pad\) - 18px\) \/ 2\.6\)\)\)\);\s*--tbl-grow: calc\(\(var\(--bj-card-w\) - var\(--bj-card-base\)\) \* 2 \* var\(--hand-k\)\);/,
     );
     expect(css.slice(css.indexOf('@media (max-width: 760px) and (max-height: 620px)'))).toMatch(/\.bj-table \{\s*--bj-card-base: 30px;/);
+    // The shoe is the size of the cards it deals wherever the dealer's four cards leave it the room (always on a phone, whose
+    // cards stop where they would not), never under its least: a crowded phone's 34px (28px on the shortest), a desktop's old size.
+    expect(css).toMatch(/\.bj-table \{[^}]*--bj-deck-least: clamp\(48px, 7cqh, 72px\);\s*--tbl-deck-w: max\(var\(--bj-deck-least\), min\(var\(--bj-card-w\), calc\(50cqw - var\(--tbl-pad\) - 18px - var\(--bj-card-w\) \* 1\.6\)\)\);/);
+    expect(phone).toMatch(/\.bj-table \{[^}]*--bj-deck-least: 34px;/);
+    expect(css.slice(css.indexOf('@media (max-width: 760px) and (max-height: 620px)'))).toMatch(/\.bj-table \{[^}]*--bj-deck-least: 28px;/);
+    expect(css.slice(css.indexOf('/* ---------- Dealer'))).not.toMatch(/--tbl-deck-w:/);
     // Only the phone's rule takes the seats' room: a desktop's cards go by the table alone.
     expect(css.slice(0, css.indexOf('@media (max-width: 760px), (min-aspect-ratio: 3/2) and (max-height: 520px)'))).not.toMatch(/var\(--tbl-spare\)/);
     // The banner goes on every phone (table.css hides it under 761px tall already): its 30px go to the cards or the seats.
@@ -1186,7 +1193,7 @@ describe("the table’s focus and the stage", () => {
     // The dealer's long draw shrinks to the room from the fan's start to the shoe: the dealer's
     // content box begins where the fan does (its padding centres the first two cards), so its whole
     // inline size is that room (half of it once left a 6-card draw at 17px beside 80px of felt).
-    expect(css).toMatch(/\.bj-dealer \.tbl-hand \{\s*(\/\*[^*]*(\*(?!\/)[^*]*)*\*\/\s*)?--bj-room: calc\(100cqw - var\(--tbl-deck-w\) \* 1\.5 - 12px\);/);
+    expect(css).toMatch(/\.bj-dealer \.tbl-hand \{\s*(\/\*[^*]*(\*(?!\/)[^*]*)*\*\/\s*)?--bj-room: calc\(100cqw - var\(--tbl-deck-w\) - 20px\);/);
     expect(render(bjRoom(view()), 'host')).toContain('tbl-felt tbl-felt--calm bj-table');
     // The crowd on show never resizes the dealer's cards or the stage's: only the seats the round began with do.
     for (const rule of css.match(/[^{}]*tbl-crowd--[^{}]*\{[^}]*\}/g) ?? []) {

@@ -761,7 +761,8 @@ async function bigTable(browser: Browser, base: string, size: number): Promise<v
       const style = getComputedStyle(el);
       return { w: parseFloat(style.getPropertyValue('--bj-card-w')), base: parseFloat(style.getPropertyValue('--bj-card-base')), spare: style.getPropertyValue('--tbl-spare') };
     });
-    if (size === 2) expect(cards.w, '2 players: the cards').toBeGreaterThanOrEqual(70);
+    // A table of two stops where the dealer's four and a shoe the cards' own size still fit beside each other: 61.9px.
+    if (size === 2) expect(cards.w, '2 players: the cards').toBeGreaterThanOrEqual(61.5);
     if (size === 12) {
       expect(cards.spare, '12 players: the room the seats leave the cards').toBe('1px');
       expect(Math.abs(cards.w - (cards.base + 1 / 3.34)), '12 players: the cards that pixel over their least size').toBeLessThanOrEqual(0.01);

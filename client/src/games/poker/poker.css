@@ -37,12 +37,19 @@
 }
 
 .pk-table {
-  --pk-card-w: min(clamp(56px, 12cqh, 120px), calc((100cqw - 2 * var(--tbl-pad) - 2 * var(--tbl-deck-w) - 40px) / 5.4));
+  /*
+   * The board's five cards fit beside the deck at its least (--pk-deck-least) on either side, with
+   * --pk-board-room for the gaps. The deck is the size of the board's cards, as far as the room
+   * beside the board allows, and never under its least.
+   */
+  --pk-deck-least: clamp(48px, 7cqh, 72px);
+  --pk-board-room: 40px;
+  --pk-card-w: min(clamp(56px, 12cqh, 120px), calc((100cqw - 2 * var(--tbl-pad) - 2 * var(--pk-deck-least) - var(--pk-board-room)) / 5.4));
   --pk-stage-w: var(--pk-card-w);
   --pk-pot-h: clamp(30px, 4.4cqh, 40px);
   --tbl-mini-w: clamp(30px, 4.6cqh, 40px);
   --tbl-pill-h: clamp(28px, 3.9cqh, 36px);
-  --tbl-deck-w: clamp(48px, 7cqh, 72px);
+  --tbl-deck-w: max(var(--pk-deck-least), min(var(--pk-card-w), calc((100cqw - 2 * var(--tbl-pad) - var(--pk-board-room) - var(--pk-card-w) * 5.4) / 2)));
   --tbl-row-gap: var(--space-4);
   --tbl-head-h: calc(var(--pk-pot-h) + 8px + var(--pk-card-w) * 1.5 + 4px);
   /* My hand's height: its pill, its fan under the pill's overlap (table.css --hand-k) and its outline's room. */
@@ -242,6 +249,15 @@
   }
 }
 
+/* A wide full tile has its cards on the right (table.css): the payout rises at the bottom left instead, under the stack, clear of the cards. */
+@container tile (min-width: 270px) {
+  .pk .tbl-tile--full .tbl-payout {
+    left: 6px;
+    right: auto;
+    bottom: 2px;
+  }
+}
+
 @keyframes pk-seat-rise {
   0% {
     opacity: 0;
@@ -320,7 +336,7 @@
 /* A short desktop window (1024x768, 1280x800): the cards a step smaller, so a big table's seats keep their height. */
 @media (min-width: 761px) and (max-height: 820px) {
   .pk-table {
-    --pk-card-w: min(clamp(52px, 10.5cqh, 120px), calc((100cqw - 2 * var(--tbl-pad) - 2 * var(--tbl-deck-w) - 40px) / 5.4));
+    --pk-card-w: min(clamp(52px, 10.5cqh, 120px), calc((100cqw - 2 * var(--tbl-pad) - 2 * var(--pk-deck-least) - var(--pk-board-room)) / 5.4));
   }
 }
 
@@ -333,7 +349,9 @@
 
 @media (max-width: 760px), (min-aspect-ratio: 3/2) and (max-height: 520px) {
   .pk-table {
-    --pk-card-w: min(clamp(30px, 10cqh, 56px), calc((100cqw - 2 * var(--tbl-pad) - 2 * var(--tbl-deck-w) - 24px) / 5.4));
+    --pk-deck-least: 34px;
+    --pk-board-room: 24px;
+    --pk-card-w: min(clamp(30px, 10cqh, 56px), calc((100cqw - 2 * var(--tbl-pad) - 2 * var(--pk-deck-least) - var(--pk-board-room)) / 5.4));
     /*
      * My two cards: the board's card, and over it the room the seats leave them (--tbl-spare: the
      * table works it out from the seats the hand was dealt with, room.ts useSeatRoom), 1.67px of it
@@ -346,7 +364,6 @@
     --pk-pot-h: 28px;
     --tbl-mini-w: 22px;
     --tbl-pill-h: 24px;
-    --tbl-deck-w: 34px;
     --tbl-row-gap: 6px;
   }
 

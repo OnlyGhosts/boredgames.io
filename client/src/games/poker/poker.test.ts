@@ -792,16 +792,20 @@ describe('the table keeps its places', () => {
     // The stage is sized for my two cards' own width (--pk-stage-w), the board's on a desktop: the pill's height and 1.67 card widths
     // (table.css --hand-k), the words over the cards coming down over them only as far as their corners begin.
     expect(css).toMatch(/\.pk-table \{[^}]*--tbl-stage-h: calc\(var\(--tbl-pill-h\) \+ var\(--pk-stage-w\) \* var\(--hand-k\) \+ 4px\);/);
-    // Worked out once on the table, from its height and its width (five cards and the deck across).
+    // Worked out once on the table, from its height and its width (five cards and the deck at its least on either side across).
     expect(css).toMatch(/@property --pk-card-w \{\s*syntax: '<length>';/);
     expect(css).toMatch(/@property --pk-stage-w \{\s*syntax: '<length>';\s*inherits: true;/);
-    expect(css).toMatch(/\.pk-table \{\s*--pk-card-w: min\(clamp\(56px, 12cqh, 120px\), calc\(\(100cqw - 2 \* var\(--tbl-pad\) - 2 \* var\(--tbl-deck-w\) - 40px\) \/ 5\.4\)\);\s*--pk-stage-w: var\(--pk-card-w\);/);
+    expect(css).toMatch(/--pk-card-w: min\(clamp\(56px, 12cqh, 120px\), calc\(\(100cqw - 2 \* var\(--tbl-pad\) - 2 \* var\(--pk-deck-least\) - var\(--pk-board-room\)\) \/ 5\.4\)\);\s*--pk-stage-w: var\(--pk-card-w\);/);
+    // The deck is the size of the board's cards as far as the room beside the board allows, never under its least.
+    expect(css).toMatch(/\.pk-table \{[^}]*--pk-deck-least: clamp\(48px, 7cqh, 72px\);\s*--pk-board-room: 40px;/);
+    expect(css).toMatch(/\.pk-table \{[^}]*--tbl-deck-w: max\(var\(--pk-deck-least\), min\(var\(--pk-card-w\), calc\(\(100cqw - 2 \* var\(--tbl-pad\) - var\(--pk-board-room\) - var\(--pk-card-w\) \* 5\.4\) \/ 2\)\)\);/);
     expect(css).toMatch(/\.pk-mine \.tbl-hand \{\s*--tbl-w: var\(--pk-stage-w\);/);
     // On a phone the board is bound by its width (five cards beside the deck keep it under 50px at 390 wide), so my two cards
     // take their own size: the board's card, and over it the room the seats leave (--tbl-spare, worked out by the table from the
     // seats the hand was dealt with: room.ts useSeatRoom), 1.67px of it a card pixel (--hand-k), up to half as wide again as the board's
     // and 84px (a flat 84px put 84px cards under a 49px board). --tbl-grow tells the table how much taller the stage is for it.
     const phone = css.slice(css.indexOf('@media (max-width: 760px), (min-aspect-ratio: 3/2) and (max-height: 520px)'));
+    expect(phone).toMatch(/\.pk-table \{\s*--pk-deck-least: 34px;\s*--pk-board-room: 24px;/);
     expect(phone).toMatch(
       /\.pk-table \{[^}]*--pk-stage-w: clamp\(var\(--pk-card-w\), calc\(var\(--pk-card-w\) \+ var\(--tbl-spare\) \/ var\(--hand-k\)\), max\(var\(--pk-card-w\), min\(84px, var\(--pk-card-w\) \* 1\.5\)\)\);\s*--tbl-grow: calc\(\(var\(--pk-stage-w\) - var\(--pk-card-w\)\) \* var\(--hand-k\)\);/,
     );

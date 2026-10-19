@@ -33,7 +33,16 @@
   --bj-label-h: 22px;
   --tbl-mini-w: clamp(30px, 4.6cqh, 40px);
   --tbl-pill-h: clamp(28px, 3.9cqh, 36px);
-  --tbl-deck-w: clamp(48px, 7cqh, 72px);
+  /*
+   * The shoe is the size of the cards it deals, as far as the dealer's row leaves it the room: the
+   * dealer's four cards at full size end 1.6 card widths right of the middle (2.32 from the
+   * anchor, 0.72 left of it), and the shoe beside them keeps 18px of the half-table spare (about
+   * 13px clear of the fourth card). Never smaller than --bj-deck-least, its old size. A phone's
+   * cards stop where a shoe their own size would no longer fit (the phone block), so there the
+   * shoe is always the cards' size.
+   */
+  --bj-deck-least: clamp(48px, 7cqh, 72px);
+  --tbl-deck-w: max(var(--bj-deck-least), min(var(--bj-card-w), calc(50cqw - var(--tbl-pad) - 18px - var(--bj-card-w) * 1.6)));
   --tbl-row-gap: var(--space-4);
   /* A hand's height: its pill, its fan under the pill's overlap (table.css --hand-k) and its outline's room. */
   --bj-fan-h: calc(var(--tbl-pill-h) + var(--bj-card-w) * var(--hand-k) + 4px);
@@ -61,7 +70,7 @@
    * The room from the fan's start to the shoe: the dealer's box begins where the fan does (its
    * padding centres the first two cards), so its whole width is the room on the right.
    */
-  --bj-room: calc(100cqw - var(--tbl-deck-w) * 1.5 - 12px);
+  --bj-room: calc(100cqw - var(--tbl-deck-w) - 20px);
   --tbl-w: min(var(--bj-card-w), max(14px, calc(var(--bj-room) / (1 + var(--fan-step) * (var(--fan, 2) - 1)))));
 }
 
@@ -409,18 +418,19 @@
      * The least card is 11% of the table's height, up to 60px. Over it the cards take the room the
      * seats leave them (--tbl-spare: the table works it out from the seats the round was dealt
      * with, room.ts useSeatRoom), shared by the dealer's hand and mine, 1.67 card widths each
-     * (--hand-k): a card pixel takes 3.34px. They stop at 84px, and where the dealer's four cards (2.32 card
-     * widths from the anchor, 0.72 left of the middle) would no longer clear the shoe. A crowd
-     * that needs all its room keeps the least card; a few players leave the cards the felt.
-     * --tbl-grow tells the table how much taller the two rows are for it.
+     * (--hand-k): a card pixel takes 3.34px. They stop at 76px, and where the dealer's four cards
+     * (1.6 card widths right of the middle) and the shoe beside them, as wide as a card, would no
+     * longer fit the half of the table right of the middle: 2.6 card widths and 18px, 61.9px on a
+     * 390px phone. A crowd that needs all its room keeps the least card; a few players leave the
+     * cards the felt. --tbl-grow tells the table how much taller the two rows are for it.
      */
     --bj-card-base: clamp(30px, 11cqh, 60px);
-    --bj-card-w: clamp(var(--bj-card-base), calc(var(--bj-card-base) + var(--tbl-spare) / (2 * var(--hand-k))), max(var(--bj-card-base), min(84px, calc((50cqw - var(--tbl-pad) - 1px - var(--tbl-deck-w) * 1.5 - 9px) / 1.6))));
+    --bj-card-w: clamp(var(--bj-card-base), calc(var(--bj-card-base) + var(--tbl-spare) / (2 * var(--hand-k))), max(var(--bj-card-base), min(76px, calc((50cqw - var(--tbl-pad) - 18px) / 2.6))));
     --tbl-grow: calc((var(--bj-card-w) - var(--bj-card-base)) * 2 * var(--hand-k));
     --bj-label-h: 18px;
     --tbl-mini-w: 22px;
     --tbl-pill-h: 24px;
-    --tbl-deck-w: 34px;
+    --bj-deck-least: 34px;
     --tbl-row-gap: 6px;
   }
 
@@ -447,7 +457,7 @@
     --bj-card-base: 30px;
     --bj-label-h: 0px;
     --tbl-pill-h: 22px;
-    --tbl-deck-w: 28px;
+    --bj-deck-least: 28px;
     --tbl-row-gap: 4px;
   }
 

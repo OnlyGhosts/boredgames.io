@@ -482,6 +482,27 @@ describe('the components', () => {
     expect(block).toMatch(/\.tbl-tile--full \.tbl-tile__chips \{\s*grid-area: chips;\s*min-width: 0;\s*overflow: hidden;\s*\}/);
   });
 
+  it('a wide full tile (one other player on a phone, up to three on a desktop) has its words on the left and its cards on the right, a size up', async () => {
+    const css = readFileSync(join(import.meta.dirname, '../styles/table.css'), 'utf8');
+    const side = css.slice(css.indexOf('@container tile (min-width: 270px) {'));
+    const block = side.slice(0, side.indexOf('\n}\n'));
+    // The avatar and the name on top, the stack, the bet pill and the status on one line under both, the cards beside them all.
+    expect(block).toMatch(/\.tbl-tile--full \{[^}]*grid-template-areas: 'face name tag cards' 'meta meta meta cards';/);
+    // The cards 6px wider than the miniature (a phone's 22px, 28px) and never taller than the tile.
+    expect(block).toMatch(/\.tbl-tile\.tbl-tile--full \.tbl-tile__cards \{\s*--tbl-w: min\(calc\(var\(--tbl-mini-w, 24px\) \+ 6px\), calc\(\(100cqh - 16px\) \/ 1\.62\)\);/);
+    // A full tile may grow to 300px where the row has the room, so a lone one on a phone (and a desktop's row of three) takes it.
+    expect(css).toMatch(/\.tbl-grid--full \{\s*grid-template-columns: repeat\(var\(--cols, 4\), minmax\(0, max\(calc\(var\(--tile-w, 120px\) \* 1\.3\), 300px\)\)\);/);
+    expect(css).toMatch(/\.tbl-grid--arc\.tbl-grid--full \{\s*grid-template-columns: repeat\(calc\(var\(--cols, 4\) \* 2\), minmax\(0, max\(calc\(var\(--tile-w, 120px\) \* 0\.65\), 150px\)\)\);/);
+    // The stack under the avatar starts 2px below the badge on its corner (3px under the avatar).
+    expect(block).toMatch(/\.tbl-tile--full \{[^}]*row-gap: 5px;/);
+    // Before the deal the tile keeps its words: the avatar's row, the 5px under it and the pill's line (54.3px) and its padding
+    // and border (13px).
+    const { BARE_FULL_HEIGHT, tileHeight } = await import('./grid');
+    expect(BARE_FULL_HEIGHT).toBe(68);
+    expect(tileHeight('full', false, true)).toBe(68);
+    expect(tileHeight('full', false, false)).toBe(96);
+  });
+
   it('the line under the ribbon: whose turn it is in its tone, the quieter second part, the clock before it', () => {
     const out = html(createElement(TurnLine, { text: "Pia’s turn", tone: 'other', state: 'turn', sub: 'Quinn raises to 40', clock: createElement('span', { 'data-testid': 'timer' }) }));
     expect(out).toMatch(/^<p class="tbl-turn tbl-turn--other" data-testid="table-turn" data-state="turn"><span class="tbl-turn__clock"><span data-testid="timer"><\/span><\/span><span class="tbl-turn__text">Pia’s turn<\/span><span class="tbl-turn__sub" data-testid="turn-sub">Quinn raises to 40<\/span><\/p>$/);

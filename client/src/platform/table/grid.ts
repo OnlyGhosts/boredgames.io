@@ -75,8 +75,12 @@ export interface GridOptions {
   tier?: TileTier;
 }
 
-/** A full tile before the deal (no seat has cards): its top rows alone, so an empty table never shows tall empty boxes. */
-export const BARE_FULL_HEIGHT = 60;
+/**
+ * A full tile before the deal (no seat has cards): its words alone, so an empty table never shows
+ * tall empty boxes. The avatar's row, the 5px under it (clear of the avatar's badge) and the stake
+ * pill's line (a wide tile's side layout, table.css) take 54.3px, the tile's padding and border 13px.
+ */
+export const BARE_FULL_HEIGHT = 68;
 
 /** The height a tile takes: its tier's, or a full tile's bare height while no seat has cards. */
 export function tileHeight(tier: TileTier, wide: boolean, bare: boolean): number {

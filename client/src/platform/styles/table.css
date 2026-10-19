@@ -1010,6 +1010,14 @@
 }
 
 /*
+ * Full tiles may grow to 300px where the row has the room (one other player on a phone, up to three
+ * on a desktop), so a tile has its cards beside its words (the side layout under A tile).
+ */
+.tbl-grid--full {
+  grid-template-columns: repeat(var(--cols, 4), minmax(0, max(calc(var(--tile-w, 120px) * 1.3), 300px)));
+}
+
+/*
  * The desktop: each row bows into a gentle arc, the ends lifted (grid.ts arcLift), a short last
  * row centred under the others (two tracks a column, PlayersGrid places its first tile).
  */
@@ -1017,6 +1025,10 @@
   grid-template-columns: repeat(calc(var(--cols, 4) * 2), minmax(0, calc(var(--tile-w, 120px) * 0.65)));
   row-gap: calc(var(--grid-gap, 6px) + var(--arc, 16px));
   padding-top: calc(var(--arc, 16px) + 2px);
+}
+
+.tbl-grid--arc.tbl-grid--full {
+  grid-template-columns: repeat(calc(var(--cols, 4) * 2), minmax(0, max(calc(var(--tile-w, 120px) * 0.65), 150px)));
 }
 
 .tbl-grid--arc .tbl-grid__cell {
@@ -1088,7 +1100,8 @@
  * The status in the avatar's corner: an icon, or just a dot on the small tiles. It reaches 2px past
  * the avatar, less than the 3px to 6px the tile's columns keep between the face and the words (3px
  * on a compact tile 46px tall or less), so a tick or a star stays at least 1px clear of the
- * stack's first figure ("1,150 chips").
+ * stack's first figure ("1,150 chips"); it reaches 3px under the avatar, less than the 5px a wide
+ * full tile keeps between the avatar and the stack under it.
  */
 .tbl-tile__mark {
   position: absolute;
@@ -1398,6 +1411,33 @@
 
   .tbl-tile--full .tbl-tile__bet .tbl-stake--wide[data-long] .tbl-figure__short {
     display: inline;
+  }
+}
+
+/*
+ * A full tile 270px or wider (one other player on a phone, up to three on a desktop): the avatar
+ * and the name on top, the stack, the bet pill and the status on one line under them ("1,250
+ * chips", three chips and "500", "Waiting" take 180px of the 200px a phone's 300px tile leaves
+ * them), and the cards on the right, 6px wider than the miniature (Blackjack's with the hand's
+ * total beside them, Poker's face down) and never taller than the tile. Before the deal the cards'
+ * column is empty and the words take the width. Narrower full tiles keep the cards along the
+ * bottom (above); a line too long for the row still wraps rather than run off (the stack and the
+ * figures read short first, fit.tsx).
+ */
+@container tile (min-width: 270px) {
+  .tbl-tile--full {
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    grid-template-rows: auto auto;
+    grid-template-areas: 'face name tag cards' 'meta meta meta cards';
+    align-content: center;
+    /* The badge on the avatar reaches 3px under it: the stack under the avatar starts 2px below that. */
+    row-gap: 5px;
+  }
+
+  .tbl-tile.tbl-tile--full .tbl-tile__cards {
+    --tbl-w: min(calc(var(--tbl-mini-w, 24px) + 6px), calc((100cqh - 16px) / 1.62));
+    align-self: center;
+    justify-content: flex-end;
   }
 }
 

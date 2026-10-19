@@ -137,9 +137,14 @@ async function fixedPlaces(browser: Browser, base: string, size: { width: number
     await expect(page.getByTestId('seat')).toHaveCount(players - 1);
     const botIds = new Set(bots.map((b) => b.id));
     const ref = await places(page);
-    // The owner's phone with one other player: the cards take the felt the seat leaves them (55.5px when they went by the
-    // table's height alone), and keep that size through the round (the places below).
-    if (size.width === 390 && size.height === 844 && players === 2) expect(await cardWidth(page), `${label}: the cards`).toBeGreaterThanOrEqual(70);
+    // A 390x844 phone with one other player: the cards take the felt the seat leaves them (55.5px when they went by the
+    // table's height alone) up to where the dealer's four and a shoe their own size still fit beside each other, 61.9px (71px
+    // beside the old 34px shoe), the shoe as wide as they are, and keep that size through the round (the places below).
+    if (size.width === 390 && size.height === 844 && players === 2) {
+      expect(await cardWidth(page), `${label}: the cards`).toBeGreaterThanOrEqual(61.5);
+      const deck = await page.getByTestId('bj-table').evaluate((el) => Math.round(parseFloat(getComputedStyle(el).getPropertyValue('--tbl-deck-w')) * 10) / 10);
+      expect(deck, `${label}: the shoe as wide as the cards`).toBe(await cardWidth(page));
+    }
     if (size.width === 320 && players === 4) await expect(page.getByTestId('seats'), `${label}: the seats`).toHaveAttribute('data-tier', 'compact');
     const seen = new Set<string>();
     const check = async (phase: string) => {
@@ -276,11 +281,13 @@ test('390x844: two players leave mid-round: the cards keep their size to the end
     for (const b of bots) b.setHold(false);
     await playOut(page, 1);
     await same('round 1 settled');
-    // Round 2 is dealt to the three seats left: the cards take the room the two seats gave back.
+    // Round 2 is dealt to the three seats left: the cards take the room the two seats gave back, up to where the dealer's four
+    // and a shoe their own size still fit beside each other (60.6px to 61.9px; the room would take them past 70px).
     await expect(page.getByTestId('place-bet')).toBeEnabled({ timeout: 20_000 });
     await page.getByTestId('place-bet').click();
     await expect(table).toHaveAttribute('data-seats', '3', { timeout: 20_000 });
-    await expect.poll(() => cardWidth(page), { message: 'round 2: the cards for three seats' }).toBeGreaterThan(five + 5);
+    await expect.poll(() => cardWidth(page), { message: 'round 2: the cards for three seats' }).toBeGreaterThan(five);
+    await expect.poll(() => cardWidth(page), { message: 'round 2: the cards up to the shoe’s room' }).toBeGreaterThanOrEqual(61.5);
     const three = await cardWidth(page);
     const ref2 = await places(page);
     expect(ref2.mine.height, 'round 2: a taller stage').toBeGreaterThan(ref.mine.height);
@@ -678,6 +685,7 @@ test.describe('many hands (the harness)', () => {
 
   // The cards on a phone take the room the seats leave (room.ts useSeatRoom), as many seats as the round was dealt with: a small
   // table on the owner's 390x844 phone gets big cards (55.5px when they went by the table's height alone, 60px for a watcher),
+  // up to where the dealer's four and a shoe their own size still fit beside each other (61.9px; 69.6px at 430 wide),
   // a table of twelve or more keeps the tiles it had (small at 390x844, compact at 430x932), and where it needs all its room
   // the least card. Twelve at 390x844 leave the cards 1px (`spare`): their small tiles take their 158px and the 8px kept over
   // them, and the two rows, at the least card a pill's height and 1.67 card widths tall each, leave 167.95px, just under the
@@ -701,20 +709,20 @@ test.describe('many hands (the harness)', () => {
     [
       { width: 390, height: 844 },
       [
-        { others: 1, watch: false, tier: 'full', least: 70 },
-        { others: 3, watch: false, tier: 'full', least: 70 },
+        { others: 1, watch: false, tier: 'full', least: 61.5 },
+        { others: 3, watch: false, tier: 'full', least: 61.5 },
         { others: 5, watch: false, tier: 'compact', least: 60 },
         { others: 11, watch: false, tier: 'small', least: 0, spare: 1 },
         { others: 23, watch: false, tier: 'small', least: 0 },
         { others: 49, watch: false, tier: 'dense', least: 0 },
-        { others: 2, watch: true, tier: 'full', least: 72 },
-        { others: 12, watch: true, tier: 'compact', least: 70 },
+        { others: 2, watch: true, tier: 'full', least: 61.5 },
+        { others: 12, watch: true, tier: 'compact', least: 61.5 },
       ],
     ],
     [
       { width: 430, height: 932 },
       [
-        { others: 1, watch: false, tier: 'full', least: 80 },
+        { others: 1, watch: false, tier: 'full', least: 69 },
         { others: 11, watch: false, tier: 'compact', least: 60 },
         { others: 49, watch: false, tier: 'dense', least: 60 },
       ],

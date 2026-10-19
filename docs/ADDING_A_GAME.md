@@ -328,7 +328,10 @@ the figure beside the chips reads short, "12k", and the chips tell 1,040 from 1,
 hand (`stage`) and the pot read in full, as the seats' pills do, short only by split hands side by
 side on a phone and where the full figure would run the pill or its hand off the stage, measured as
 it lays out), `Deck` (with `corner`: wholly on the felt in its top right corner, inside the felt's
-padding, the count said rather than shown) and `DiscardCorner` (the anchor cards fly to, just past
+padding, the count said rather than shown; the game sets its width, `--tbl-deck-w`, to the cards
+it deals as far as the room beside them allows: Blackjack's shoe is the dealer's card wherever
+four of them still clear it, which a phone's cards keep to, Poker's deck the board's card where
+the row has the room) and `DiscardCorner` (the anchor cards fly to, just past
 the top left corner), `TurnLine`, `TableStage`, `PlayersGrid` / `PlayerTile` / `SeatSheet` (every other player as a tile in seat order
 in a grid that fits its space: [`grid.ts`](../client/src/platform/table/grid.ts) picks the tier
 (full, compact, small, dense) from the room the table leaves the seats, the richest whose fewest
@@ -336,7 +339,9 @@ rows keep the tile's least height (`tierFor`: a desktop keeps the cards in minia
 for seven others across, a phone steps down to compact for four), fits the columns to the room
 left, never narrower than the tier's `minWidth` so names, totals and a full tile's stack in words
 stay whole (104px on a phone: three full tiles across a 360px phone, two across a 320px one, where
-three others take a row of compact tiles instead; a narrow full tile gives its name, stack, bet and
+three others take a row of compact tiles instead; a full tile 270px or wider, which a lone one on
+a phone and a desktop's row of three grow to, has the avatar and name on top, the stack, bet and
+status on one line under them and the cards on the right, 6px over the miniature; a narrow full tile gives its name, stack, bet and
 cards a row each; a compact tile under 150px wide and 70px tall
 puts its stack and total on one line (the stack alone across it while there is no total), the hand
 in play's total alone for split hands, and its bet pill on a line of its own; a
