@@ -31,7 +31,7 @@ export interface Scenario {
   otherHands: number;
   /** Cards in each of my hands. */
   cards: number;
-  /** The beat between two snapshots of a phase that moves. */
+  /** The beat between two snapshots of a phase that moves; 0 waits for the test to call `window.harnessNext()`. */
   stepMs: number;
   /** My stake already down while the bets are open (betting, and the next bets after the results). */
   myBet: number;

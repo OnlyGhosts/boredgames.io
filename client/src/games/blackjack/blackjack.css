@@ -164,6 +164,12 @@
   justify-content: flex-start;
   height: 100%;
   scroll-snap-align: center;
+  /*
+   * A card still flying in from the shoe reaches past its hand for a moment. Layout containment
+   * makes that ink overflow: still drawn over the row, but never part of how far the row scrolls,
+   * so the snap never chases it past the last hand and snaps back as the card lands.
+   */
+  contain: layout;
 }
 
 /* Centred on two cards (its slot's middle), but never so far right that its fan runs out of its slot. */

@@ -42,6 +42,11 @@ function Harness() {
     }
     document.documentElement.dataset.harnessStep = String(step);
     if (step + 1 >= rooms.length) return undefined;
+    // stepMs 0: the test moves the table on itself (harnessNext), so its checks never race a clock.
+    if (scenario.stepMs === 0) {
+      (window as Window & { harnessNext?: () => void }).harnessNext = () => setStep(step + 1);
+      return undefined;
+    }
     const t = window.setTimeout(() => setStep(step + 1), scenario.stepMs);
     return () => window.clearTimeout(t);
   }, [room, step]);

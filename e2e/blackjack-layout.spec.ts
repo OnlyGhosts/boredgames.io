@@ -543,11 +543,29 @@ test.describe('many hands (the harness)', () => {
         }
         // My turn moving through eight hands, then my hands splitting one at a time up to eight: each hand in play comes into view.
         for (const phase of ['walk', 'splits']) {
-          page = await pages.go(`phase=${phase}&others=5&hands=8&cards=3&allCards=1&stepMs=1500`);
+          // The test moves the table on (stepMs 0), so a slow check never falls behind the table.
+          page = await pages.go(`phase=${phase}&others=5&hands=8&cards=3&allCards=1&stepMs=0`);
           const steps = phase === 'walk' ? 8 : 7;
           for (let step = 0; step < steps; step += 1) {
             const label = `${phase}, step ${step + 1}`;
+            if (step > 0) await page.evaluate(() => (window as Window & { harnessNext?: () => void }).harnessNext?.());
             await expect(page.locator('html'), label).toHaveAttribute('data-harness-step', String(step), { timeout: 5000 });
+            // While a dealt card is still in the air the row never scrolls past its last hand: the card's
+            // flight is not part of the row's width (it once was, and the row overshot, snapped back and
+            // left its right fade over the last hand).
+            const overshoot = await page.evaluate(async () => {
+              const el = document.querySelector<HTMLElement>('[data-testid="my-hands-row"]');
+              if (!el) return null;
+              let most = 0;
+              for (let i = 0; i < 16; i += 1) {
+                const box = el.getBoundingClientRect();
+                const end = Math.max(...[...el.children].map((c) => c.getBoundingClientRect().right)) - box.left + el.scrollLeft + parseFloat(getComputedStyle(el).paddingRight);
+                most = Math.max(most, el.scrollLeft - Math.max(0, end - el.clientWidth));
+                await new Promise((done) => setTimeout(done, 50));
+              }
+              return Math.round(most);
+            });
+            expect(overshoot, `${label}: the row never scrolls past its last hand`).toBeLessThanOrEqual(1);
             const want = phase === 'walk' ? step : step + 1;
             await expect.poll(async () => { const r = await rowShown(page, 'my-hands-row'); return r && { active: r.active, inView: r.inView, sizes: r.sizes }; }, { message: `${label}: the hand in play in view`, timeout: 1300 }).toEqual({ active: want, inView: true, sizes: [card] });
             await nothingScrolls(page, label);
