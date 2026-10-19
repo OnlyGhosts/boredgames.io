@@ -43,7 +43,9 @@ export interface RuleFact {
   label: string;
   /** The big accent-coloured value, a number or a short phrase ("21", "Stands on 17"); at most 12 characters, so it keeps to one line on a 320px phone. */
   value: string;
-  /** A few words under the value ("Draws to 16"). Prose: curly apostrophes, the last two words kept together; a \n starts a new line ("Beat the dealer,\ndon’t go over"). */
+  /** A few words under the value ("Draws to 16"). Prose: curly apostrophes; the card sets it through rulesProse (lib/rules.ts), which keeps the last two words together; a 
+ starts a new line ("Beat the dealer,
+don’t go over"). */
   note: string;
 }
 
@@ -55,11 +57,11 @@ export interface RuleFact {
 export type RulesHero =
   /** Two of the site's playing cards, fanned ("AS", "KH": rank then suit letter). */
   | { kind: 'cards'; cards: [string, string]; badge: string }
-  /** Scribble: a mini white canvas with a doodle and the pencil over it. */
+  /** Scribble: a paper canvas with a sun, a hill and a house, the tile's marker drawing on it. */
   | { kind: 'canvas'; badge: string }
   /** The Spy Game: a place card beside the spy's "?" card. */
   | { kind: 'place'; badge: string }
-  /** Quip Game: two speech bubbles, one taking the votes. */
+  /** Quip Game: two speech bubbles, the one taking the votes in the accent with the lime tick. */
   | { kind: 'quips'; badge: string }
   /** The game's glyph on its accent plate: the fallback a new game starts with. */
   | { kind: 'glyph' };
@@ -69,14 +71,16 @@ export type RulesHero =
  * one-line summary, four key facts in tiles, then five short plain sections under coloured tab
  * pills. Written from the server's rules in `client/src/games/<id>/rules.ts`, with every number a
  * template over the game's shared constants so the copy can never drift from the code. Short
- * plain words, curly apostrophes, no dashes; the card keeps each paragraph's last two words
- * together. The facts carry the numbers, so the sections say them once at most.
+ * plain words, curly apostrophes, no dashes, plain spaces and hyphens: the card sets each paragraph
+ * through rulesProse (lib/rules.ts), which keeps the last two words together, a number with the
+ * word after it and a hyphenated word whole. The facts carry the numbers, so the sections say them
+ * once at most.
  */
 export interface GameRules {
   summary: string;
   /** The illustration beside the name and summary. */
   hero: RulesHero;
-  /** Exactly four tiles, in reading order (left to right, then the second row). */
+  /** Exactly four tiles, in reading order (a row of four on a wide card, two rows of two in the sheet). */
   facts: RuleFact[];
   /** How one round (or hand, at a card table) goes. */
   round: string;

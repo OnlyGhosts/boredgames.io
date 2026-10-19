@@ -1,7 +1,7 @@
 import { expect, test, type Browser, type BrowserContext, type Locator, type Page } from '@playwright/test';
 import { PROMPTS } from '../shared/games/quipgame/prompts';
 import { QUIPGAME_RESULTS_SECONDS } from '../shared/games/quipgame/protocol';
-import { closeResults, createParty, enterNameIfAsked, gameBarFits, readyAll } from './party';
+import { closeResults, createParty, enterNameIfAsked, expectRulesReadCleanly, gameBarFits, readyAll } from './party';
 
 /**
  * A whole Quip Game between a desktop host and two phones (390x844, touch): the lobby settings,
@@ -13,6 +13,8 @@ test.describe.configure({ mode: 'serial' });
 
 const ROOM_CODE_RE = /^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{4}$/;
 const PORTRAIT = { width: 390, height: 844 };
+/** The narrower phones How to play is read at too. */
+const NARROW = [{ width: 360, height: 740 }, { width: 320, height: 568 }];
 const MIN_TARGET = 44;
 const MIN_ANSWER_HEIGHT = 64;
 const PACK = new Set(PROMPTS.map((p) => p.text));
@@ -203,6 +205,15 @@ test('the host creates a Quip Game room and two phones join by code; there are n
   await expect(host.page.getByTestId('settings-cheeky')).toHaveCount(0);
   await expect(host.page.getByTestId('settings-contentMode')).toHaveAttribute('data-value', 'family');
   await expect(pia.page.getByTestId('settings-panel')).toHaveCount(0);
+
+  // How to play reads cleanly on a phone down to the narrowest and on the host's desktop, its badge clear of the bubbles
+  // ("ranks 3" / "favourites" and "with 10" / "or more" once split on a phone).
+  for (const size of [PORTRAIT, ...NARROW]) {
+    await pia.page.setViewportSize(size);
+    await expectRulesReadCleanly(pia.page, 'Quip Game', `Quip Game at ${size.width}`);
+  }
+  await pia.page.setViewportSize(PORTRAIT);
+  await expectRulesReadCleanly(host.page, 'Quip Game', 'Quip Game on the host’s desktop');
 
   await expect(host.page.getByTestId('start-game')).toBeDisabled();
   await readyAll([pia.page, quinn.page]);

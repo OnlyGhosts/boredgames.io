@@ -29,10 +29,11 @@ const { noticeFor } = await import('../lib/connectionNotice');
 const { ReadyControls, readyState } = await import('./ReadyControls');
 const { AvatarPicker } = await import('./AvatarPicker');
 const { GamePicker } = await import('./GamePicker');
-const { RulesCard } = await import('./HowToPlay');
+const { POPOVER_MAX_WIDTH, RulesCard } = await import('./HowToPlay');
 const { noOrphan } = await import('../lib/format');
 const { COLUMNS_QUERY, PHONE_QUERY, TABLET_QUERY } = await import('../lib/media');
-const { roomBesideList } = await import('../lib/useListRoom');
+const { LIST_EDGE, LIST_MIN_ROWS, LIST_PEEK, listCap, restForList, roomForList } = await import('../lib/useListRoom');
+const { BottomSheet } = await import('./BottomSheet');
 const { Lobby } = await import('../screens/Lobby');
 const { GAME_LIST } = await import('@shared/platform/games');
 const { AVATAR_COLORS, AVATAR_FACES } = await import('@shared/platform/avatar');
@@ -1012,12 +1013,30 @@ describe('lobby', () => {
     expect(stylesheet('components.css')).not.toContain('.settings-menu__action');
   });
 
-  it('asks before leaving the room, with the lobby’s own note, Leave room and Stay', () => {
+  it('asks before leaving the room once, in its question, with the lobby’s own note, Leave and Stay', () => {
     const html = renderToString(createElement(LeaveConfirm, { room: room(), meId: 'host', onCancel: () => undefined, testId: 'lobby-leave' }));
     expect(html).toContain('Leave the room?');
     expect(html).toContain('You’d need the code to come back in.');
-    expect(textOf(html, 'lobby-leave-yes')).toBe('Leave room');
+    // The question says "the room"; the button is the verb alone, so nothing reads twice.
+    expect(textOf(html, 'lobby-leave-yes')).toBe('Leave');
     expect(textOf(html, 'lobby-leave-no')).toBe('Stay');
+    expect(html.match(/Leave room/g)).toBeNull();
+  });
+
+  it('gives a confirm sheet no title of its own: the question names the dialog, the close button sits alone over its corner', () => {
+    const html = renderToString(createElement(BottomSheet, { open: true, title: 'Leave the room?', hideTitle: true, onClose: () => undefined, testId: 'lobby-leave-sheet', className: 'sheet--exit', children: createElement(LeaveConfirm, { room: room(), meId: 'host', onCancel: () => undefined, testId: 'lobby-leave' }) }));
+    expect(tagWith(html, 'lobby-leave-sheet')).toContain('aria-label="Leave the room?"');
+    expect(html).not.toContain('sheet__title');
+    expect(html).toContain('class="sheet__head sheet__head--bare"');
+    expect(tagWith(html, 'lobby-leave-sheet-close')).toContain('aria-label="Close"');
+    // "Leave" reads once as the question and once as the button, nowhere else.
+    expect(html.replace(/<[^>]+>/g, ' ').match(/Leave/g)).toHaveLength(2);
+    // Any other sheet keeps its title row.
+    const titled = renderToString(createElement(BottomSheet, { open: true, title: 'Change my look', onClose: () => undefined, testId: 'profile-sheet', children: null }));
+    expect(titled).toContain('<h2 class="sheet__title">Change my look</h2>');
+    expect(titled).toContain('class="sheet__head"');
+    const css = stylesheet('components.css');
+    expect(ruleOf(css, '.sheet__head--bare')).toMatch(/position: absolute;[^}]*top: 8px;[^}]*right: 8px/);
   });
 
   it('is one header bar on a wider screen (a surface with the logo, the code and its buttons on one 44px line), split on a phone into the centred logo and the code card', () => {
@@ -1082,6 +1101,24 @@ describe('lobby', () => {
     expect(bar).not.toMatch(/margin|width/);
   });
 
+  it('lines the pinned footer’s controls up with the page above them, and gives a desktop guest a column wide enough for the bar’s rhythm', () => {
+    const css = stylesheet('lobby.css');
+    // One column width for the page and the footer's controls: a phone on its side (the host's two columns over a pinned
+    // footer) shows Start as wide as the room bar and the tiles, not a narrower button in the middle.
+    expect(ruleOf(css, '.lobby')).toContain('--lobby-column: 1120px');
+    expect(ruleOf(css, '.lobby__body')).toContain('width: min(calc(var(--lobby-column) + 2 * var(--lobby-gutter, 16px)), 100%)');
+    expect(ruleOf(css, '.lobby__footer-inner')).toContain('width: min(var(--lobby-column), 100%)');
+    expect(ruleOf(css, '.lobby__footer')).toContain('padding: var(--space-3) max(var(--lobby-gutter, 16px), env(safe-area-inset-right))');
+    expect(ruleOf(css, '.lobby__footer-inner')).not.toContain('560px');
+    // A guest's footer and bar keep the guest's own column.
+    expect(ruleOf(css, '.lobby--guest .lobby__footer-inner')).toContain('width: min(var(--guest-column), 100%)');
+    // On a desktop the guest's column is 880px: the bar's code sits centred with clear room each side, as on the host's bar,
+    // and How to play's card spans the same column edge to edge.
+    expect(mediaBlock(css, '(min-width: 1024px)')).toMatch(/\.lobby--guest \{\s*--guest-column: 880px;\s*\}/);
+    expect(POPOVER_MAX_WIDTH).toBe(880);
+    expect(mediaBlock(css, '(min-width: 761px)')).toMatch(/\.lobby--guest \{\s*--guest-column: 720px;/);
+  });
+
   /** Renders the lobby with the given media queries matching (the room's columns, the phone layout). */
   function renderAt(matching: string[], state = room()): string {
     const g = globalThis as { matchMedia: (q: string) => { matches: boolean } };
@@ -1126,21 +1163,93 @@ describe('lobby', () => {
     expect(ruleOf(css, '.lobby__actions')).not.toMatch(/border|position/);
     expect(COLUMNS_QUERY).toBe('(min-width: 768px)');
     expect(css).toContain('@media (min-width: 768px) {');
-    // Under the list the block must stay on the screen: the list is capped to the room left for it (a big party scrolls inside), never under three rows; a phone keeps its own cap.
-    expect(ruleOf(css, '.lobby__players .player-list')).toContain('max-height: min(60dvh, 560px)');
-    // The room beside the list is measured (the picker above it changes height with the games), not guessed.
-    expect(ruleOf(css, '.lobby--columns .lobby__players .player-list')).toContain('max-height: max(calc(3 * 53px), min(calc(100dvh - var(--list-room, 0px)), 560px))');
-    expect(css).not.toMatch(/--list-room: \d/);
+    // The list shows every row unless the window cannot hold it with Start under it: then useListRoom caps it (--list-cap), in
+    // whole rows with a peek of the next, phone and desktop alike. No fixed cap cuts a row part way, and nothing guesses the room.
+    expect(ruleOf(css, '.lobby__players .player-list')).toContain('max-height: var(--list-cap, none)');
+    expect(ruleOf(css, '.lobby__players .player-list')).toContain('overflow-y: auto');
+    expect(css).not.toContain('--list-room');
+    expect(css).not.toMatch(/--list-cap: \d/);
+    expect(css).not.toMatch(/player-list \{[^}]*max-height: (?:min|max|calc)/);
   });
 
-  it('measures the room the page takes beside the list, the same whatever the list’s height', () => {
-    // The block ends at 802 with a 424px list and the page scrolled 0; 24px of padding under it.
-    expect(roomBesideList(802, 0, 424, 24)).toBe(402);
-    // The list capped to 256px moves the block up by as much: the same room.
-    expect(roomBesideList(634, 0, 256, 24)).toBe(402);
-    // Scrolled by 100, the block reads 100 higher on the screen: still the same.
-    expect(roomBesideList(534, 100, 256, 24)).toBe(402);
-    expect(roomBesideList(633.2, 0, 256, 24)).toBe(402);
+  /** A list of `n` rows 53px apart (a 52px row and its 1px line) under a 1px top border: each row's bottom from the box's top. */
+  const rows = (n: number) => Array.from({ length: n }, (_, i) => 1 + 53 * (i + 1) - 1);
+
+  it('shows every player while the window holds the list with Start under it, else caps it in whole rows and a faded peek, on the screen at the page’s top where it can', () => {
+    // The room for the list once the page is scrolled to it: the window less the block under it and an edge above and below.
+    expect(roomForList(768, 126)).toBe(768 - 126 - 2 * LIST_EDGE);
+    // The room under the list's own top at the page's rest: the host's list starts 418px down the page (under the bar and the
+    // tiles), a guest's 238px (no tiles).
+    expect(restForList(768, 418, 126)).toBe(768 - 418 - 126 - LIST_EDGE);
+    expect(LIST_EDGE).toBe(16);
+    expect(LIST_PEEK).toBeGreaterThan(20);
+    expect(LIST_PEEK).toBeLessThan(52 / 2 + 4);
+    const host = (view: number, n: number) => listCap({ room: roomForList(view, 126), rest: restForList(view, 418, 126), rowBottoms: rows(n), border: 1 });
+    const guest = (view: number, n: number) => listCap({ room: roomForList(view, 126), rest: restForList(view, 238, 126), rowBottoms: rows(n), border: 1 });
+    // 1280x720, the host, four players: the list's 213px fit the 546px of room. No cap: every row shows.
+    expect(host(720, 4)).toBeNull();
+    // Twelve players at 1280x800 (636px of rows in 642px of room): still every row, the page scrolling to Start.
+    expect(host(800, 12)).toBeNull();
+    // Twelve at 1366x768: the window cannot hold the list with Start under it (610px of room), so it is capped. Under the list's
+    // top at the page's rest there are 208px: three whole rows and 28px of the fourth, so the box, its "+9 more" and Start all
+    // show at the page's top, with the list the one thing to scroll (ten rows would have put the box's foot and Start 200px
+    // under the fold).
+    const cap = host(768, 12);
+    expect(cap).toBe(rows(3)[2] + LIST_PEEK + 1);
+    expect(cap ?? 0).toBeLessThanOrEqual(restForList(768, 418, 126));
+    // A guest's list starts higher: six whole rows at the page's top.
+    expect(guest(768, 12)).toBe(rows(6)[5] + LIST_PEEK + 1);
+    // A 1366x650 browser, the host: 90px under the list's top at rest hold no three rows, so the box takes the window's room
+    // (eight whole rows), the page scrolled to show it with Start under it. The guest's 270px hold four.
+    expect(host(650, 12)).toBe(rows(8)[7] + LIST_PEEK + 1);
+    expect(host(650, 12) ?? 0).toBeLessThanOrEqual(roomForList(650, 126));
+    expect(guest(650, 12)).toBe(rows(4)[3] + LIST_PEEK + 1);
+    // 1280x720, the host: 160px at rest hold no three rows either (the box and Start would end 28px past the window): ten rows.
+    expect(host(720, 12)).toBe(rows(10)[9] + LIST_PEEK + 1);
+    // However short the window, at least three whole rows and the peek.
+    expect(listCap({ room: 40, rest: 40, rowBottoms: rows(12), border: 1 })).toBe(rows(LIST_MIN_ROWS)[LIST_MIN_ROWS - 1] + LIST_PEEK + 1);
+    // A box that would hide one row only is not worth a scroll of its own: the whole list shows, a little past the room.
+    expect(listCap({ room: rows(11)[10] + LIST_PEEK + 1, rest: rows(11)[10] + LIST_PEEK + 1, rowBottoms: rows(12), border: 1 })).toBeNull();
+    expect(listCap({ room: 40, rest: 40, rowBottoms: rows(4), border: 1 })).toBeNull();
+    // From two hidden rows it caps.
+    expect(listCap({ room: rows(10)[9] + LIST_PEEK + 1, rest: rows(10)[9] + LIST_PEEK + 1, rowBottoms: rows(12), border: 1 })).toBe(rows(10)[9] + LIST_PEEK + 1);
+    // Once capped, more players never mean fewer rows shown in the same window; the box takes the room at rest (three rows for
+    // the host at 1366x768) from the first party too big for the window on.
+    let shown = 0;
+    let capped = false;
+    for (let n = 1; n <= 50; n++) {
+      const c = host(768, n);
+      const whole = c === null ? n : rows(n).filter((b) => b + 1 <= c).length;
+      if (c !== null) {
+        expect(whole, `${n} players`).toBeGreaterThanOrEqual(LIST_MIN_ROWS);
+        if (capped) expect(whole, `${n} players`).toBeGreaterThanOrEqual(shown);
+        capped = true;
+        shown = whole;
+      } else expect(capped, `${n} players: once capped, a bigger party stays capped`).toBe(false);
+    }
+    expect(capped).toBe(true);
+  });
+
+  it('marks a capped list for the eye: a fade at each end with more, the "+N more" pill over the peek, the list itself read out whole', () => {
+    const markup = renderToString(createElement(Lobby, { room: room(), game: null }));
+    // Measured in the browser only: on the server nothing is capped and there is no pill.
+    expect(markup).toContain('class="lobby__list" data-capped="false"');
+    expect(markup).not.toContain('data-testid="player-list-more"');
+    expect(markup.indexOf('class="lobby__list"')).toBeLessThan(markup.indexOf('data-testid="player-list"'));
+    const css = stylesheet('lobby.css');
+    expect(ruleOf(css, '.lobby__list')).toContain('position: relative');
+    // The fades: bands of the list's own surface stuck to each end, shown only where there is more.
+    expect(ruleOf(css, '.lobby__players .player-list::before,\n.lobby__players .player-list::after')).toMatch(/position: sticky;[^}]*height: 28px;[^}]*pointer-events: none;[^}]*opacity: 0/);
+    const ends = css.slice(css.indexOf('\n.lobby__players .player-list::before {'));
+    expect(ruleOf(ends, '.lobby__players .player-list::before')).toMatch(/top: 0;[^}]*margin-bottom: -28px/);
+    expect(ruleOf(ends, '.lobby__players .player-list::after')).toMatch(/bottom: 0;[^}]*margin-top: -28px/);
+    expect(css).toContain(".lobby__list[data-fade~='top'] .player-list::before,\n.lobby__list[data-fade~='bottom'] .player-list::after {\n  opacity: 1;\n}");
+    expect(LIST_PEEK).toBe(28);
+    // The pill: over the peek at the box's foot, centred, never taking a press from the list under it.
+    const pill = ruleOf(css, '.lobby__more');
+    expect(pill).toMatch(/position: absolute;[^}]*left: 50%;[^}]*bottom: 5px;[^}]*transform: translateX\(-50%\)/);
+    expect(pill).toContain('height: 20px');
+    expect(pill).toContain('pointer-events: none');
   });
 
   it('says nothing about being alone: the code card already asks to be shared', () => {
@@ -1446,7 +1555,7 @@ describe('the ways out of a game', () => {
     const html = renderToString(createElement(LeaveConfirm, { room: playing(), meId: 'bob', onCancel: () => undefined, testId: 'game-leave' }));
     expect(html).toContain('Leave the room?');
     expect(html).toContain('The game goes on without you.');
-    expect(textOf(html, 'game-leave-yes')).toBe('Leave room');
+    expect(textOf(html, 'game-leave-yes')).toBe('Leave');
     expect(textOf(html, 'game-leave-no')).toBe('Stay');
   });
 

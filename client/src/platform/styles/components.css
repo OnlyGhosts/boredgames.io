@@ -1385,6 +1385,15 @@
   height: 44px;
 }
 
+/* A confirm step names itself in its question (BottomSheet's hideTitle): no title row, the close button alone over the panel's top right corner. */
+.sheet__head--bare {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
+  margin: 0;
+}
+
 .sheet__title {
   font-size: 1.125rem;
   font-weight: 700;

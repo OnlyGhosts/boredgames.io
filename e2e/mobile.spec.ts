@@ -1,5 +1,5 @@
 import { expect, test, type Browser, type BrowserContext, type Locator, type Page } from '@playwright/test';
-import { closeResults, createParty, enterNameIfAsked, leaveLobby, readyAll } from './party';
+import { closeResults, createParty, enterNameIfAsked, expectConfirmReadsOnce, leaveLobby, readyAll } from './party';
 
 /**
  * A desktop host and a phone guest (390x844, touch, 3x) share a two-player room. The phone is
@@ -520,9 +520,10 @@ test('the players button opens a sheet with both players and the backdrop closes
   await expect(menu).toBeVisible();
   await expect(menu.getByTestId('leave-room')).toBeVisible();
   await expectTallEnough(menu.getByTestId('leave-room'), 'menu leave button');
-  // Leave room asks first, in plain words; Stay goes back to the menu.
+  // Leave room asks first, in plain words, once (the question heads the step; the sheet shows no title over it); Stay goes back to the menu.
   await menu.getByTestId('leave-room').click();
   await expect(menu.getByTestId('game-leave-confirm')).toContainText('Leave the room?');
+  await expectConfirmReadsOnce(phone.page, 'Leave the room?', menu.getByTestId('game-leave-yes'), 'Leave');
   await menu.getByTestId('game-leave-no').click();
   await expect(menu.getByTestId('leave-room')).toBeVisible();
   await menu.getByTestId('menu-sheet-close').click();

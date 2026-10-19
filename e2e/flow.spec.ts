@@ -1,6 +1,6 @@
 import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test';
 import { GAME_LIST, gameById, type GameId } from '../shared/platform/games';
-import { closeResults, createParty, endGameAsHost, expectGameBar, expectResults, gameBarFits, joinByCode, readyAll } from './party';
+import { closeResults, createParty, endGameAsHost, expectConfirmReadsOnce, expectGameBar, expectResults, gameBarFits, joinByCode, readyAll } from './party';
 
 /**
  * How a game ends and how a player leaves, in every game: the host's End game ends it for
@@ -88,6 +88,8 @@ for (const [index, gameId] of LIVE.entries()) {
       }
       await quinn.page.getByTestId('leave-room').click();
       await expect(quinn.page.getByTestId('game-leave-confirm')).toContainText('Leave the room?');
+      // It says so once: the question heads it, no title row over it, and the button is Leave.
+      await expectConfirmReadsOnce(quinn.page, 'Leave the room?', quinn.page.getByTestId('game-leave-yes'), 'Leave');
       await expect(quinn.page.getByTestId('leave-room')).toHaveAttribute('aria-expanded', 'true');
       await expect(quinn.page.getByTestId('brand-link')).toHaveAttribute('aria-expanded', 'false');
       await quinn.page.getByTestId('game-leave-no').click();

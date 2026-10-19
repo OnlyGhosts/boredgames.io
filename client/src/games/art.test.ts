@@ -13,6 +13,7 @@ const { registerGames } = await import('../platform/registry');
 const { GamePicker } = await import('../platform/components/GamePicker');
 const { ART, ART_VIEWBOX, EDGE_WIDTH } = await import('../platform/components/GameArt');
 const { room } = await import('../test/fixtures');
+const { HERO, HERO_EDGE, RulesHeroArt } = await import('../platform/components/RulesHero');
 
 const tiles = (html: string): string[] => html.split('data-testid="game-tile"').slice(1);
 
@@ -229,5 +230,67 @@ describe('every game’s picture', () => {
     expect(tiles(guest)).toHaveLength(1);
     expect(guest.match(/data-art="/g)).toHaveLength(1);
     expect(guest).toContain('data-art="poker"');
+  });
+});
+
+describe('How to play’s drawn heroes', () => {
+  /** The games whose hero the platform draws in the tiles' flat style: Scribble's canvas, Quip Game's bubbles. */
+  const drawn = GAME_LIST.filter((g) => ['canvas', 'quips'].includes(GAMES[g.id].rules.hero.kind));
+
+  it('draws the canvas and the bubbles flat in the accent, lime and paper, each shape rimmed in the deep cut of its own fill, ink only inside a shape', () => {
+    expect(drawn.map((g) => g.id).sort()).toEqual(['quipgame', 'scribble']);
+    // A fill's edge: the accent's deep cut, lime's, and a white shape borrows either.
+    const EDGE: Record<string, string[]> = { [HERO.accent]: [HERO.edge], [HERO.lime]: [HERO.limeEdge], [HERO.paper]: [HERO.edge, HERO.limeEdge] };
+    for (const g of drawn) {
+      const { hero } = GAMES[g.id].rules;
+      const html = renderToString(createElement(RulesHeroArt, { hero, meta: g }));
+      const drawing = html.slice(html.indexOf('<svg class="rules-hero__drawing"'), html.lastIndexOf('</svg>') + 6);
+      // The sticker shadow: the drawing once more under itself (lobby.css fills it in each shape's edge colour).
+      expect(drawing, g.id).toContain('class="rules-hero__shadow"');
+      expect(drawing, g.id).toContain(`transform="translate(${HERO_EDGE} ${HERO_EDGE})"`);
+      // Tokens only, from the hero's palette: no raw colour, no grey, no black line.
+      expect(drawing, g.id).not.toMatch(/#[0-9a-f]{3,8}\b/i);
+      for (const [, colour] of drawing.matchAll(/(?:fill|stroke)="([^"]+)"/g)) expect(['none', ...Object.values(HERO)], `${g.id} ${colour}`).toContain(colour);
+      expect(drawing, g.id).not.toContain(`stroke="${HERO.ink}"`);
+      let shapes = 0;
+      for (const { tag, attrs } of elements(drawing)) {
+        if (!attrs.fill) continue;
+        const what = `${g.id} <${tag} fill=${attrs.fill} stroke=${attrs.stroke}>`;
+        if (!attrs.stroke) {
+          // A detail inside a shape (a door, a line of text, the tick): ink or an edge colour, no edge, no shadow.
+          expect([HERO.ink, HERO.edge, HERO.limeEdge], what).toContain(attrs.fill);
+          expect(attrs['data-detail'], what).toBe('');
+          continue;
+        }
+        shapes++;
+        expect(EDGE[attrs.fill], what).toContain(attrs.stroke);
+        expect(attrs['stroke-width'], what).toBe(String(HERO_EDGE));
+        // Its shadow takes the same edge colour.
+        expect(attrs.style, what).toBe(`--edge:${attrs.stroke}`);
+      }
+      expect(shapes, g.id).toBeGreaterThan(3);
+      // The key shapes are marked, so the e2e check can keep the badge clear of them.
+      expect(drawing.match(/data-key="/g)?.length ?? 0, g.id).toBeGreaterThanOrEqual(3);
+    }
+    const lobby = readFileSync(fileURLToPath(new URL('../platform/styles/lobby.css', import.meta.url)), 'utf8');
+    expect(lobby).toContain('.rules-hero__shadow [data-detail] {\n  display: none;\n}');
+    expect(lobby).toContain('.rules-hero__shadow [stroke] {\n  fill: var(--edge);\n  stroke: var(--edge);\n}');
+    // The old thin line drawings and their grey canvas edge are gone.
+    for (const old of ['.rules-hero__canvas', '.rules-hero__pencil', '.rules-hero__quips', '--shadow-pencil']) expect(lobby + tokens, old).not.toContain(old);
+  });
+
+  it('rims them in a deep cut of the accent’s own hue that reads on the paper and on the hero’s wash in both themes', () => {
+    const paper = hex('game-paper');
+    for (const g of drawn) {
+      const accent = hex(`game-${g.id}`);
+      const edge = hex(`game-${g.id}-edge`);
+      expect(contrast(edge, paper), `${g.id} edge on paper`).toBeGreaterThanOrEqual(3);
+      expect(contrast(edge, accent), `${g.id} edge on its accent`).toBeGreaterThanOrEqual(1.6);
+      // The hero's wash runs from the accent's soft cut to the raised surface, in each theme.
+      for (const wash of [...values(`game-${g.id}-soft`), ...values('color-surface-2')]) expect(contrast(edge, wash), `${g.id} edge on ${wash}`).toBeGreaterThanOrEqual(3);
+      // The same hue as the accent, deeper and well saturated: never grey.
+      expect(Math.abs(hueSat(edge).hue - hueSat(accent).hue), `${g.id} edge hue`).toBeLessThanOrEqual(12);
+      expect(hueSat(edge).sat, `${g.id} edge saturation`).toBeGreaterThanOrEqual(0.25);
+    }
   });
 });

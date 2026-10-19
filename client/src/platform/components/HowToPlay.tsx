@@ -3,7 +3,7 @@ import type { GameMeta } from '@shared/platform/games';
 import type { GameRules } from '../game';
 import { noOrphan } from '../lib/format';
 import { DESKTOP_QUERY, useMediaQuery } from '../lib/media';
-import { rulesSections } from '../lib/rules';
+import { rulesProse, rulesSections } from '../lib/rules';
 import { BottomSheet } from './BottomSheet';
 import { CloseIcon, HelpIcon } from './Icons';
 import { RulesHeroArt } from './RulesHero';
@@ -20,11 +20,12 @@ interface Props {
 
 /**
  * The lobby's How to play: a button beside the picked game that opens its rules. On a desktop a
- * popover card opens by the button, under, over or beside it (placePopover): whole wherever the
- * window has the room, never over the room code, leaving each game the host could switch to a part
- * to press, and with nothing dimming the room under it; on a phone or tablet the rules come up in
- * the bottom sheet. Either way the card follows the game the host picks, Escape and the close
- * button hand the focus back to the button, and a tap outside closes it.
+ * popover card opens by the button, under, over or beside it (placePopover): inside the page's own
+ * width, whole wherever a side of the button has the room and scrolling there where it has not
+ * (never over its own button, the players and Start while a side holds most of it), never over the
+ * room code, leaving each game the host could switch to a part to press, and with nothing dimming
+ * the room under it; on a phone or tablet the rules come up in the bottom sheet. Either way the card follows the game the host
+ * picks, Escape and the close button hand the focus back to the button, and a tap outside closes it.
  */
 export function HowToPlay({ meta, rules, keepOpenIn }: Props) {
   const [open, setOpen] = useState(false);
@@ -82,8 +83,20 @@ export function HowToPlayDialog({ meta, rules, open, mode, onClose, anchorRef, k
   return <Popover meta={meta} rules={rules} label={label} onClose={onClose} anchorRef={anchorRef} keepOpenIn={keepOpenIn} id={id} />;
 }
 
-/** The card's widest: two columns, the hero and the key facts beside the five sections (lobby.css lays them out from 640px). */
-export const POPOVER_MAX_WIDTH = 760;
+/**
+ * The card's widest: the hero and the key facts across it, the five sections in two columns under
+ * them (lobby.css, from POPOVER_TWO_COLUMNS). Under or over the button in a page column no wider
+ * than this (a guest's, 880px on a desktop), the card hangs from the button's left edge to the
+ * column's right edge, the players' rows left of it still in view.
+ */
+export const POPOVER_MAX_WIDTH = 880;
+/** From this wide the card lays its sections out in two columns (lobby.css's container query). */
+export const POPOVER_TWO_COLUMNS = 640;
+/**
+ * Over a wider page (the host's two columns) the card is this wide: two columns still, and narrow
+ * enough, slid over the button from the page's right edge, to leave every other game tile a part to press.
+ */
+export const POPOVER_WIDTH = 760;
 /** The narrowest the card goes beside its button: one column, as in the phone's sheet. */
 export const POPOVER_MIN_WIDTH = 380;
 /** Clear of the screen's edges, and under the room bar. */
@@ -122,12 +135,16 @@ export interface PopoverPlacement {
 export interface PopoverRoom {
   /** The window. */
   view: { width: number; height: number };
+  /** The page's own column, edge to edge (the room bar's): the card never runs past it, nor past the window's edges. */
+  bounds: { left: number; right: number };
   /** The How to play button. */
   anchor: ScreenBox;
   /** The highest the card may reach: under the room bar, so the room code always shows (the screen's top edge once the bar has scrolled away). */
   ceiling: number;
   /** Start and Ready: under the player list, or the footer pinned to the foot of a short window. The card leaves them uncovered where it can (placePopover). */
   keepClear: ScreenBox | null;
+  /** Start and Ready sit in that footer, pinned to a short window's foot: a card showing most of itself may run over them under the player list, never over the pinned footer (placePopover). */
+  pinned?: boolean;
   /** The game tiles the host could switch to: a press there switches the game and the card follows, so the card leaves a part of each to press. */
   keepReach: readonly ScreenBox[];
   /** The card's whole height at a width (measured: its layout changes with its width). */
@@ -156,39 +173,55 @@ interface Slot {
 }
 
 /**
- * Where the desktop card goes. Never over the room bar (the room code) or off the window, and in
- * this order of what matters:
- * 1. The whole card, never cut, wherever the window has the room for it, leaving every game tile
- *    the host could switch to a part to press. It tries under the button, over it, then beside it
- *    (right, then left, as wide as the window leaves there, at most two columns' worth); where no
- *    side of the button holds it, it slides up over the button (all of it, never half), as low as
- *    it fits, from the button's own place or from the window's right or left edge, whichever
- *    leaves the tiles. Of those, one clear of the button wins, then one clear of Start and Ready.
- * 2. Else it scrolls where it has the most room and still leaves the tiles (at least MIN_HEIGHT):
- *    rather a scrolling card than a game the host cannot switch to with it open.
- * 3. Else (no place leaves the tiles) the whole card as in 1, and last, in a window too short for
- *    the whole card anywhere, it scrolls where it has the most room.
- * A scrolling card stops short of Start and Ready (under the player list, or the footer pinned to a
- * short window's foot) wherever that still leaves it MIN_HEIGHT, so they stay in reach; with less
- * room than that there it runs over them.
+ * Where the desktop card goes. Never over the room bar (the room code), never past the page's own
+ * edges (the room bar's) or off the window, and in this order of what matters:
+ * 1. The whole card, never cut, on a side of its button, leaving every game tile the host could
+ *    switch to a part to press. It tries under the button and over it (in a page column up to
+ *    POPOVER_MAX_WIDTH, from the button's left edge to the column's right; over a wider page
+ *    POPOVER_WIDTH), then beside it (right, then left, as wide as the page leaves there, at most
+ *    POPOVER_MAX_WIDTH). One clear of Start and Ready wins.
+ * 2. Else a card on a side of the button showing most of itself, the rest scrolling (the common
+ *    laptop windows: beside the host's button the page leaves one column, a little too tall for
+ *    the window): the one showing the most. It may run over Start and Ready under the player
+ *    list, as the whole card does (a guest's hangs over its own column), never over the footer
+ *    pinned to a short window's foot.
+ * 3. Else it scrolls where it has the most room and still leaves the tiles (at least MIN_HEIGHT),
+ *    stopping short of Start and Ready wherever that still leaves it MIN_HEIGHT, so they stay in
+ *    reach; with less room than that there it runs over them.
+ * 4. Else (no side of the button holds even MIN_HEIGHT of it) the whole card slides up over the
+ *    button, all of it, never half: from the page's right edge (over the host's settings), from
+ *    the button's own place or from the page's left edge, whichever leaves the tiles, ending above
+ *    Start and Ready where that still covers the button, else as low as it fits.
+ * 5. Else (no place leaves the tiles) the whole card wherever it fits, a side of the button first;
+ *    and last, in a window too short for the whole card anywhere, it scrolls where it has the
+ *    most room.
+ * So the card never sits over its own button (and, in the host's room, over the players' statuses
+ * and Start) while a side of the button holds MIN_HEIGHT of it: rather a card that scrolls beside
+ * the button than one that covers them.
  */
-export function placePopover({ view, anchor, ceiling, keepClear, keepReach, heightAt }: PopoverRoom): PopoverPlacement {
+export function placePopover({ view, bounds, anchor, ceiling, keepClear, pinned = false, keepReach, heightAt }: PopoverRoom): PopoverPlacement {
   const floor = view.height - EDGE;
   const midX = (anchor.left + anchor.right) / 2;
   const midY = (anchor.top + anchor.bottom) / 2;
-  const width = Math.min(POPOVER_MAX_WIDTH, view.width - 2 * EDGE);
+  // The page's edges, inside the window's.
+  const pageLeft = Math.max(EDGE, bounds.left);
+  const pageRight = Math.min(view.width - EDGE, bounds.right);
+  const page = pageRight - pageLeft;
+  // A guest's column: from the button's left edge to the column's right edge (the whole column if that is under two columns' worth).
+  const fromButton = pageRight - Math.max(pageLeft, anchor.left);
+  const width = page > POPOVER_MAX_WIDTH ? POPOVER_WIDTH : fromButton >= POPOVER_TWO_COLUMNS ? fromButton : page;
   const whole = heightAt(width);
-  // Under or over the button the card hangs from its left edge, or from its right where the window ends first.
-  const x = anchor.left + width <= view.width - EDGE ? anchor.left : anchor.right - width >= EDGE ? anchor.right - width : clamp(midX - width / 2, EDGE, view.width - EDGE - width);
+  // Under or over the button the card hangs from its left edge, or from its right where the page ends first.
+  const x = anchor.left + width <= pageRight ? anchor.left : anchor.right - width >= pageLeft ? anchor.right - width : clamp(midX - width / 2, pageLeft, pageRight - width);
   const arrowX = clamp(midX - x, 16, width - 16);
 
-  // The sides of the button: under and over it at the card's widest; beside it as wide as the window leaves, from under the room bar to the window's foot.
+  // The sides of the button: under and over it at the card's widest; beside it as wide as the page leaves, from under the room bar to the window's foot.
   const slots: Slot[] = [
     { side: 'below', x, width, top: anchor.bottom + GAP, bottom: floor },
     { side: 'above', x, width, top: ceiling, bottom: anchor.top - GAP },
   ];
-  const rightWidth = Math.min(POPOVER_MAX_WIDTH, view.width - EDGE - anchor.right - GAP);
-  const leftWidth = Math.min(POPOVER_MAX_WIDTH, anchor.left - GAP - EDGE);
+  const rightWidth = Math.min(POPOVER_MAX_WIDTH, pageRight - anchor.right - GAP);
+  const leftWidth = Math.min(POPOVER_MAX_WIDTH, anchor.left - GAP - pageLeft);
   if (rightWidth >= POPOVER_MIN_WIDTH) slots.push({ side: 'right', x: anchor.right + GAP, width: rightWidth, top: ceiling, bottom: floor });
   if (leftWidth >= POPOVER_MIN_WIDTH) slots.push({ side: 'left', x: anchor.left - GAP - leftWidth, width: leftWidth, top: ceiling, bottom: floor });
 
@@ -210,26 +243,46 @@ export function placePopover({ view, anchor, ceiling, keepClear, keepReach, heig
     if (stop !== null && stop > slot.top && stop < slot.bottom && (slot.side === 'below' || stop >= midY + 16)) places.push(put(slot, stop));
     places.push(put(slot, slot.bottom));
   }
-  // Over the button, whole: its top 10px over the button's (or higher, as low as it fits), so it covers the button whole, never half.
+  // Over the button, whole, covering all of it, never half: ending 16px above Start and Ready where that still covers the button,
+  // else its top 10px over the button's (or higher, as low as it fits). From the page's right edge first, over the host's settings.
   if (whole <= floor - ceiling) {
-    const y = Math.max(ceiling, Math.min(floor - whole, anchor.top - GAP));
-    for (const left of [x, view.width - EDGE - width, EDGE]) {
-      if (left <= anchor.left && left + width >= anchor.right && !places.some((p) => p.side === 'over' && p.x === left)) places.push({ side: 'over', x: left, y, width, height: whole, scrolls: false, arrow: null });
+    const low = Math.max(ceiling, Math.min(floor - whole, anchor.top - GAP));
+    const high = keepClear ? keepClear.top - EDGE - whole : null;
+    const ys = high !== null && high >= ceiling && high < low && high + whole >= anchor.bottom ? [high, low] : [low];
+    for (const left of [pageRight - width, x, pageLeft]) {
+      if (left > anchor.left || left + width < anchor.right || places.some((p) => p.side === 'over' && p.x === left)) continue;
+      for (const y of ys) places.push({ side: 'over', x: left, y, width, height: whole, scrolls: false, arrow: null });
     }
   }
 
   const clear = (p: PopoverPlacement) => !keepClear || !overlaps(boxOf(p), keepClear);
   const reaches = (p: PopoverPlacement) => keepReach.every((tile) => leavesReach(boxOf(p), tile));
+  const beside = (p: PopoverPlacement) => p.side !== 'over';
+  /** How much of the card a placement shows: all of it, or the part of it its room holds. */
+  const shown = (p: PopoverPlacement) => p.height / heightAt(p.width);
   // Of whole cards: clear of the button before over it, then clear of Start and Ready, then the order tried.
-  const best = (list: PopoverPlacement[]) => list.find((p) => p.side !== 'over' && clear(p)) ?? list.find((p) => p.side !== 'over') ?? list.find(clear) ?? list.at(0);
+  const best = (list: PopoverPlacement[]) => list.find((p) => beside(p) && clear(p)) ?? list.find(beside) ?? list.find(clear) ?? list.at(0);
+  // Of scrolling cards showing most of themselves (and not over a pinned footer): the one showing the most (the first of equals).
+  const most = (list: PopoverPlacement[]) =>
+    list.filter((p) => shown(p) > 1 / 2 && (clear(p) || !pinned)).reduce<PopoverPlacement | undefined>((top, p) => (!top || shown(p) > shown(top) ? p : top), undefined);
   // Of scrolling cards: the roomiest of those clear of Start and Ready with MIN_HEIGHT, else the roomiest (the first of equals).
   const roomiest = (list: PopoverPlacement[]) => {
     const short = list.filter((p) => clear(p) && p.height >= MIN_HEIGHT);
     return (short.length > 0 ? short : list).reduce<PopoverPlacement | undefined>((top, p) => (!top || p.height > top.height ? p : top), undefined);
   };
   const wholes = places.filter((p) => !p.scrolls);
+  // The cards on a side of the button that scroll (a card over the button is always whole).
+  const scrolling = places.filter((p) => p.scrolls);
   const over: PopoverPlacement = { side: 'over', x, y: ceiling, width, height: Math.max(0, floor - ceiling), scrolls: true, arrow: null };
-  return best(wholes.filter(reaches)) ?? roomiest(places.filter((p) => reaches(p) && p.height >= MIN_HEIGHT)) ?? best(wholes) ?? roomiest([...places, over]) ?? over;
+  return (
+    best(wholes.filter((p) => beside(p) && reaches(p))) ??
+    most(scrolling.filter(reaches)) ??
+    roomiest(scrolling.filter((p) => reaches(p) && p.height >= MIN_HEIGHT)) ??
+    best(wholes.filter(reaches)) ??
+    best(wholes) ??
+    roomiest([...places, over]) ??
+    over
+  );
 }
 
 interface PopoverProps {
@@ -289,14 +342,20 @@ function Popover({ meta, rules, label, onClose, anchorRef, keepOpenIn, id }: Pop
         return height;
       };
       const bar = document.querySelector('.lobby__top')?.getBoundingClientRect();
+      const viewWidth = document.documentElement.clientWidth;
       // The host's tiles other than the picked one: the games a press there switches to, with the card following.
       const others = keepOpenIn?.current ? Array.from(keepOpenIn.current.children).filter((tile) => tile.getAttribute('aria-checked') !== 'true') : [];
+      const actions = document.querySelector('.lobby__actions');
+      const footer = document.querySelector('.lobby__footer');
       const next = placePopover({
-        view: { width: document.documentElement.clientWidth, height: window.innerHeight },
+        view: { width: viewWidth, height: window.innerHeight },
+        // The page's own column: the room bar's edges.
+        bounds: bar ? { left: bar.left, right: bar.right } : { left: 0, right: viewWidth },
         anchor: anchorBox,
         ceiling: Math.max(EDGE, (bar?.bottom ?? 0) + EDGE),
         // Start and Ready: under the player list in the room's two columns, else in the footer pinned to the window's foot.
-        keepClear: document.querySelector('.lobby__actions, .lobby__footer')?.getBoundingClientRect() ?? null,
+        keepClear: (actions ?? footer)?.getBoundingClientRect() ?? null,
+        pinned: !actions && footer !== null,
         keepReach: others.map((tile) => tile.getBoundingClientRect()),
         heightAt,
       });
@@ -384,10 +443,15 @@ function Popover({ meta, rules, label, onClose, anchorRef, keepOpenIn, id }: Pop
 /**
  * The rules themselves: the hero (the game's illustration, name and summary on a wash of its
  * accent), the four key facts in tiles, then the five sections under coloured tab pills. The
- * game's accent and its text and wash cuts come in as custom properties on the card.
+ * game's accent and its text, wash and edge cuts come in as custom properties on the card.
  */
 export function RulesCard({ meta, rules, mode }: { meta: GameMeta; rules: GameRules; mode: 'popover' | 'sheet' }) {
-  const accent = { '--game-accent': `var(--game-${meta.id})`, '--game-accent-text': `var(--game-${meta.id}-text)`, '--game-accent-soft': `var(--game-${meta.id}-soft)` } as CSSProperties;
+  const accent = {
+    '--game-accent': `var(--game-${meta.id})`,
+    '--game-accent-text': `var(--game-${meta.id}-text)`,
+    '--game-accent-soft': `var(--game-${meta.id}-soft)`,
+    '--game-accent-edge': `var(--game-${meta.id}-edge)`,
+  } as CSSProperties;
   return (
     <div className="rules" style={accent} data-testid="how-to-play-card" data-game={meta.id} data-mode={mode}>
       {/* Hero and facts, then the sections: one column in the sheet and a narrow card, side by side in a wide one. */}
@@ -398,7 +462,7 @@ export function RulesCard({ meta, rules, mode }: { meta: GameMeta; rules: GameRu
             <h3 className="rules__name" data-testid="rules-name">
               {noOrphan(meta.name)}
             </h3>
-            <p className="rules__summary">{noOrphan(rules.summary)}</p>
+            <p className="rules__summary">{rulesProse(rules.summary)}</p>
           </div>
         </div>
         <section className="rules__section rules__section--facts" aria-label="Key facts">
@@ -408,7 +472,7 @@ export function RulesCard({ meta, rules, mode }: { meta: GameMeta; rules: GameRu
               <div key={fact.label} className="rules-fact" data-testid="rules-fact">
                 <span className="rules-fact__label">{fact.label}</span>
                 <span className="rules-fact__value">{fact.value}</span>
-                <span className="rules-fact__note">{noOrphan(fact.note)}</span>
+                <span className="rules-fact__note">{rulesProse(fact.note)}</span>
               </div>
             ))}
           </div>
@@ -418,7 +482,7 @@ export function RulesCard({ meta, rules, mode }: { meta: GameMeta; rules: GameRu
         {rulesSections(rules).map((s) => (
           <section key={s.key} className="rules__section" data-testid="rules-section" data-section={s.key}>
             <h4 className={`rules__tab rules__tab--${s.tone}`}>{s.heading}</h4>
-            <p className="rules__text">{noOrphan(s.text)}</p>
+            <p className="rules__text">{rulesProse(s.text)}</p>
           </section>
         ))}
       </div>

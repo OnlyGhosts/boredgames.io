@@ -64,7 +64,10 @@ export function EndGameConfirm({ room, onCancel, testId }: ConfirmProps) {
   );
 }
 
-/** "Leave the room?" with what it does, Leave and Stay: the one confirmation in front of leaving a game. */
+/**
+ * "Leave the room?" with what it does, Leave and Stay: the one confirmation in front of leaving a
+ * game or the waiting room. The question says it once; the sheet around it shows no title of its own.
+ */
 export function LeaveConfirm({ room, meId, onCancel, testId }: ConfirmProps & { meId: string | null }) {
   return (
     <div className="exit-confirm" role="group" aria-label="Leave the room?" data-testid={`${testId}-confirm`}>
@@ -75,7 +78,7 @@ export function LeaveConfirm({ room, meId, onCancel, testId }: ConfirmProps & { 
       <p className="exit-confirm__note">{leaveNote(room, meId)}</p>
       <div className="exit-confirm__actions">
         <button type="button" className="btn btn--danger" onClick={leaveRoom} data-testid={`${testId}-yes`}>
-          <LogoutIcon size={16} /> Leave room
+          <LogoutIcon size={16} /> Leave
         </button>
         <button type="button" className="btn btn--ghost" onClick={onCancel} data-testid={`${testId}-no`}>
           Stay

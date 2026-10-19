@@ -1,4 +1,4 @@
-import { expect, type Page } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 import { GAME_LIST } from '../shared/platform/games';
 
 /** The slug a new party starts on: the first live game (Scribble). */
@@ -88,17 +88,35 @@ export async function joinByLink(page: Page, name: string, path: string, code: s
   await expect(page.getByTestId('room-code')).toHaveText(code);
 }
 
-/** Leaves from the lobby: the room bar's Leave, then Leave room in the confirmation. */
+/**
+ * A confirm step says what it asks once: its question names the dialog and heads it, with no title
+ * row over it saying the same, and the button under it is the action in a word or two ("Leave",
+ * "End game"), so the action's verb reads twice at most, in the question and on the button.
+ */
+export async function expectConfirmReadsOnce(page: Page, question: string, button: Locator, action: string): Promise<void> {
+  const dialog = page.getByRole('dialog', { name: question });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.locator('.sheet__title')).toHaveCount(0);
+  await expect(button).toHaveText(action);
+  const text = await dialog.innerText();
+  expect(text.split(question).length - 1, `"${question}" once`).toBe(1);
+  const verb = action.split(' ')[0];
+  expect(text.match(new RegExp(`\\b${verb}\\b`, 'g'))?.length, `"${verb}" in the question and on the button only`).toBe(2);
+}
+
+/** Leaves from the lobby: the room bar's Leave, then Leave in the confirmation. */
 export async function leaveLobby(page: Page): Promise<void> {
   await page.getByTestId('leave-room').click();
+  await expectConfirmReadsOnce(page, 'Leave the room?', page.getByTestId('lobby-leave-yes'), 'Leave');
   await page.getByTestId('lobby-leave-yes').click();
 }
 
-/** Leaves from a game screen: the top bar's Leave (on a phone, Leave room in the options sheet), then Leave room in the confirmation. */
+/** Leaves from a game screen: the top bar's Leave (on a phone, Leave room in the options sheet), then Leave in the confirmation. */
 export async function leaveGame(page: Page): Promise<void> {
   const menu = page.getByTestId('game-menu');
   if (await menu.isVisible()) await menu.click();
   await page.getByTestId('leave-room').click();
+  await expectConfirmReadsOnce(page, 'Leave the room?', page.getByTestId('game-leave-yes'), 'Leave');
   await page.getByTestId('game-leave-yes').click();
 }
 
@@ -111,7 +129,184 @@ export async function endGameAsHost(page: Page): Promise<void> {
   if (await menu.isVisible()) await menu.click();
   await page.getByTestId('end-game').click();
   await expect(page.getByTestId('end-game-confirm')).toContainText('End the game for everyone?');
+  await expectConfirmReadsOnce(page, 'End the game for everyone?', page.getByTestId('end-game-yes'), 'End game');
   await page.getByTestId('end-game-yes').click();
+}
+
+/**
+ * Every player in the room's list is in reach, and none is cut without a sign. The list shows every
+ * row whole, the page scrolling to it if it must; or, where the window cannot hold the whole list with
+ * Start under it (a big party), it scrolls inside in whole rows: its box ends on a faded peek of the
+ * next row under a "+N more" pill naming the rows still below, and the box and Start (or a phone's
+ * pinned footer) fit on the screen together: at the page's top wherever the room under the box holds
+ * three rows, else once the page is scrolled to the list. Scrolled inside to its end, the last row
+ * shows whole, the pill goes and the top fades. The list is left scrolled back to its top and the
+ * page to its top.
+ */
+export async function expectPlayersInReach(page: Page, label: string): Promise<{ capped: boolean }> {
+  const state = () =>
+    page.evaluate(() => {
+      const list = document.querySelector<HTMLElement>('[data-testid="player-list"]');
+      if (!list) return null;
+      const box = list.getBoundingClientRect();
+      const rows = [...list.querySelectorAll<HTMLElement>('[data-testid="player-item"]')].map((row) => row.getBoundingClientRect());
+      const below = document.querySelector('[data-testid="lobby-actions"], [data-testid="lobby-footer"]')?.getBoundingClientRect() ?? null;
+      const pinned = document.querySelector('[data-testid="lobby-footer"]') !== null;
+      const pill = document.querySelector('[data-testid="player-list-more"]');
+      return {
+        top: box.top,
+        bottom: box.bottom,
+        height: box.height,
+        scrolls: list.scrollHeight > list.clientHeight + 1,
+        rows: rows.map((r) => ({ top: r.top, bottom: r.bottom })),
+        // What stays on the screen with the list: the gap and the block under it, or the pinned footer.
+        under: below ? (pinned ? below.height : below.bottom - box.bottom) : 0,
+        view: window.innerHeight,
+        pill: pill ? (pill.textContent ?? '').trim() : null,
+        pillBox: pill ? (() => { const r = pill.getBoundingClientRect(); return { top: r.top, bottom: r.bottom }; })() : null,
+        fade: list.closest('.lobby__list')?.getAttribute('data-fade') ?? '',
+      };
+    });
+  // Once the page has caught up with a resize or a join (the list is measured on the resize and after every render).
+  const settled = async () => {
+    for (let i = 0; i < 20; i++) {
+      await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
+      const a = await state();
+      await page.evaluate(() => new Promise((done) => requestAnimationFrame(done)));
+      const b = await state();
+      if (a && b && a.height === b.height && a.scrolls === b.scrolls && a.pill === b.pill) return b;
+    }
+    return state();
+  };
+  await page.evaluate(() => window.scrollTo(0, 0));
+  const first = await settled();
+  if (!first) throw new Error(`${label}: no player list`);
+  const n = first.rows.length;
+  if (!first.scrolls) {
+    // Every row whole inside the box, no pill and no fade.
+    for (const [i, r] of first.rows.entries()) expect(r.bottom, `${label}: row ${i + 1} of ${n} inside the list`).toBeLessThanOrEqual(first.bottom + 0.5);
+    expect(first.pill, `${label}: no "more" pill on a list that shows every row`).toBeNull();
+    expect(first.fade, `${label}: no fade`).toBe('');
+    // The page reaches the last row: scrolled to it, it shows whole, above a pinned footer.
+    const last = await page.evaluate(() => {
+      const row = () => [...document.querySelectorAll('[data-testid="player-item"]')].at(-1)!.getBoundingClientRect();
+      const floor = () => Math.min(window.innerHeight, document.querySelector('[data-testid="lobby-footer"]')?.getBoundingClientRect().top ?? Infinity);
+      window.scrollBy(0, row().bottom - (floor() - 8));
+      const r = row();
+      return { top: r.top, bottom: r.bottom, floor: floor() };
+    });
+    expect(last.top >= -0.5 && last.bottom <= last.floor + 0.5, `${label}: the page scrolls to the last player`).toBe(true);
+    await page.evaluate(() => window.scrollTo(0, 0));
+    return { capped: false };
+  }
+  // Capped: whole rows, then the peek of exactly one more under the fade and the pill.
+  const cut = first.rows.filter((r) => r.top < first.bottom - 0.5 && r.bottom > first.bottom + 0.5);
+  expect(cut, `${label}: the box ends on the peek of one row`).toHaveLength(1);
+  const peek = first.bottom - cut[0].top;
+  expect(peek, `${label}: a peek, not half a row`).toBeGreaterThan(16);
+  expect(peek, `${label}: a peek, not half a row`).toBeLessThan(32);
+  const whole = first.rows.filter((r) => r.bottom <= first.bottom + 0.5).length;
+  expect(whole, `${label}: at least three whole rows`).toBeGreaterThanOrEqual(3);
+  expect(first.pill, `${label}: the pill names the rows still below`).toBe(`+${n - whole} more`);
+  expect(n - whole, `${label}: a box never hides a single row`).toBeGreaterThanOrEqual(2);
+  expect(first.fade, `${label}: the foot fades`).toBe('bottom');
+  expect(first.pillBox && first.pillBox.top >= cut[0].top - 0.5 && first.pillBox.bottom <= first.bottom + 0.5, `${label}: the pill sits over the peek`).toBe(true);
+  // The box and what stays under it fit the screen together, an edge to spare above and below.
+  expect(first.height + first.under + 32, `${label}: the list and Start fit the screen together`).toBeLessThanOrEqual(first.view + 0.5);
+  // At the page's top: where the room under the box's own top holds three whole rows and the peek, the box ends inside it, so
+  // its pill and Start (or the pinned footer) show without a page scroll (a capped list once ran 200px under the fold at
+  // 1366x768, Start and the pill with it); a list lower on the page (a laptop's browser, a phone) takes the window's room instead.
+  const restRoom = first.view - first.top - first.under - 16;
+  if (first.rows[2].bottom - first.top + 28 + 1 <= restRoom) {
+    expect(first.bottom + first.under + 16, `${label}: the box, its pill and Start show at the page's top`).toBeLessThanOrEqual(first.view + 0.5);
+    expect(first.pillBox && first.pillBox.bottom <= first.view + 0.5, `${label}: the pill is on the screen at the page's top`).toBe(true);
+  }
+  // Scrolled inside to its end: the last row whole, no pill, the top fades.
+  await page.getByTestId('player-list').evaluate((el) => el.scrollTo(0, el.scrollHeight));
+  await expect.poll(async () => (await state())?.pill ?? null, { message: `${label}: the pill goes at the end` }).toBeNull();
+  const end = await state();
+  if (!end) throw new Error(`${label}: no player list`);
+  expect(end.rows[n - 1].bottom, `${label}: the last player shows whole`).toBeLessThanOrEqual(end.bottom + 0.5);
+  expect(end.fade, `${label}: the top fades once scrolled`).toBe('top');
+  await page.getByTestId('player-list').evaluate((el) => el.scrollTo(0, 0));
+  await expect.poll(async () => (await state())?.fade ?? '').toBe('bottom');
+  await page.evaluate(() => window.scrollTo(0, 0));
+  return { capped: true };
+}
+
+/**
+ * The open How to play card's text, line by line: no line ends on a hyphen ("mid-" / "game"), a
+ * number ("4 points (3" / "on"), or the first half of a range ("2 to" / "5)."), and no line holds a
+ * short word alone in text that runs to more lines. Each character's box gives its line.
+ */
+export async function rulesTextBreaks(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const out: string[] = [];
+    for (const el of document.querySelectorAll('.rules__name, .rules__summary, .rules-fact__note, .rules-fact__label, .rules__text')) {
+      const node = [...el.childNodes].find((c) => c.nodeType === Node.TEXT_NODE) as Text | undefined;
+      if (!node) continue;
+      const range = document.createRange();
+      const lines: string[] = [];
+      let top: number | null = null;
+      let line = '';
+      for (let i = 0; i < node.data.length; i++) {
+        range.setStart(node, i);
+        range.setEnd(node, i + 1);
+        const rects = range.getClientRects();
+        // A space where the line wraps has a box at each line's end: its first box says where it sits.
+        if (rects.length > 0) {
+          const t = Math.round(rects[0].top);
+          if (top !== null && t > top + 2) {
+            lines.push(line);
+            line = '';
+          }
+          if (top === null || t > top + 2) top = t;
+        }
+        line += node.data[i];
+      }
+      lines.push(line);
+      const clean = lines.map((l) => l.replace(/[\s\u00a0]+/g, ' ').trim());
+      for (let i = 0; i < clean.length; i++) {
+        const at = `${el.className} "${clean.join(' / ')}"`;
+        if (i < clean.length - 1 && /[-\u2010\u2011]$/.test(clean[i])) out.push(`${at}: a line ends on a hyphen`);
+        if (i < clean.length - 1 && /\d\)?$/.test(clean[i])) out.push(`${at}: a line ends on a number`);
+        if (i < clean.length - 1 && /\d to$/.test(clean[i])) out.push(`${at}: a range splits`);
+        const words = clean[i].split(' ').filter(Boolean);
+        if (clean.length > 1 && words.length === 1 && words[0].replace(/[^\p{L}\p{N}]/gu, '').length < 8) out.push(`${at}: "${words[0]}" alone on a line`);
+      }
+    }
+    return out;
+  });
+}
+
+/** The How to play hero's badge (the lime pill at its corner) clear of the drawing's key shapes (data-key; the canvas is its ground, not one of them). */
+export async function heroBadgeClear(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const out: string[] = [];
+    const badge = document.querySelector('.rules-hero__badge')?.getBoundingClientRect();
+    if (!badge) return out;
+    for (const part of document.querySelectorAll('.rules-hero__drawing > g:not(.rules-hero__shadow) [data-key]')) {
+      const key = part.getAttribute('data-key');
+      if (key === 'canvas') continue;
+      const r = part.getBoundingClientRect();
+      if (r.left < badge.right && badge.left < r.right && r.top < badge.bottom && badge.top < r.bottom) out.push(`the badge covers the ${key}`);
+    }
+    return out;
+  });
+}
+
+/**
+ * Opens How to play (a phone's sheet, a wider screen's card), checks it reads cleanly (no line ends on a
+ * hyphen or a number, no word alone) with its badge clear of its picture, and closes it with Escape.
+ */
+export async function expectRulesReadCleanly(page: Page, name: string, label: string): Promise<void> {
+  const dialog = page.getByRole('dialog', { name: `How to play ${name}` });
+  await page.getByTestId('how-to-play').click();
+  await expect(dialog).toBeVisible();
+  await expect.poll(() => rulesTextBreaks(page), { message: label }).toEqual([]);
+  expect(await heroBadgeClear(page), label).toEqual([]);
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
 }
 
 /** The results popup is up over the lobby (the room's code under it). */

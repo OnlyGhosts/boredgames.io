@@ -12,6 +12,11 @@ interface Props {
   className?: string;
   /** The dialog's accessible name when it should say more than the title ("How to play Poker" over "How to play"). */
   label?: string;
+  /**
+   * The body says what the sheet is (a confirm step's own question, "Leave the room?"), so the head
+   * shows the close button alone, over the panel's corner, and the title only names the dialog.
+   */
+  hideTitle?: boolean;
 }
 
 /**
@@ -19,7 +24,7 @@ interface Props {
  * A modal dialog for keyboard and screen-reader users too: it takes the focus when it opens,
  * keeps Tab inside the panel and hands the focus back to the control that opened it.
  */
-export function BottomSheet({ open, title, onClose, children, testId, className, label }: Props) {
+export function BottomSheet({ open, title, onClose, children, testId, className, label, hideTitle = false }: Props) {
   const panelRef = useRef<HTMLDivElement | null>(null);
   useModalFocus(panelRef, open, onClose);
 
@@ -29,8 +34,8 @@ export function BottomSheet({ open, title, onClose, children, testId, className,
       <button type="button" className="sheet__backdrop" aria-label="Close" tabIndex={-1} onClick={onClose} data-testid={`${testId}-backdrop`} />
       <div className="sheet__panel" ref={panelRef} tabIndex={-1}>
         <div className="sheet__handle" aria-hidden="true" />
-        <header className="sheet__head">
-          <h2 className="sheet__title">{title}</h2>
+        <header className={`sheet__head${hideTitle ? ' sheet__head--bare' : ''}`}>
+          {!hideTitle && <h2 className="sheet__title">{title}</h2>}
           <button type="button" className="icon-btn" onClick={onClose} aria-label="Close" data-testid={`${testId}-close`}>
             <CloseIcon size={18} />
           </button>

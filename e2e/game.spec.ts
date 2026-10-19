@@ -1,5 +1,5 @@
 import { expect, test, type Browser, type BrowserContext, type Locator, type Page } from '@playwright/test';
-import { closeResults, createParty, endGameAsHost, enterNameIfAsked, expectResults, gameBarFits, joinByLink, leaveLobby, readyAll } from './party';
+import { closeResults, createParty, endGameAsHost, enterNameIfAsked, expectResults, expectRulesReadCleanly, gameBarFits, joinByLink, leaveLobby, readyAll } from './party';
 
 /**
  * One browser, three contexts = three players sharing a room on the real production server.
@@ -207,6 +207,17 @@ test('only the host sees and changes the settings; the others just sit in the ro
   }
   await expect(bob.page.getByTestId('start-game')).toHaveCount(0);
   await expect(bob.page.getByTestId('waiting-for-host')).toContainText(host.name);
+
+  // How to play reads cleanly on phones and on a wide desktop, its badge clear of the pencil and the house ("guess" alone
+  // in the summary at 320, "Join mid-" / "game" on a phone and "4 points (3" / "on the second guess)" at 1440 once stood there).
+  for (const size of [{ width: 390, height: 844 }, { width: 360, height: 740 }, { width: 320, height: 568 }]) {
+    await bob.page.setViewportSize(size);
+    await expectRulesReadCleanly(bob.page, 'Scribble', `Scribble at ${size.width}`);
+  }
+  await bob.page.setViewportSize({ width: 1280, height: 800 });
+  await host.page.setViewportSize({ width: 1440, height: 900 });
+  await expectRulesReadCleanly(host.page, 'Scribble', 'Scribble at 1440');
+  await host.page.setViewportSize({ width: 1280, height: 800 });
 });
 
 test('the host adds custom words from a .txt file: split like typed words, no duplicates, and says how many', async () => {

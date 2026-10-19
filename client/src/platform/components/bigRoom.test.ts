@@ -18,6 +18,7 @@ const { GamePicker } = await import('./GamePicker');
 const { PlayerList } = await import('./PlayerList');
 const { ResultsPopup } = await import('./ResultsPopup');
 const { Lobby } = await import('../screens/Lobby');
+const { listCap, restForList, roomForList } = await import('../lib/useListRoom');
 
 const ids = Array.from({ length: ROOM_HARD_CAP }, (_, i) => (i === 0 ? 'host' : `p${i}`));
 const full = (overrides: Parameters<typeof room>[0] = {}) => room({ players: ids.map((id, i) => player(id, { joinOrder: i, score: (ROOM_HARD_CAP - i) * 10 })), ...overrides });
@@ -36,12 +37,20 @@ function stylesheet(name: string): string {
 beforeEach(() => resetStore());
 
 describe('a full room of 50', () => {
-  it('lists all 50 in the lobby, in a list that scrolls on its own so the settings and chat stay close', () => {
+  it('lists all 50 in the lobby, in a list that scrolls on its own in whole rows so the settings stay close', () => {
     expect(ROOM_HARD_CAP).toBe(50);
     expect(rows(renderToString(createElement(Lobby, { room: full(), game: null })))).toBe(50);
     const list = ruleOf(stylesheet('lobby.css'), '.lobby__players .player-list');
-    expect(list).toContain('max-height: min(60dvh, 560px)');
+    expect(list).toContain('max-height: var(--list-cap, none)');
     expect(list).toContain('overflow-y: auto');
+    // Fifty rows never fit a window with Start under them: the list is capped, on a phone (Start pinned under 844px, the list
+    // 446px down the page) as on a desktop (the host's list 418px down), inside the room under its top at the page's rest.
+    const bottoms = Array.from({ length: ROOM_HARD_CAP }, (_, i) => 53 * (i + 1));
+    for (const [view, top, below] of [[844, 446, 134], [900, 418, 126], [1080, 418, 126]]) {
+      const cap = listCap({ room: roomForList(view, below), rest: restForList(view, top, below), rowBottoms: bottoms, border: 1 });
+      expect(cap, `${view}px`).not.toBeNull();
+      expect(cap ?? 0, `${view}px`).toBeLessThanOrEqual(restForList(view, top, below));
+    }
     expect(ruleOf(stylesheet('lobby.css'), '.lobby__players .player')).toContain('flex: none');
   });
 

@@ -1,7 +1,8 @@
 import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test';
 import { DEALER_STANDS_AT } from '../shared/games/blackjack/cards';
 import { SPYGAME_ROUND_MINUTES } from '../shared/games/spygame/protocol';
-import { closeResults, createParty, expectReadyCount, expectResults, joinByCode, leaveLobby, readyAll, roomTabTitle } from './party';
+import { closeResults, createParty, expectConfirmReadsOnce, expectPlayersInReach, expectReadyCount, expectResults, expectRulesReadCleanly, joinByCode, leaveLobby, readyAll, roomTabTitle } from './party';
+import { tableBots } from './tableBots';
 
 /**
  * The party stays together across games. Four players (one on a phone) create a Click Race
@@ -35,6 +36,15 @@ const HD = { width: 1280, height: 720 };
 const LETTERBOX = { width: 1280, height: 500 };
 /** A tablet held upright: the room's two columns, the settings column at its narrowest. */
 const PORTRAIT_TABLET = { width: 768, height: 1024 };
+/** A phone on its side: the phone's layout (Start pinned to the foot) over the room's two columns. */
+const SIDEWAYS = { width: 844, height: 390 };
+/** A real 1366x768 laptop's browser, the window less its tabs and bars. */
+const LAPTOP_BROWSER = { width: 1366, height: 650 };
+const BIG = { width: 1920, height: 1080 };
+/** The laptop windows a host or a guest sees the room at, short to tall. */
+const LAPTOP_SIZES = [LANDSCAPE_TABLET, HD, DESKTOP, LAPTOP, LAPTOP_BROWSER, WIDE, BIG];
+/** The phones, and one on its side. */
+const PHONE_SIZES = [PORTRAIT, MID, SMALL, SIDEWAYS];
 const MIN_TARGET = 44;
 
 interface Player {
@@ -95,6 +105,12 @@ async function expectRulesCardPlaced(page: Page, size: { width: number; height: 
     };
     const scroll = document.querySelector('.how-to-play__scroll') as HTMLElement;
     const band = getComputedStyle(scroll, '::after');
+    // The sections' columns: where each one's last section ends (one key per column, by its left edge).
+    const ends: Record<number, number> = {};
+    for (const section of document.querySelectorAll('[data-testid="how-to-play-popover"] [data-testid="rules-section"]')) {
+      const r = section.getBoundingClientRect();
+      ends[Math.round(r.left)] = Math.max(ends[Math.round(r.left)] ?? 0, r.bottom);
+    }
     return {
       card: box('[data-testid="how-to-play-popover"]'),
       code: box('[data-testid="room-code"]'),
@@ -104,11 +120,17 @@ async function expectRulesCardPlaced(page: Page, size: { width: number; height: 
       scrolls: scroll.scrollHeight > scroll.clientHeight + 1,
       fade: scroll.getAttribute('data-fade'),
       band: { opacity: band.opacity, width: parseFloat(band.width), inside: scroll.clientWidth },
+      columns: Object.values(ends),
     };
   });
   const { card, code, bar, close, rules } = at;
   if (!card || !code || !bar || !close || !rules) throw new Error(`${label}: the card, the code or the room bar has no box`);
   expect(card.top, `${label}: the card stays under the room bar`).toBeGreaterThanOrEqual(bar.bottom - 0.5);
+  // Inside the page's own width: never past the room bar's ends (it once ran 144px past them at 1440).
+  expect(card.left, `${label}: the card starts inside the page`).toBeGreaterThanOrEqual(bar.left - 0.5);
+  expect(card.right, `${label}: the card ends inside the page`).toBeLessThanOrEqual(bar.right + 0.5);
+  // Two columns of sections end close together (a side column once ran 260px past the facts beside it).
+  if (at.columns.length === 2) expect(Math.abs(at.columns[0] - at.columns[1]), `${label}: the columns are balanced`).toBeLessThanOrEqual(96);
   const overCode = card.left < code.right && code.left < card.right && card.top < code.bottom && code.top < card.bottom;
   expect(overCode, `${label}: the card leaves the room code showing`).toBe(false);
   if (whole) {
@@ -321,16 +343,36 @@ test('the host creates a Click Race party, three friends join, and the lobby sho
   const confirm = host.page.getByTestId('lobby-leave-confirm');
   await expect(confirm).toContainText('Leave the room?');
   await expect(confirm).toContainText('You’d need the code to come back in.');
+  // It says so once: the question heads it (no title row over it saying the same), the button is Leave.
+  await expectConfirmReadsOnce(host.page, 'Leave the room?', host.page.getByTestId('lobby-leave-yes'), 'Leave');
   await host.page.getByTestId('lobby-leave-no').click();
   await expect(confirm).toHaveCount(0);
   await expect(host.page.getByTestId('room-code')).toHaveText(code);
   for (const p of players) await expect(p.page.getByTestId('player-item')).toHaveCount(4);
+
+  // The bar keeps one rhythm for the host and a guest: the code centred between the logo and the buttons, clear room either
+  // side (a guest's once sat 7px from Copy and 14px from the gear).
+  for (const size of [LANDSCAPE_TABLET, DESKTOP, WIDE]) {
+    for (const p of [host, quinn]) {
+      await p.page.setViewportSize(size);
+      const gaps = await p.page.evaluate(() => {
+        const r = (id: string) => document.querySelector(`[data-testid="${id}"]`)!.getBoundingClientRect();
+        return { before: r('room-code').left - document.querySelector('.lobby__top .site-header')!.getBoundingClientRect().right, after: r('copy-code').left - r('room-code').right };
+      });
+      const label = `${p.name} ${size.width}`;
+      expect(gaps.before, `${label}: room between the logo and the code`).toBeGreaterThanOrEqual(48);
+      expect(gaps.after, `${label}: room between the code and Copy`).toBeGreaterThanOrEqual(48);
+      expect(Math.abs(gaps.before - gaps.after), `${label}: the code centred between them`).toBeLessThanOrEqual(12);
+    }
+  }
+  for (const p of [host, quinn]) await p.page.setViewportSize(DESKTOP);
 });
 
 const ROOM_SIZES = [
   { width: 320, height: 568 },
   { width: 360, height: 740 },
   { width: 390, height: 844 },
+  SIDEWAYS,
   { width: 768, height: 1024 },
   { width: 1024, height: 768 },
   { width: 1440, height: 900 },
@@ -342,13 +384,20 @@ test('a phone pins Start and Ready to the bottom of the screen, a wider room put
       await p.page.setViewportSize(size);
       await p.page.evaluate(() => window.scrollTo(0, 0));
       const big = p === host ? 'start-game' : 'ready-toggle';
-      if (size.width < 768) {
+      // A phone, or one on its side (wide enough for the columns, too short for anything but the pinned footer).
+      if (size.width < 768 || (size.width / size.height >= 1.5 && size.height <= 520)) {
         // A phone: the guest's page is short and the host's long, and either way Start or Ready sits on the bottom edge, the line across the page.
         await expect(p.page.getByTestId('lobby-actions')).toHaveCount(0);
         const footer = await p.page.getByTestId('lobby-footer').boundingBox();
         expect(Math.abs((footer?.y ?? 0) + (footer?.height ?? 0) - size.height), `${p.name} ${size.width}: the footer is on the bottom`).toBeLessThanOrEqual(1);
         expect(footer?.x ?? -1, 'its line starts at the left edge').toBeLessThanOrEqual(0.5);
         expect(footer?.width ?? 0, 'and spans the page').toBeGreaterThanOrEqual(size.width - 0.5);
+        // Its controls line up with the page above them, edge for edge with the room's code card (sideways the host's Start
+        // once stood 560px wide in the middle of a 780px page).
+        const inner = await p.page.locator('.lobby__footer-inner').boundingBox();
+        const card = await p.page.getByTestId('room-bar').boundingBox();
+        expect(Math.abs((inner?.x ?? 0) - (card?.x ?? 1)), `${p.name} ${size.width}x${size.height}: Start's left edge on the page's`).toBeLessThanOrEqual(0.5);
+        expect(Math.abs((inner?.x ?? 0) + (inner?.width ?? 0) - (card?.x ?? 0) - (card?.width ?? 1)), `${p.name} ${size.width}x${size.height}: and its right edge`).toBeLessThanOrEqual(0.5);
       } else {
         // A tablet or desktop: no footer and no line; the block sits under the player list, as wide as it, Start or Ready first and the row under it.
         await expect(p.page.getByTestId('lobby-footer')).toHaveCount(0);
@@ -398,43 +447,73 @@ test('a phone pins Start and Ready to the bottom of the screen, a wider room put
   for (const p of [host, quinn]) await p.page.setViewportSize(DESKTOP);
 });
 
-test('a big party on a short desktop: the list scrolls inside, and Start and the row under it stay on the screen', async ({ browser }) => {
-  // Four more join for this test alone and leave at its end.
-  const extras = await Promise.all(['Sam', 'Tao', 'Uma', 'Vik'].map(async (name) => ({ name, context: await browser.newContext() })));
+test('every player stays in reach on a laptop and a phone: the whole list shows, or a big party scrolls inside in whole rows under "+N more"', async ({ baseURL }) => {
+  test.setTimeout(150_000);
+  // Four players: no list that short ever scrolls inside; every row whole, the page reaching the last one where it must (the
+  // 3-row floor once hid the fourth player at 1280x720, and a fixed cap cut the fourth row in half at 1024x768 and 1366x768).
+  for (const size of LAPTOP_SIZES) {
+    for (const p of [host, quinn]) {
+      await p.page.setViewportSize(size);
+      await p.page.evaluate(() => window.scrollTo(0, 0));
+      expect((await expectPlayersInReach(p.page, `${p.name}, 4 players, ${size.width}x${size.height}`)).capped).toBe(false);
+    }
+  }
+  for (const size of PHONE_SIZES) {
+    for (const p of [host, pia]) {
+      await p.page.setViewportSize(size);
+      expect((await expectPlayersInReach(p.page, `${p.name}, 4 players, ${size.width}x${size.height}`)).capped).toBe(false);
+    }
+  }
+  // Twelve: eight more join on bare sockets for this test alone and leave at its end.
+  const bots = await tableBots(8, code, baseURL ?? 'http://localhost:4173', { game: 'poker' });
   try {
-    for (const extra of extras) await joinByCode(await extra.context.newPage(), extra.name, code);
-    for (const p of [host, quinn]) await expect(p.page.getByTestId('player-item')).toHaveCount(8);
-    for (const size of [LANDSCAPE_TABLET, DESKTOP, { width: 1440, height: 900 }]) {
+    for (const p of players) await expect(p.page.getByTestId('player-item')).toHaveCount(12);
+    const capped: string[] = [];
+    for (const size of LAPTOP_SIZES) {
       for (const p of [host, quinn]) {
         await p.page.setViewportSize(size);
         await p.page.evaluate(() => window.scrollTo(0, 0));
-        const list = p.page.getByTestId('player-list');
-        const listBox = await list.boundingBox();
-        expect(listBox?.height ?? 0, `${p.name} ${size.width}: at least three rows show`).toBeGreaterThanOrEqual(3 * 52);
-        // The host's eight rows do not fit the room left: the list scrolls inside, not the page.
-        if (p === host) expect(await list.evaluate((el) => el.scrollHeight > el.clientHeight + 1), `${p.name} ${size.width}: the list scrolls inside`).toBe(true);
-        expect(await p.page.evaluate(() => window.scrollY), 'the page is not scrolled').toBe(0);
-        for (const id of [p === host ? 'start-game' : 'ready-toggle', 'sitout-toggle', 'edit-profile']) await expectInsideViewport(p.page, id, size);
+        if ((await expectPlayersInReach(p.page, `${p.name}, 12 players, ${size.width}x${size.height}`)).capped) capped.push(`${p.name} ${size.width}x${size.height}`);
       }
     }
-    // The host's Start anyway step makes the block taller: the list gives way again, and both choices stay on the screen.
+    for (const size of PHONE_SIZES) {
+      for (const p of [host, pia]) {
+        await p.page.setViewportSize(size);
+        if ((await expectPlayersInReach(p.page, `${p.name}, 12 players, ${size.width}x${size.height}`)).capped) capped.push(`${p.name} ${size.width}x${size.height}`);
+      }
+    }
+    // A tall window shows all twelve; a short one (a laptop's browser, a phone on its side) scrolls the list inside.
+    expect(capped).not.toContain(`${host.name} 1920x1080`);
+    expect(capped).not.toContain(`${quinn.name} 1440x900`);
+    for (const p of [host, quinn]) expect(capped).toContain(`${p.name} 1366x650`);
+    for (const p of [host, pia]) expect(capped).toContain(`${p.name} 844x390`);
+    // The common laptop (1366x768): the host's capped list, its "+N more" and Start all show at the page's top, the list the
+    // one thing to scroll (the box once ran 200px under the fold, Start and the pill with it); a guest's at 1366x650 too.
+    for (const [p, size] of [[host, LAPTOP], [quinn, LAPTOP_BROWSER]] as const) {
+      await p.page.setViewportSize(size);
+      await p.page.evaluate(() => window.scrollTo(0, 0));
+      expect((await expectPlayersInReach(p.page, `${p.name}, 12 players, ${size.width}x${size.height}`)).capped).toBe(true);
+      for (const id of ['player-list-more', p === host ? 'start-game' : 'ready-toggle', 'edit-profile']) await expectInsideViewport(p.page, id, size);
+      expect(await p.page.evaluate(() => window.scrollY), `${p.name}: at the page's top`).toBe(0);
+    }
+    // The host's Start anyway step makes the block under the list taller: the list gives way again, and both choices are in reach.
     await host.page.setViewportSize(LANDSCAPE_TABLET);
+    await host.page.evaluate(() => window.scrollTo(0, 0));
     await host.page.getByTestId('start-game').click();
     await expect(host.page.getByTestId('start-confirm')).toBeVisible();
+    await expectPlayersInReach(host.page, `${host.name}, Start anyway, 1024x768`);
+    await host.page.getByTestId('start-wait').scrollIntoViewIfNeeded();
     for (const id of ['start-anyway', 'start-wait']) await expectInsideViewport(host.page, id, LANDSCAPE_TABLET);
-    expect(await host.page.evaluate(() => window.scrollY), 'the page is not scrolled').toBe(0);
     await host.page.getByTestId('start-wait').click();
     await expect(host.page.getByTestId('start-confirm')).toHaveCount(0);
   } finally {
-    for (const extra of extras) {
-      const page = extra.context.pages()[0];
-      if (page) {
-        await leaveLobby(page);
-        await expect(page.getByTestId('home-create')).toBeVisible();
-      }
-      await extra.context.close();
+    for (const bot of bots) {
+      bot.leave();
+      bot.close();
     }
     for (const p of [host, quinn]) await p.page.setViewportSize(DESKTOP);
+    await pia.page.setViewportSize(PORTRAIT);
+    for (const p of players) await p.page.evaluate(() => window.scrollTo(0, 0));
   }
   for (const p of players) await expect(p.page.getByTestId('player-item')).toHaveCount(4);
 });
@@ -666,7 +745,10 @@ test('How to play shows the rules of the game picked, follows the host’s switc
   const gapBelow = (panel?.y ?? 0) - ((anchor?.y ?? 0) + (anchor?.height ?? 0));
   expect(gapBelow, 'right under the button').toBeGreaterThanOrEqual(0);
   expect(gapBelow, 'right under the button').toBeLessThanOrEqual(16);
-  expect(Math.abs((panel?.x ?? 0) - (anchor?.x ?? 0)), 'lined up with its left edge').toBeLessThanOrEqual(1);
+  // From the button's left edge to the guest's column's right edge (the room bar's), never past it.
+  const guestBar = await page.locator('.lobby__top').boundingBox();
+  expect(Math.abs((panel?.x ?? 0) - (anchor?.x ?? 0)), 'lined up with the button’s left edge').toBeLessThanOrEqual(1);
+  expect(Math.abs((panel?.x ?? 0) + (panel?.width ?? 0) - (guestBar?.x ?? 0) - (guestBar?.width ?? 1)), 'and the column’s right edge').toBeLessThanOrEqual(1);
   await expectRulesCardPlaced(page, DESKTOP, true);
   await expect(page.locator('.sheet__backdrop')).toHaveCount(0);
   const firstRow = page.getByTestId('player-item').first();
@@ -702,39 +784,49 @@ test('How to play shows the rules of the game picked, follows the host’s switc
   await host.page.keyboard.press('Escape');
   await expect(host.page.getByTestId('how-to-play-popover')).toHaveCount(0);
 
-  // The host's button sits low, under the tiles. On a 1440x900 window the whole card stands beside it, over the settings,
-  // clear of the room code, of the button and of Start (it once opened upwards over the code, cut off mid-row).
+  // The host's button sits low, under the tiles. On a 1440x900 window neither under it nor over it holds the card, and beside it
+  // the page leaves one column, a little too tall for the window: the card stands beside the button, from under the room bar
+  // to the window's foot, scrolling the little it lacks (never the whole card slid over its own button, the players' statuses
+  // and Start, which it once covered down to "Start · 3 reac"), inside the page (its right edge the room bar's; it once ran
+  // 144px past it), clear of the room code, every other game's tile left a part to press.
   await host.page.setViewportSize(WIDE);
   await hostButton.click();
   await expect(host.page.getByTestId('how-to-play-popover')).toHaveAttribute('data-side', 'right');
-  await expectRulesCardPlaced(host.page, WIDE, true);
+  await expectRulesCardPlaced(host.page, WIDE, false);
   await expect(host.page.getByTestId('rules-section')).toHaveCount(5);
-  const beside = await host.page.getByTestId('how-to-play-popover').boundingBox();
-  const start = await host.page.getByTestId('lobby-actions').boundingBox();
-  const own = await hostButton.boundingBox();
-  expect(beside?.x ?? 0, 'beside the button, clear of it and of Start').toBeGreaterThanOrEqual(Math.max((own?.x ?? 0) + (own?.width ?? 0), (start?.x ?? 0) + (start?.width ?? 0)));
+  for (const [other, point] of Object.entries(await tilePoints(host.page))) if (other !== 'spygame') expect(point, `1440x900: the ${other} tile keeps a part to press`).not.toBeNull();
   await host.page.keyboard.press('Escape');
   await expect(host.page.getByTestId('how-to-play-popover')).toHaveCount(0);
 
-  // Smaller windows: no side of the button holds the whole card. On 1366x768 and 1280x720 it slides over the button to the
-  // window's right edge, whole; on 1024x768 no whole card leaves every game's tile showing, so it scrolls beside the button,
-  // clear of the tiles and of Start. Either way every other game keeps a part to press while the card is open: a press there
-  // switches the game, and the card follows, placed again for the new rules.
-  for (const [size, whole] of [[LAPTOP, true], [HD, true], [LANDSCAPE_TABLET, false]] as const) {
+  // At every laptop size the host's card stands beside the button the same way (1440x900, 1366x768, 1280x720, 1024x768): from the
+  // page's right edge, scrolling, clear of the button, of every tile, of the players' rows and of Start, over the settings only;
+  // the window's height decides how much of it shows (all of it on a 1920x1080 screen). Every other game keeps a part to press
+  // while the card is open: a press there switches the game, and the card follows, placed again for the new rules.
+  for (const size of [WIDE, LAPTOP, HD, LANDSCAPE_TABLET]) {
     const label = `${size.width}x${size.height}`;
     await host.page.setViewportSize(size);
     await host.page.evaluate(() => window.scrollTo(0, 0));
     await hostButton.click();
     const popover = host.page.getByTestId('how-to-play-popover');
-    await expect(popover).toHaveAttribute('data-side', whole ? 'over' : 'right');
-    await expectRulesCardPlaced(host.page, size, whole);
-    if (!whole) {
-      await expect(popover).toHaveAttribute('data-scrolls', 'true');
-      const card = await popover.boundingBox();
-      const button = await hostButton.boundingBox();
-      const actions = await host.page.getByTestId('lobby-actions').boundingBox();
-      expect(card?.x ?? 0, `${label}: beside the button, clear of it, of the tiles and of Start`).toBeGreaterThanOrEqual(Math.max((button?.x ?? 0) + (button?.width ?? 0), (actions?.x ?? 0) + (actions?.width ?? 0)));
-    }
+    await expect(popover).toHaveAttribute('data-side', 'right');
+    await expect(popover).toHaveAttribute('data-scrolls', 'true');
+    await expectRulesCardPlaced(host.page, size, false);
+    const card = await popover.boundingBox();
+    const button = await hostButton.boundingBox();
+    const actions = await host.page.getByTestId('lobby-actions').boundingBox();
+    const list = await host.page.getByTestId('player-list').boundingBox();
+    const bar = await host.page.locator('.lobby__top').boundingBox();
+    expect(card?.x ?? 0, `${label}: beside the button, clear of it, of the tiles, of the players' rows and of Start`).toBeGreaterThanOrEqual(Math.max((button?.x ?? 0) + (button?.width ?? 0), (actions?.x ?? 0) + (actions?.width ?? 0), (list?.x ?? 0) + (list?.width ?? 0)));
+    expect(Math.abs((card?.x ?? 0) + (card?.width ?? 0) - (bar?.x ?? 0) - (bar?.width ?? 1)), `${label}: to the page's right edge`).toBeLessThanOrEqual(1);
+    // Most of the card shows: the rules box holds more than half of what it scrolls.
+    const shown = await host.page.locator('.how-to-play__scroll').evaluate((el) => el.clientHeight / el.scrollHeight);
+    expect(shown, `${label}: most of the card shows`).toBeGreaterThan(0.5);
+    // Start takes a press all along its width with the card open.
+    const pressable = await host.page.getByTestId('start-game').evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      return [0.1, 0.5, 0.9].map((f) => el.contains(document.elementFromPoint(r.left + r.width * f, r.top + r.height / 2)));
+    });
+    expect(pressable, `${label}: Start takes a press at its left end, its middle and its right end`).toEqual([true, true, true]);
     let picked = 'spygame';
     for (const game of ['scribble', 'quipgame', 'blackjack', 'poker', 'spygame']) {
       const points = await tilePoints(host.page);
@@ -746,14 +838,15 @@ test('How to play shows the rules of the game picked, follows the host’s switc
       picked = game;
       await expect(host.page.getByTestId('how-to-play-card')).toHaveAttribute('data-game', game);
       await expect(hostButton).toHaveAttribute('aria-expanded', 'true');
-      await expectRulesCardPlaced(host.page, size, whole);
+      await expectRulesCardPlaced(host.page, size, false);
     }
     await host.page.keyboard.press('Escape');
     await expect(host.page.getByTestId('how-to-play-popover')).toHaveCount(0);
   }
   for (const p of players) await expect(p.page.getByTestId('game-picker')).toHaveAttribute('data-game', 'spygame');
-  // A 1280x600 window is too short for the whole card anywhere: it scrolls beside the button, inside the window, under the room
-  // bar, its close button in a head above the rules and the cut edge fading; scrolled to the end, the last section shows.
+  // A 1280x600 window is too short for the whole card anywhere: it scrolls beside the host's button and under the guest's (two
+  // thirds of it showing, as the whole card hangs there on a taller window), inside the window, under the room bar, its close
+  // button in a head above the rules and the cut edge fading; scrolled to the end, the last section shows.
   for (const p of [host, quinn]) {
     await p.page.setViewportSize(SHORT);
     await p.page.evaluate(() => window.scrollTo(0, 0));
@@ -858,6 +951,35 @@ test('How to play shows the rules of the game picked, follows the host’s switc
     await noHorizontalOverflow(host.page, size.width);
   }
   await host.page.setViewportSize(DESKTOP);
+});
+
+test('How to play reads cleanly for every game on a phone and a desktop: no line ends on a hyphen or a number, no word alone, every badge clear of its picture', async () => {
+  test.setTimeout(120_000);
+  const names: Record<string, string> = { scribble: 'Scribble', spygame: 'The Spy Game', quipgame: 'Quip Game', blackjack: 'Blackjack', poker: 'Poker' };
+  for (const [game, name] of Object.entries(names)) {
+    await host.page.getByTestId('game-picker').locator(`[data-testid="game-tile"][data-game="${game}"]`).click();
+    await expect(pia.page.getByTestId('game-picker')).toHaveAttribute('data-game', game);
+    // The phone's sheet at 390, 360 and 320 ("Join mid-" / "game", "words to choose from (2 to" / "5).", "Take every vote, 2" /
+    // "or more" and "guess" alone in Scribble's summary all once stood there).
+    for (const size of [PORTRAIT, MID, SMALL]) {
+      // The badge at the picture's corner covers none of its key shapes (Scribble's pencil and house once hid under it).
+      await pia.page.setViewportSize(size);
+      await expectRulesReadCleanly(pia.page, name, `${name} at ${size.width}`);
+      await expect(pia.page.getByTestId('how-to-play-sheet')).toHaveCount(0);
+    }
+    // The host's desktop card, two columns ("4 points (3" / "on the second guess)" once stood at 1440).
+    for (const size of [WIDE, LAPTOP, HD]) {
+      await host.page.setViewportSize(size);
+      await host.page.evaluate(() => window.scrollTo(0, 0));
+      await expectRulesReadCleanly(host.page, name, `${name} at ${size.width}x${size.height}`);
+      await expect(host.page.getByTestId('how-to-play-popover')).toHaveCount(0);
+    }
+  }
+  // Back to The Spy Game for the rest of the party.
+  await host.page.getByTestId('game-picker').locator('[data-testid="game-tile"][data-game="spygame"]').click();
+  for (const p of players) await expect(p.page.getByTestId('game-picker')).toHaveAttribute('data-game', 'spygame');
+  await host.page.setViewportSize(DESKTOP);
+  await pia.page.setViewportSize(PORTRAIT);
 });
 
 test('one player sits out, the host sets Unhinged, three play a one-round Spy Game while the fourth watches from the party', async () => {

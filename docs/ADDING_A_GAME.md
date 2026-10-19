@@ -86,9 +86,13 @@ host starts. The lobby screen (only the host sees the settings and the game grid
 sees the next game, the players and their own buttons), the room header at its top (one bar: the logo, the code, Copy,
 Share and Leave, which asks first; the gear holds the device's theme and sound only; a phone centres the logo over the
 code card, with the three as squares on it), Start or I'm ready, Sit this one out and Change my look
-under the player list on a tablet or desktop (the list is capped so they stay on the screen, a big
-party scrolling inside it; `useListRoom` in `lib/` measures the room the page takes beside it) and pinned to the bottom of a phone's screen (a footer
-whose line spans the page), each player row's kick button
+under the player list on a tablet or desktop and pinned to the bottom of a phone's screen (a footer
+whose line spans the page, its controls on the room's own column); the list shows every player while
+the window holds it with Start under it (the page scrolls if it must), and a bigger party scrolls
+inside it in whole rows, with a faded peek of the next row and a "+N more" pill, the box sized to
+the room under it at the page's top wherever that holds three rows, so the box, the pill and Start
+show without a page scroll (`useListRoom` in `lib/` measures what stays under the list and where
+the list sits on the page, and caps it), each player row's kick button
 last, after the status, in a 44px column that lines up down the list, the profile editor (a centred
 box on a desktop, a drawer on a tablet or phone), the browser tab's title in a room
 ("boredgames.io 🚪 𝗔𝗕𝟮𝟯": the door and the code in Mathematical Sans-Serif Bold, `roomTitle` in
@@ -717,7 +721,9 @@ export interface RuleFact {
   label: string;
   /** The big accent-coloured value, a number or a short phrase ("21", "Stands on 17"); at most 12 characters, so it keeps to one line on a 320px phone. */
   value: string;
-  /** A few words under the value ("Draws to 16"). Prose: curly apostrophes, the last two words kept together; a \n starts a new line ("Beat the dealer,\ndon’t go over"). */
+  /** A few words under the value ("Draws to 16"). Prose: curly apostrophes; the card sets it through rulesProse (lib/rules.ts), which keeps the last two words together; a 
+ starts a new line ("Beat the dealer,
+don’t go over"). */
   note: string;
 }
 
@@ -729,11 +735,11 @@ export interface RuleFact {
 export type RulesHero =
   /** Two of the site's playing cards, fanned ("AS", "KH": rank then suit letter). */
   | { kind: 'cards'; cards: [string, string]; badge: string }
-  /** Scribble: a mini white canvas with a doodle and the pencil over it. */
+  /** Scribble: a paper canvas with a sun, a hill and a house, the tile's marker drawing on it. */
   | { kind: 'canvas'; badge: string }
   /** The Spy Game: a place card beside the spy's "?" card. */
   | { kind: 'place'; badge: string }
-  /** Quip Game: two speech bubbles, one taking the votes. */
+  /** Quip Game: two speech bubbles, the one taking the votes in the accent with the lime tick. */
   | { kind: 'quips'; badge: string }
   /** The game's glyph on its accent plate: the fallback a new game starts with. */
   | { kind: 'glyph' };
@@ -743,14 +749,16 @@ export type RulesHero =
  * one-line summary, four key facts in tiles, then five short plain sections under coloured tab
  * pills. Written from the server's rules in `client/src/games/<id>/rules.ts`, with every number a
  * template over the game's shared constants so the copy can never drift from the code. Short
- * plain words, curly apostrophes, no dashes; the card keeps each paragraph's last two words
- * together. The facts carry the numbers, so the sections say them once at most.
+ * plain words, curly apostrophes, no dashes, plain spaces and hyphens: the card sets each paragraph
+ * through rulesProse (lib/rules.ts), which keeps the last two words together, a number with the
+ * word after it and a hyphenated word whole. The facts carry the numbers, so the sections say them
+ * once at most.
  */
 export interface GameRules {
   summary: string;
   /** The illustration beside the name and summary. */
   hero: RulesHero;
-  /** Exactly four tiles, in reading order (left to right, then the second row). */
+  /** Exactly four tiles, in reading order (a row of four on a wide card, two rows of two in the sheet). */
   facts: RuleFact[];
   /** How one round (or hand, at a card table) goes. */
   round: string;
@@ -824,8 +832,14 @@ on a 320px phone, and a note) and a `hero` the platform draws from plain data: s
 `{ kind: 'glyph' }`, the game's glyph on its accent plate, and pick another kind from
 `platform/game.ts` (fanned playing cards, the canvas, a place card, speech bubbles) when one fits;
 `RulesHero.tsx` is where a new kind is drawn, in inline SVG and CSS only, so it renders on the server.
-The facts carry the numbers, so the sections say them once at most (`client/src/games/rules.test.ts`
-checks every game's hero, facts, sections and copy). The accent's text and wash cuts are the
+The canvas and the speech bubbles are drawn in the lobby tiles' flat style (`HERO` in `RulesHero.tsx`:
+the accent and lime as fills, paper, ink for details inside a shape, every edge the deep cut of its
+fill's hue, a sticker shadow, the badge clear of every key shape), so a game picking one of them needs
+the `--game-<id>-edge` token too. The facts carry the numbers, so the sections say them once at most
+(`client/src/games/rules.test.ts` checks every game's hero, facts, sections and copy). Write plain
+spaces and hyphens: the card sets the summary, the notes and the sections through `rulesProse`
+(`lib/rules.ts`), which keeps a number with the word after it ("4 points", "1 to 10"), never breaks a
+hyphenated word and keeps the last two words together. The accent's text and wash cuts are the
 `--game-<id>-text` and `--game-<id>-soft` tokens in `tokens.css`, one pair per theme, AA on the panel. The platform's shell ([`client/src/App.tsx`](../client/src/App.tsx))
 renders `Lobby` while `phase === 'lobby'` (with the `ResultsPopup` over it once a game ended) and
 your `Screen` (keyed by room code) while `'playing'`, with the `WaitingOverlay` over it during a
@@ -2127,10 +2141,10 @@ operating system preference is not consulted).
 | Type | `--font-sans` (Inter, body), `--font-display` (Space Grotesk 700, headings), `--font-mono` (IBM Plex Mono, only where a monospace is truly needed: the room code, in the code boxes and the front door's code chip, so 2/Z and 5/S never blur); self-hosted latin subsets in `client/public/fonts/` (`fonts.css`). Labels are normal words in the main fonts (no tracked uppercase, no monospace as decoration); numbers keep tabular figures; copy uses the curly apostrophe (’) |
 | Spacing | `--space-1` 4px, `--space-2` 8px, `--space-3` 12px, `--space-4` 16px, `--space-5` 24px, `--space-6` 32px, `--space-7` 48px, `--space-8` 64px, `--gutter` 16px |
 | Radii | `--radius-sm` 8px (inputs, buttons), `--radius-item` 10px (choice cards, code boxes, toasts), `--radius-md` 14px (panels), `--radius-lg` 20px (sheets, modals), `--radius-pill` |
-| Shadows | `--shadow-sm` and `--shadow-md` are `none` (flat surfaces sit on their border); `--shadow-lg` is a soft drop for floating layers only (sheets, toasts); `--shadow-piece` and `--shadow-pencil` lift the pieces of the How to play hero (a fanned card, the spy's card, the pencil over the canvas) |
+| Shadows | `--shadow-sm` and `--shadow-md` are `none` (flat surfaces sit on their border); `--shadow-lg` is a soft drop for floating layers only (sheets, toasts); `--shadow-piece` lifts the pieces of the How to play hero (a fanned card, the spy's card); the drawn heroes (Scribble's canvas, Quip Game's bubbles) carry the tile pictures' flat sticker shadow instead |
 | Surfaces | `--color-bg` #141514, `--color-surface` #20221F, `--color-surface-2` #2B2E29 (raised), `--color-surface-3` #191C19 (inset wells: inputs, lists), `--color-border` #454A43, `--color-border-strong` #747D6F (control borders) |
 | Text | `--color-text` #F1F0E8, `--color-text-muted` #B9C0B3, `--color-text-faint` (small text, AA on the panels) |
-| Games | `--game-<id>` per game (the same hex as `GameMeta.accent`), `--game-ink` for the glyph on top and `--game-paper`, the off-white in a game’s picture; `--game-edge-lime` and `--game-edge-lilac`, the picture’s only two edges (a white shape borrows one), the same in both themes, each as firm round its own fill as the other, at least 3:1 on the white tile and standing off the dark one by its colour, with `--game-edge-lime-picked` and `--game-edge-lilac-picked`, the deeper cuts the picked lilac tile swaps in (section 5, step 4); `--game-<id>-text` and `--game-<id>-soft` are the accent as text (the How to play card's key facts) and as the wash under its hero, one pair per theme, AA on the panels |
+| Games | `--game-<id>` per game (the same hex as `GameMeta.accent`), `--game-ink` for the glyph on top and `--game-paper`, the off-white in a game’s picture; `--game-edge-lime` and `--game-edge-lilac`, the picture’s only two edges (a white shape borrows one), the same in both themes, each as firm round its own fill as the other, at least 3:1 on the white tile and standing off the dark one by its colour, with `--game-edge-lime-picked` and `--game-edge-lilac-picked`, the deeper cuts the picked lilac tile swaps in (section 5, step 4); `--game-<id>-text` and `--game-<id>-soft` are the accent as text (the How to play card's key facts) and as the wash under its hero, one pair per theme, AA on the panels; `--game-<id>-edge` is the accent's deep edge for a hero drawn in the tiles' flat style (Scribble's canvas, Quip Game's bubbles), the same in both themes, at least 3:1 on the paper and on the hero's wash |
 | Brand | `--color-primary` (lime #C7E976, a FILL that always carries `--color-primary-contrast` ink text), `--color-primary-hover`, `--color-primary-soft`, `--color-primary-text` (lime as text/border/stroke on dark, a dark olive on white); `--color-secondary*` (lilac #A699D5) with the same five |
 | Status | `--color-success`, `-soft`, `-text`; `--color-warning*`; `--color-danger*`; `--color-info-soft`; `--color-focus` (flat, restrained, AA on the panels) |
 | Chat | `--chat-correct-bg/fg`, `--chat-close-bg/fg`, `--chat-guessed-bg/fg` |
@@ -2175,7 +2189,7 @@ layout, which is a good reference for a non-scrolling phone game.
 | [`Wordmark`](../client/src/platform/components/Wordmark.tsx) | `className?`, `variant?: 'full' \| 'icon'` | The outlined boredgames.io logo (Poppins Black + Regular paths) inline, accessible name "boredgames.io", "games" in `--color-primary-mark`; `'icon'` is the two phones alone on their own artboard (`.wordmark--icon`, a phone's game top bar) |
 | [`RoomCode`](../client/src/platform/components/RoomCode.tsx) | `code`, `testId` | The room code's lime tiles, one character a tile (`.room-card__value`, `.room-card__char` in `components.css`), read-only, named for screen readers a letter at a time ("Room code U B R D"): the waiting room's (`room-code`) and the game top bar's (`game-code`) |
 | [`PhoneBored`](../client/src/platform/components/Mascots.tsx) / `PhoneHappy` | `className?` | The two phone characters from `branding/mascots/boredgames-mascots.svg`, each cropped to itself, decorative (`aria-hidden`); the logo draws `BoredArt` and `HappyArt` together; celebrations only |
-| [`GameGlyph`](../client/src/platform/components/GameGlyph.tsx) | `game: GameMeta`, icon props | The game's 24px line glyph (the How to play hero draws it at 30px on the game's accent plate when the game has no illustration of its own, and at 34px as Scribble's pencil) |
+| [`GameGlyph`](../client/src/platform/components/GameGlyph.tsx) | `game: GameMeta`, icon props | The game's 24px line glyph (the How to play hero draws it at 30px on the game's accent plate when the game has no illustration of its own) |
 | [`GameArt`](../client/src/platform/components/GameArt.tsx) | `game: GameId`, children | The frame a game’s lobby picture (`GameClientModule.Art`) is drawn in: a 64 x 46 canvas, `aria-hidden`, with a flat sticker shadow (each shape filled in its own edge colour) drawn under whatever the game draws; `ART` (lime, lilac, paper, deep lime and deep lilac edges, and ink for details, as tokens; no grey) is the palette, `shape('lime' \| 'lilac')` a shape’s fill and its own deep edge, `shape('paper', 'lime' \| 'lilac')` a white shape with the deep edge it borrows, `Line` a lime or lilac line with its edge (section 5, step 4) |
 | [`GameTopBar`](../client/src/platform/components/GameTopBar.tsx) | `meta`, `room`, `isPhone`, `testId`, `className?`, `status?` (none for a card table, whose round is on its ribbon), `statusTestId?` ('round-indicator'), `statusData?`, `clock?`, `players: { label?, open, onOpen }`, `menu: { open, onOpen }`, `middle?`, `below?`, `compact?` | Every game's top bar (`gamebar.css`, `.gbar*`): the waiting room's header with the game in it, one surface. A desktop's first row: the logo (`game-brand`: the waiting room's `Logo`, its gear "o" the settings button, `settings-menu`, whose popover is the device's theme and sound alone; the logo itself, `brand-link`, opens the leave confirm, never a plain link out of a game), a divider, the game's name (Space Grotesk 700, 1.375rem) with the status in small muted type under it ("Round 2/3 · Turn 1/8"), the room code's lime tiles (`RoomCode`, `game-code`, read-only) centred in the room left over, then the host's End game (`end-game`: Leave's quiet twin, the room's 44px button with only its word and power icon in the danger colour and a soft danger tint under the pointer; it asks first in `end-sheet`, with your `endGameNote`; "Ending soon" once asked for a later end) and Leave for everyone (`leave-room`, the room's own Leave; it and the logo open `leave-sheet`: `game-leave-confirm`, `game-leave-yes`, `game-leave-no`). The second row: the player chips (`PlayerChips`: avatar, name, a status badge from your `playerStatus`; the row is the `players-toggle` button and never scrolls, a "+K" chip takes what does not fit; whatever sits beside it, the strip keeps at least one player's chip and the "+K"), your `middle` (Scribble's word, which gives way instead: it wraps between its words, and only a word wider than all its room wraps inside itself) and the timer ring at the end. A tablet (761 to 1023px, `TABLET_QUERY`) is full: the status moves down to the players row, before the word, and Leave keeps its icon alone (a 44px square). A phone keeps one line: the logo's two phones alone (`Wordmark variant="icon"`, a picture, no control), the name with the status under it, smaller tiles and the options button (`game-menu`), all a size down again when the bar sits in a narrow column (`@container gbar`, Scribble's side column on a phone turned sideways); `below` is a last row inside the bar (Scribble's word on a phone). Only the name gives way when a line is full (an ellipsis); the logo, the tiles, the buttons and the status keep their size (on a phone the title is never narrower than its status). Keep the status short (`RoundStatus` renders "Round 1/5"); it stays whole, on one line. A status of two parts (a round and a turn) passes `StatusParts` (`parts`): one line with a dot between the parts where there is room, the parts stacked where there is not (the narrowest phones, a bar in a side column), never cut. `compact` packs it into one row (a card table at every size, The Spy Game on a phone): the chips give way to a players button (`players-toggle`: the people icon and the count in a pill, a 44px target) and a `clock` sits small in the row; a card table's tablet bar also leaves out its status and keeps End game's icon alone, and once the host asked for an end its "Ending soon" (`end-game-requested`) goes under the name, in words, where the note beside the code has no room. The Spy Game's phone row (the clock, the players button and the code beside the name) is the fullest: its name gives way to an ellipsis there (on a phone 350px wide or less the logo's two phones make way too, so the round stays whole), and is whole from a tablet up. `TableShell` renders it for the card tables |
 | `GameMenuSheet` | `open`, `onClose()`, `children?` | The phone options sheet behind the bar's menu button (`menu-sheet`): theme and sound, your rows, then the ways out as tall rows (`ExitActions` in `GameExit.tsx`): End game for the host in the danger colour ("Ends it for everyone"), Leave room ("Only you leave"); each opens its confirm step in the sheet ("End the game for everyone?" with what it does; "Leave the room?" with whether the game goes on) |
@@ -2197,7 +2211,7 @@ layout, which is a good reference for a non-scrolling phone game.
 | [`ChipsSetting`](../client/src/platform/components/ChipsSetting.tsx) | `id`, `label`, `value`, `min`, `max`, `presets`, `onCommit(v)`, `hint?` | A chip amount setting: one row of preset buttons and a numeric field (which holds the value) committed on blur or Enter, clamped; test ids `settings-<id>`, `settings-<id>-<preset>` |
 | [`GuessTiles`](../client/src/platform/components/GuessTiles.tsx) | `mask`, `draft`, `onDraftChange(draft)`, `onSubmit(text): boolean`, `canSend` | Type into the blanks of a masked word (layout in [`lib/wordMask.ts`](../client/src/platform/lib/wordMask.ts)); Scribble's guess bar; test ids `guess-input`, `guess-send` |
 | [`Timer`](../client/src/platform/components/Timer.tsx) | `endsAt: number \| null \| undefined`, `warnUnder?` (10), `tickUnder?`, `size?: 'md' \| 'lg'`, `paused?`, `settling?`, `label?` (a small word under the ring: what it counts when that is not the usual clock), `data?` (extra data attributes) | Server-clock countdown in a ring whose lime arc empties toward the deadline (the length is the time left when this client first saw the deadline; reduced motion steps it once a second); plain seconds up to 99, m:ss beyond; the danger colour in the last 5 seconds (never with `warnUnder` 0); `tickUnder` plays a tick cue for the final seconds |
-| [`BottomSheet`](../client/src/platform/components/BottomSheet.tsx) | `open`, `title`, `onClose()`, `children`, `testId`, `className?` | Phone sheet with focus trap and Escape; `${testId}-close`, `${testId}-backdrop`. `className="sheet--dialog"` makes it a centred box over the dimmed page from 1024px (the lobby's Change my look); Escape and a click on the page around it still close it |
+| [`BottomSheet`](../client/src/platform/components/BottomSheet.tsx) | `open`, `title`, `onClose()`, `children`, `testId`, `className?`, `label?`, `hideTitle?` | Phone sheet with focus trap and Escape; `${testId}-close`, `${testId}-backdrop`. `className="sheet--dialog"` makes it a centred box over the dimmed page from 1024px (the lobby's Change my look); Escape and a click on the page around it still close it. `hideTitle` is for a confirm step whose own question says what it is ("Leave the room?"): no title row repeating it, the close button alone over the panel's corner, the title naming the dialog for screen readers |
 | [`ResultsPopup`](../client/src/platform/components/ResultsPopup.tsx) | `results`, `meId`, `onClose()` | Rendered by the shell over the lobby once a game ended (the store's `results`); you never render it. The small happy phone (96px at most), "Scribble · Game over", "Alice wins!" and the score in the game's `scoreUnit` (points, or a card table's chips), where you came, why it ended early (`results-reason`), the top three on small lime / lilac / graphite blocks (`results-step`), every player in order (`results-entry` with `data-rank`) and a brief confetti; a game cut short by too few players crowns nobody. Back to the room, the X, Escape or (a desktop) a tap beside it closes it for good |
 | [`Toasts`](../client/src/platform/components/Toasts.tsx), [`ConnectionNotice`](../client/src/platform/components/ConnectionNotice.tsx) | none | Both are rendered once by the shell; add toasts with `usePlatformStore.getState().addToast(kind, text)` (errors stay until dismissed), never for the connection: the notice says that (`noticeFor` in `lib/connectionNotice.ts` words it, with room for a second line) |
 | [`Icons`](../client/src/platform/components/Icons.tsx) | `Icon({ paths, size?, ...svg })` (1.8px round stroke) plus `DiceIcon`, `CrownIcon`, `CheckIcon`, `CopyIcon`, `ShareIcon`, `ChatIcon`, `AlertIcon`, `LinkIcon`, `CloseIcon`, `UsersIcon`, `ChevronIcon`, `LogoutIcon`, `PlayIcon`, `KickIcon`, `SparkIcon`, `EditIcon`, `SendIcon`, `UploadIcon`, `MoreIcon`, `MoonIcon` | Build game icons from the `Icon` primitive (24×24 stroke paths), as The Spy Game's [`Icons.tsx`](../client/src/games/spygame/components/Icons.tsx) does |

@@ -7,7 +7,7 @@ installBrowserGlobals();
 
 const { GAMES } = await import('./index');
 const { GAME_LIST, gameById } = await import('@shared/platform/games');
-const { rulesSections } = await import('../platform/lib/rules');
+const { JOIN_MID_GAME_TEXT, rulesProse, rulesSections } = await import('../platform/lib/rules');
 const { RulesCard } = await import('../platform/components/HowToPlay');
 const { CHOOSE_TIME_SECONDS } = await import('@shared/games/scribble/constants');
 const { SCRIBBLE_DRAW_SECONDS } = await import('@shared/games/scribble/protocol');
@@ -40,8 +40,9 @@ describe('every game’s How to play', () => {
       expect(sections.map((s) => s.key)).toEqual(['round', 'scoring', 'end', 'settings', 'watchers']);
       for (const s of sections) expect(s.text.trim().length, `${g.id} ${s.key}`).toBeGreaterThan(0);
       expect(sections.map((s) => s.heading)).toEqual([rules.unit === 'hand' ? 'How a hand goes' : 'How a round goes', 'How you score', 'How it ends', 'What the settings change', 'Watching']);
-      // Everyone who joins mid-game watches: every game says so.
-      expect(rules.watchers).toContain('Join mid-game and you watch until the next game.');
+      // Everyone who joins mid-game watches: every game says so, "mid\u2011game" with a no-break hyphen.
+      expect(rules.watchers).toContain(JOIN_MID_GAME_TEXT);
+      expect(JOIN_MID_GAME_TEXT).toBe('Join mid\u2011game and you watch until the next game.');
     }
     // The card tables deal hands; the others play rounds.
     expect(GAMES.blackjack.rules.unit).toBe('hand');
@@ -133,28 +134,45 @@ describe('every game’s How to play', () => {
     expect(GAMES.poker.rules.watchers).toContain(`seats ${gameById('poker').maxPlayers}`);
   });
 
-  it('renders each paragraph with its last two words joined, so no word sits alone on the card’s last line', () => {
+  it('sets every paragraph as rules prose: the last two words joined, a number kept with the word after it, no hyphen to break at', () => {
     for (const g of GAME_LIST) {
-      const html = renderToString(createElement(RulesCard, { meta: g, rules: GAMES[g.id].rules, mode: 'popover' }));
-      const paragraphs = [...html.matchAll(/<p class="rules__(?:summary|text)">([^<]*)<\/p>/g)].map((m) => m[1]);
-      expect(paragraphs, g.id).toHaveLength(6);
+      const rules = GAMES[g.id].rules;
+      const html = renderToString(createElement(RulesCard, { meta: g, rules, mode: 'popover' }));
+      const paragraphs = [...html.matchAll(/<p class="rules__(?:summary|text)">([^<]*)<\/p>/g)].map((m) => m[1].replace(/&#x27;/g, "'"));
+      expect(paragraphs, g.id).toEqual([rules.summary, ...rulesSections(rules).map((s) => s.text)].map(rulesProse));
       for (const p of paragraphs) {
-        expect(p, `${g.id}: ${p}`).toMatch(/\S \S+$/);
-        expect(p.split(' '), g.id).toHaveLength(2);
+        // The same words: only no-break spaces and hyphens differ from the copy as written.
+        expect(p.replace(/\u00a0/g, ' ').replace(/\u2011/g, '-'), g.id).not.toMatch(/\u00a0|\u2011/);
+        // The last two words joined; no number with a breakable space before its word; no breakable hyphen inside a word.
+        expect(p, `${g.id}: ${p}`).toMatch(/\S\u00a0\S+$/);
+        expect(p, `${g.id}: ${p}`).not.toMatch(/\d\)? (?=[^\s])/);
+        expect(p, `${g.id}: ${p}`).not.toMatch(/\d\u00a0to (?=\S)/);
+        expect(p, `${g.id}: ${p}`).not.toMatch(/\p{L}-\p{L}/u);
       }
       expect(html).toContain(`data-game="${g.id}"`);
       expect(html.match(/data-testid="rules-section"/g)).toHaveLength(5);
-      // The hero draws, and the four facts show, with a note's last two words joined too.
-      const { hero, facts } = GAMES[g.id].rules;
+      // The hero draws, and the four facts show, their notes set as prose too.
+      const { hero, facts } = rules;
       expect(html).toContain(`data-testid="rules-hero" data-kind="${hero.kind}"`);
       if ('badge' in hero) expect(html).toContain(`class="rules-hero__badge">${hero.badge}<`);
-      const drawn = { cards: 'data-testid="rules-hero-card"', canvas: 'class="rules-hero__canvas"', place: 'class="rules-hero__spy"', quips: 'class="rules-hero__quips"', glyph: `data-glyph="${g.id}"` }[hero.kind];
+      const drawn = { cards: 'data-testid="rules-hero-card"', canvas: 'data-key="marker"', place: 'class="rules-hero__spy"', quips: 'data-key="winner"', glyph: `data-glyph="${g.id}"` }[hero.kind];
       expect(html, `${g.id} hero`).toContain(drawn);
       expect(html.match(/data-testid="rules-fact"/g)).toHaveLength(4);
       for (const f of facts) {
         expect(html).toContain(`<span class="rules-fact__value">${f.value}</span>`);
-        expect(html).toContain(`<span class="rules-fact__note">${f.note.replace(/ (\S+)$/, '\u00a0$1')}</span>`);
+        expect(html.replace(/&#x27;/g, "'")).toContain(`<span class="rules-fact__note">${rulesProse(f.note)}</span>`);
       }
     }
+  });
+
+  it('keeps a number with its neighbour and a hyphenated word whole, whatever the copy', () => {
+    expect(rulesProse('The spy names the place: 4 points (3 on the second guess).')).toBe('The spy names the place: 4\u00a0points (3\u00a0on the second\u00a0guess).');
+    expect(rulesProse('Rounds (2 to 10), hints per word (0 to 5, at most half the letters).')).toBe('Rounds (2\u00a0to\u00a010), hints per word (0\u00a0to\u00a05, at most half the\u00a0letters).');
+    expect(rulesProse('Take every vote, 2 or more')).toBe('Take every vote, 2\u00a0or\u00a0more');
+    expect(rulesProse('Wrong person voted out: 2 to the spy.')).toBe('Wrong person voted out: 2\u00a0to\u00a0the\u00a0spy.');
+    // Thousands and a list: the number before "and" keeps it; one before a comma needs nothing.
+    expect(rulesProse('Picks pay 1,500, 1,000 and 500.')).toBe('Picks pay 1,500, 1,000\u00a0and\u00a0500.');
+    expect(rulesProse('Join mid-game and you watch.')).toBe('Join mid\u2011game and you\u00a0watch.');
+    expect(rulesProse('No numbers here')).toBe('No numbers\u00a0here');
   });
 });

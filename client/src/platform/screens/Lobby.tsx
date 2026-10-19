@@ -8,7 +8,7 @@ import { AvatarPicker } from '../components/AvatarPicker';
 import { BottomSheet } from '../components/BottomSheet';
 import { GamePicker } from '../components/GamePicker';
 import { LeaveConfirm } from '../components/GameExit';
-import { CopyIcon, EditIcon, LogoutIcon, PlayIcon, ShareIcon } from '../components/Icons';
+import { ChevronIcon, CopyIcon, EditIcon, LogoutIcon, PlayIcon, ShareIcon } from '../components/Icons';
 import { PlayerList } from '../components/PlayerList';
 import { ReadyControls } from '../components/ReadyControls';
 import { RoomCode } from '../components/RoomCode';
@@ -41,13 +41,15 @@ export function Lobby({ room, game }: Props) {
   // column and a phone's footer (a tablet turned, a window resized), which remounts them.
   const [confirming, setConfirming] = useState(false);
   // The two-column room (a tablet or a desktop, never a phone turned sideways): Start and the row
-  // under it sit under the player list, which leaves them room on the screen (a big party scrolls
-  // inside it); a phone pins them to the bottom of the screen instead.
+  // under it sit under the player list; a phone pins them to the bottom of the screen instead. The
+  // list shows every player while the page holds it with them; a bigger party scrolls inside it, in
+  // whole rows with a faded peek of the next and "+N more" (useListRoom).
   const twoColumns = useMediaQuery(COLUMNS_QUERY);
   const phone = useMediaQuery(PHONE_QUERY);
   const columns = twoColumns && !phone;
-  const bodyRef = useRef<HTMLDivElement | null>(null);
-  useListRoom(bodyRef, '[data-testid="player-list"]', '.lobby__actions', columns);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const list = useListRoom(rootRef, '[data-testid="player-list"]', columns ? '.lobby__actions' : '.lobby__footer', !columns);
+  const fade = [list.above && 'top', list.below > 0 && 'bottom'].filter(Boolean).join(' ');
   const meta = gameById(room.gameId);
 
   // The home page was likely scrolled to its join form (or the game was): start the lobby at the code.
@@ -96,8 +98,8 @@ export function Lobby({ room, game }: Props) {
   );
 
   return (
-    <div className={`lobby${isHost ? '' : ' lobby--guest'}${columns ? ' lobby--columns' : ''}`} data-testid="lobby">
-      <div className="lobby__body" ref={bodyRef}>
+    <div className={`lobby${isHost ? '' : ' lobby--guest'}${columns ? ' lobby--columns' : ''}`} ref={rootRef} data-testid="lobby">
+      <div className="lobby__body">
         {/* The room's header: one bar holding the logo, the code and its buttons on a wider screen; a phone stacks the logo over the code card. */}
         <div className="lobby__top">
           <SiteHeader />
@@ -133,7 +135,15 @@ export function Lobby({ room, game }: Props) {
               <span className="sr-only" data-testid="player-count" data-ready={readyPlayers(room).length} data-players={room.players.length}>
                 {readyLine(room)}
               </span>
-              <PlayerList room={room} meId={playerId} isHost={isHost} mode="lobby" game={game} />
+              <div className="lobby__list" data-capped={list.capped} data-fade={fade || undefined}>
+                <PlayerList room={room} meId={playerId} isHost={isHost} mode="lobby" game={game} />
+                {/* The rows the box hides under its foot; the list itself is read out whole, so the pill is for the eye only. */}
+                {list.below > 0 && (
+                  <span className="lobby__more" aria-hidden="true" data-testid="player-list-more">
+                    +{list.below} more <ChevronIcon size={14} strokeWidth={2.4} />
+                  </span>
+                )}
+              </div>
             </section>
 
             {columns && (
@@ -164,7 +174,7 @@ export function Lobby({ room, game }: Props) {
         </div>
       )}
 
-      <BottomSheet open={leaving} title="Leave room" onClose={() => setLeaving(false)} testId="lobby-leave-sheet" className="sheet--exit">
+      <BottomSheet open={leaving} title="Leave the room?" hideTitle onClose={() => setLeaving(false)} testId="lobby-leave-sheet" className="sheet--exit">
         <LeaveConfirm room={room} meId={playerId} onCancel={() => setLeaving(false)} testId="lobby-leave" />
       </BottomSheet>
 

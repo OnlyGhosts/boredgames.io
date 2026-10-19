@@ -62,7 +62,8 @@ called Scribble), the owner's decisions win. The short version:
   round its own colour as the other), never ink or grey, so it reads on the dark tile (a white
   shape borrows the deep edge of its neighbour; the picked lilac tile cuts both edges deeper), and
   a 24px line icon (`GameMeta.glyph`) on its accent, which the How to play card draws on the plate
-  of a game with no illustration of its own and as Scribble's pencil. The app icon is the lime smile (`node scripts/brand-icons.mjs`
+  of a game with no illustration of its own (Scribble's and Quip Game's heroes are drawn in the
+  tiles' flat style instead). The app icon is the lime smile (`node scripts/brand-icons.mjs`
   renders the opaque apple-touch and maskable PNGs).
 - **Copy.** Short, plain and human. No taglines, no filler, and no em dashes in anything a player
   sees or hears.

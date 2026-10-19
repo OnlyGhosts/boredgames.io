@@ -41,9 +41,8 @@
   --shadow-sm: none;
   --shadow-md: none;
   --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.28);
-  /* The lift under a piece of the How to play hero (a fanned card, the spy's card) and under the pencil over Scribble's canvas. */
+  /* The lift under a piece of the How to play hero (a fanned card, the spy's card); the drawn heroes carry the flat sticker shadow instead. */
   --shadow-piece: 0 2px 6px rgba(0, 0, 0, 0.18);
-  --shadow-pencil: 0 1px 1px rgba(0, 0, 0, 0.3);
 
   --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
 
@@ -133,6 +132,14 @@
   --game-edge-lime-picked: #405311;
   --game-edge-lilac-picked: #3d2f74;
   /*
+   * The deep edge of a game's own accent, for the How to play pictures drawn in the tile pictures'
+   * flat style (RulesHero.tsx: Scribble's canvas, Quip Game's bubbles), the same in both themes: at
+   * least 3:1 on the paper and on the hero's wash in either theme, at least 1.6:1 on the accent.
+   */
+  --game-scribble-edge: #7a6cb4;
+  --game-quipgame-edge: #a57a20;
+
+  /*
    * Each accent as text (the How to play card's key facts) and as a soft wash (its hero): on dark
    * the accent itself or a lighter cut, every text cut AA (4.5:1) on the panel and the raised surface.
    */
@@ -162,7 +169,6 @@
   color-scheme: light;
   --shadow-lg: 0 16px 48px rgba(20, 25, 18, 0.18);
   --shadow-piece: 0 2px 6px rgba(20, 25, 18, 0.18);
-  --shadow-pencil: 0 1px 1px rgba(20, 25, 18, 0.3);
 
   --color-bg: #f5f6ef;
   --color-surface: #ffffff;

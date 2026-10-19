@@ -146,10 +146,10 @@ export function GameTopBar({ meta, room, isPhone, testId, className, status, sta
         )}
         {below}
       </header>
-      <BottomSheet open={leaving} title="Leave room" onClose={closeExit} testId="leave-sheet" className="sheet--exit">
+      <BottomSheet open={leaving} title="Leave the room?" hideTitle onClose={closeExit} testId="leave-sheet" className="sheet--exit">
         <LeaveConfirm room={room} meId={meId} onCancel={closeExit} testId="game-leave" />
       </BottomSheet>
-      <BottomSheet open={exit === 'end' && hostCanEnd} title="End game" onClose={closeExit} testId="end-sheet" className="sheet--exit">
+      <BottomSheet open={exit === 'end' && hostCanEnd} title="End the game for everyone?" hideTitle onClose={closeExit} testId="end-sheet" className="sheet--exit">
         <EndGameConfirm room={room} onCancel={closeExit} testId="end-game" />
       </BottomSheet>
     </>
@@ -195,7 +195,8 @@ export function GameMenuSheet({ open, onClose, children }: { open: boolean; onCl
   // A step whose action went away (the game ended, the host role moved) falls back to the menu.
   const step = confirm === 'end' && !canEndGame(room, isHost) ? null : confirm;
   return (
-    <BottomSheet open={open} title={step === 'end' ? 'End game' : step === 'leave' ? 'Leave room' : 'Options'} onClose={close} testId="menu-sheet">
+    // A confirm step's question names it: the sheet's head keeps only the close button then.
+    <BottomSheet open={open} title={step === 'end' ? 'End the game for everyone?' : step === 'leave' ? 'Leave the room?' : 'Options'} hideTitle={step !== null} onClose={close} testId="menu-sheet">
       <div className="menu-sheet">
         {step === 'end' ? (
           <EndGameConfirm room={room} onCancel={close} testId="end-game" />

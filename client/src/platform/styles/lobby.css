@@ -1,5 +1,7 @@
 /* ---------- The party lobby: room bar, game grid, players, the host's settings; Start under the players, or pinned to a phone's bottom ---------- */
 .lobby {
+  /* The room's column: the bar, the grid and (on a phone) the footer's controls share its edges. */
+  --lobby-column: 1120px;
   min-height: 100dvh;
   display: flex;
   flex-direction: column;
@@ -8,7 +10,7 @@
 /* Everything above a phone's footer, in the page's column; it grows to fill a short page, so the footer sits at the bottom of the screen. */
 .lobby__body {
   flex: 1 0 auto;
-  width: min(calc(1120px + 2 * var(--lobby-gutter, 16px)), 100%);
+  width: min(calc(var(--lobby-column) + 2 * var(--lobby-gutter, 16px)), 100%);
   margin: 0 auto;
   padding: calc(var(--space-3) + env(safe-area-inset-top)) max(var(--lobby-gutter, 16px), env(safe-area-inset-right)) var(--space-4) max(var(--lobby-gutter, 16px), env(safe-area-inset-left));
   display: flex;
@@ -90,23 +92,76 @@
   flex-direction: column;
 }
 
-/* The board's player rows: a roomier list on the panel colour, the status on the right. A big party scrolls inside the list, so the settings stay close. */
+/*
+ * The board's player rows: a roomier list on the panel colour, the status on the right. Every row
+ * shows while the page holds the whole list with Start (or a phone's pinned footer) under it,
+ * scrolling if it must. A bigger party scrolls inside the list: --list-cap (useListRoom) ends the
+ * box on whole rows and a peek of the next, which fades out under a "+N more" pill, so a cut row
+ * always reads as more to scroll; scrolled down, the top fades too.
+ */
+.lobby__list {
+  position: relative;
+}
+
 .lobby__players .player-list {
   background: var(--color-surface);
   border-radius: 12px;
-  max-height: min(60dvh, 560px);
+  max-height: var(--list-cap, none);
   overflow-y: auto;
   overscroll-behavior: contain;
 }
 
-/*
- * With Start and the row under it below the list (a tablet or a desktop, .lobby--columns), the
- * list leaves them room on the screen, so a big party scrolls inside it and Start never drops
- * below the fold: the screen less the rest of the page down to the block's bottom (--list-room,
- * measured by useListRoom), never under three rows.
- */
-.lobby--columns .lobby__players .player-list {
-  max-height: max(calc(3 * 53px), min(calc(100dvh - var(--list-room, 0px)), 560px));
+/* The fades: bands of the list's own surface stuck to each end that has more, beside the scrollbar, never over a whole row. */
+.lobby__players .player-list::before,
+.lobby__players .player-list::after {
+  content: '';
+  position: sticky;
+  z-index: 1;
+  flex: none;
+  display: block;
+  height: 28px;
+  pointer-events: none;
+  opacity: 0;
+}
+
+.lobby__players .player-list::before {
+  top: 0;
+  margin-bottom: -28px;
+  background: linear-gradient(var(--color-surface), transparent);
+}
+
+.lobby__players .player-list::after {
+  bottom: 0;
+  margin-top: -28px;
+  background: linear-gradient(transparent, var(--color-surface) 70%);
+}
+
+.lobby__list[data-fade~='top'] .player-list::before,
+.lobby__list[data-fade~='bottom'] .player-list::after {
+  opacity: 1;
+}
+
+/* "+N more", over the faded peek at the box's foot: a quiet pill that says how many rows wait under it. */
+.lobby__more {
+  position: absolute;
+  z-index: 2;
+  left: 50%;
+  bottom: 5px;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 20px;
+  padding: 0 6px 0 9px;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  pointer-events: none;
 }
 
 .lobby__players .player {
@@ -222,8 +277,9 @@
   box-shadow: 0 16px 0 var(--color-bg);
 }
 
+/* The footer's controls line up with the page's column above them: the whole room's width for the host (a phone on its side shows both columns), the guest's own column (below). */
 .lobby__footer-inner {
-  width: min(560px, 100%);
+  width: min(var(--lobby-column), 100%);
   margin: 0 auto;
 }
 
@@ -566,28 +622,43 @@ button.game-tile:active {
 }
 
 /*
- * A card wide enough for two columns: the hero and the key facts at the left, the sections beside
- * them (starting a little lower, clear of the close button). A tile there has about 132px inside,
- * so the facts' values take the step down that keeps "Stands on 17" (about 123px) on its line.
+ * A card wide enough for two columns: the hero across the top (the close button over its empty
+ * right end), the four key facts in one row under it, then the five sections flowing down two
+ * columns that the browser balances, each section whole in one of them, so neither column ends
+ * far above the other. A fact's tile has at least 122px inside (at 640px), so the values take the
+ * step down that keeps "Stands on 17" (about 117px at this size) on its line.
  */
 @container how-to-play (min-width: 640px) {
-  .how-to-play__popover .rules {
-    display: grid;
-    grid-template-columns: 324px minmax(0, 1fr);
-    column-gap: var(--space-5);
-    align-items: start;
+  .how-to-play__popover .rules-facts {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
   .how-to-play__popover .rules-fact__value {
-    font-size: 1.25rem;
+    font-size: 1.1875rem;
   }
 
-  .how-to-play__popover .rules__name {
-    padding-right: 0;
+  .how-to-play__popover .rules__body {
+    display: block;
+    columns: 2;
+    column-gap: var(--space-5);
   }
 
-  .how-to-play__popover:not(.how-to-play__popover--scrolls) .rules__body {
-    padding-top: 6px;
+  .how-to-play__popover .rules__body > .rules__section {
+    break-inside: avoid;
+    margin-bottom: var(--space-4);
+  }
+
+  .how-to-play__popover .rules__body > .rules__section:last-child {
+    margin-bottom: 0;
+  }
+
+  /* Read at a desktop's distance: the prose a step smaller and the hero a little shallower, so the whole card fits a 720px window. */
+  .how-to-play__popover .rules__text {
+    font-size: 0.875rem;
+  }
+
+  .how-to-play__popover .rules-hero {
+    padding-block: 10px;
   }
 }
 
@@ -643,11 +714,13 @@ button.game-tile:active {
   letter-spacing: -0.025em;
 }
 
+/* Two or three short lines beside the picture, balanced so no line holds a word alone. */
 .rules__summary {
   color: var(--color-text-muted);
   font-weight: 500;
   font-size: 0.9375rem;
   line-height: 1.35;
+  text-wrap: balance;
 }
 
 /* The badge at the illustration's corner: a key number on the lime, edged in the panel's surface so it reads over the art. */
@@ -691,28 +764,24 @@ button.game-tile:active {
   transform: rotate(8deg);
 }
 
-/* Scribble: a doodle on a mini canvas, white in both themes like the real one, the pencil over it. */
-.rules-hero__canvas {
+/*
+ * Scribble's canvas and Quip Game's bubbles (RulesHero.tsx): drawn in the lobby tiles' flat style,
+ * filling the box. Their sticker shadow is the drawing once more, each shape filled in its own edge
+ * colour (--edge on the shape), the details left out.
+ */
+.rules-hero__drawing {
   position: absolute;
-  left: 4px;
-  top: 6px;
-  width: 84px;
-  height: 62px;
-  border-radius: 6px;
-  background: var(--canvas-bg);
-  border: 1px solid var(--color-border-strong);
-  overflow: hidden;
-  /* The doodle's ink: a dark cut of the accent, so it reads on the white canvas in both themes. */
-  color: #5e468c;
-  color: color-mix(in srgb, var(--game-accent) 55%, #000);
+  inset: 0;
+  overflow: visible;
 }
 
-.rules-hero__pencil {
-  position: absolute;
-  left: 60px;
-  top: 30px;
-  color: var(--game-accent);
-  filter: drop-shadow(var(--shadow-pencil));
+.rules-hero__shadow [data-detail] {
+  display: none;
+}
+
+.rules-hero__shadow [stroke] {
+  fill: var(--edge);
+  stroke: var(--edge);
 }
 
 /* The Spy Game: the place card the agents see (a skyline in the accent's text cut) and the spy's "?" card on the accent. */
@@ -749,13 +818,6 @@ button.game-tile:active {
   font-size: 1.75rem;
   line-height: 1;
   box-shadow: var(--shadow-piece);
-}
-
-/* Quip Game: two answers as speech bubbles in the accent; the filled one took the votes. */
-.rules-hero__quips {
-  position: absolute;
-  inset: 0;
-  color: var(--game-accent);
 }
 
 /* A game without an illustration yet: its glyph on the accent plate. */
@@ -1116,6 +1178,17 @@ button.content-mode:not(:disabled):hover {
 
 .lobby .site-header {
   --wordmark-height: 30px;
+}
+
+/*
+ * A desktop guest's column is wide enough for the bar to keep the host's rhythm: the code centred
+ * between the logo and the buttons with clear room on either side (about 90px), not pressed against
+ * them. How to play's card ends at the same column's right edge (POPOVER_MAX_WIDTH, HowToPlay.tsx).
+ */
+@media (min-width: 1024px) {
+  .lobby--guest {
+    --guest-column: 880px;
+  }
 }
 
 /* A tablet's bar is full: a slightly smaller logo and tighter gaps keep the whole line a clear few pixels inside it. */

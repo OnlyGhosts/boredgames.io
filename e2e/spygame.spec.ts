@@ -1,5 +1,5 @@
 import { expect, test, type Browser, type BrowserContext, type Locator, type Page } from '@playwright/test';
-import { closeResults, createParty, enterNameIfAsked, gameBarFits, readyAll } from './party';
+import { closeResults, createParty, enterNameIfAsked, expectRulesReadCleanly, gameBarFits, readyAll } from './party';
 
 /**
  * A whole two-round Spy Game between a desktop host and two phones (390x844, touch): roles, the
@@ -12,6 +12,8 @@ test.describe.configure({ mode: 'serial' });
 const ROOM_CODE_RE = /^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{4}$/;
 const PORTRAIT = { width: 390, height: 844 };
 const DESKTOP = { width: 1280, height: 800 };
+/** The narrower phones How to play is read at too. */
+const NARROW = [{ width: 360, height: 740 }, { width: 320, height: 568 }];
 const MIN_TARGET = 44;
 
 interface Player {
@@ -169,6 +171,15 @@ test('the host creates a Spy Game room, two phones join by code and the host set
   // The rounds are the only setting: the round clock and the vote window are fixed.
   for (const id of ['roundMinutes', 'voteSeconds']) await expect(host.page.getByTestId(`settings-${id}`)).toHaveCount(0);
   await expect(pia.page.getByTestId('settings-panel')).toHaveCount(0);
+
+  // How to play reads cleanly on a phone down to the narrowest and on the host's desktop ("1" / "to each agent" once split
+  // at 360).
+  for (const size of [PORTRAIT, ...NARROW]) {
+    await pia.page.setViewportSize(size);
+    await expectRulesReadCleanly(pia.page, 'The Spy Game', `The Spy Game at ${size.width}`);
+  }
+  await pia.page.setViewportSize(PORTRAIT);
+  await expectRulesReadCleanly(host.page, 'The Spy Game', 'The Spy Game on the host’s desktop');
 
   await expect(host.page.getByTestId('start-game')).toBeDisabled();
   await readyAll([pia.page, quinn.page]);
