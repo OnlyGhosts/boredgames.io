@@ -59,6 +59,9 @@ export function useDrawing({ session, canvasRef, rendererRef, enabled, settings 
 
     const toLogical = (e: { clientX: number; clientY: number }): Point => {
       const rect = canvas.getBoundingClientRect();
+      // Through the renderer's view, so the line lands exactly under the pointer.
+      const renderer = rendererRef.current;
+      if (renderer) return renderer.toLogical(e.clientX - rect.left, e.clientY - rect.top);
       return {
         x: ((e.clientX - rect.left) * CANVAS_WIDTH) / rect.width,
         y: ((e.clientY - rect.top) * CANVAS_HEIGHT) / rect.height,

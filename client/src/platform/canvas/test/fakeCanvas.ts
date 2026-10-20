@@ -33,7 +33,9 @@ export class FakeContext {
 
   save(): void {}
   restore(): void {}
-  setTransform(): void {}
+  setTransform(a: number, b: number, c: number, d: number, e: number, f: number): void {
+    this.calls.push({ op: 'setTransform', args: [a, b, c, d, e, f] });
+  }
   beginPath(): void {
     this.pendingRects = [];
     this.calls.push({ op: 'beginPath', args: [] });

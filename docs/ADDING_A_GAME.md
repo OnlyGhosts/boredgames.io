@@ -2074,6 +2074,11 @@ for the lifetime of the page, hands it the stream from its module (`onServerMess
 canvas.handleServerMessage`, `onWelcome: canvas.onWelcome`, `onLeave: canvas.onLeave`, and
 `canvas.store.getState().clear()` at turn boundaries), and renders `<GameCanvas session={canvas}
 canDraw settings footer={<Toolbar ... onUndo={canvas.undo} onRedo={canvas.redo} onClear={canvas.clear} />} />`.
+The drawer gets the whole 4:3 canvas, as large as the stage allows, and it never moves under the
+pen. Everyone watching gets paper filling the whole stage with the drawing fitted to it (`fit.ts`:
+the box of what is drawn so far, scaled up to `MAX_FIT_ZOOM` times the whole canvas and never below
+it, easing between fits); give `avoid` a selector for anything laid over the canvas (Scribble's
+caption and its phone clock) and the fitted drawing keeps clear of it.
 Redo is the client's: the drawer's own undos go on the store's `redoable` stack and `redo()`
 draws the newest one again as a fresh stroke through the ordinary draw path (a new id from
 `nextStrokeId()`, so the server and late joiners take it like any other stroke); a new stroke,

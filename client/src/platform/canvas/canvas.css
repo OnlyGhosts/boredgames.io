@@ -1,5 +1,6 @@
 /*
- * The shared drawing canvas: the stage that fits the 4:3 canvas, and the drawer's toolbar. Games
+ * The shared drawing canvas: the stage that fits the canvas (the drawer's 4:3, a watcher's paper
+ * filling it; GameCanvas sizes the frame), and the drawer's toolbar. Games
  * import this through platform/canvas (GameCanvas); a game's own stylesheet loads after it and
  * may override the layout (Scribble's phone columns do).
  */

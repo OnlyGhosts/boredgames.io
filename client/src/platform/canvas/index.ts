@@ -20,8 +20,11 @@
  * 3. Render `<GameCanvas session={canvas} canDraw settings footer={<Toolbar ... onUndo={canvas.undo} onRedo={canvas.redo} onClear={canvas.clear} />} />`
  *    in the screen; `canvas.store((s) => s.canvas.length > 0)` tells whether there is anything to undo.
  *
- * Coordinates are logical canvas pixels (CANVAS_WIDTH x CANVAS_HEIGHT); the canvas scales to fit
- * its stage at 4:3 and the stylesheet (canvas.css) brings the toolbar's 44px phone targets.
+ * Coordinates are logical canvas pixels (CANVAS_WIDTH x CANVAS_HEIGHT). The drawer's canvas is the
+ * whole 4:3 canvas, as large as its stage allows; everyone else's paper fills the stage and the
+ * drawing so far is fitted to it (fit.ts: zoomed in up to MAX_FIT_ZOOM, easing between fits, clear
+ * of whatever the `avoid` selector matches over it). The stylesheet (canvas.css) brings the
+ * toolbar's 44px phone targets.
  */
 export { GameCanvas } from './GameCanvas';
 export { Toolbar } from './Toolbar';
@@ -33,3 +36,4 @@ export { useDrawing, DEFAULT_DRAWING_SETTINGS, type DrawingSettings, type DrawTo
 export { CanvasRenderer, clampDpr, drawStroke, ERASER_COLOR, FILL_TOLERANCE, type CanvasSource, type RendererOptions } from './renderer';
 export { floodFillImage, hexToRgb, paintSpans, type FillSpans, type PixelImage } from './floodFill';
 export { applyOpsToActions, maxStrokeId, opsForAction } from './history';
+export { drawingBounds, easeView, fitView, MAX_FIT_ZOOM, wholeCanvasView, type Box, type View } from './fit';

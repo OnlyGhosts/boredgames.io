@@ -119,9 +119,13 @@ test('the drawer reloads mid-turn: still the drawer, and new strokes still reach
   await expect(drawer.page.getByTestId('word-plain')).toContainText(word);
   await expect.poll(() => nonWhitePixels(drawer.page), { timeout: 5_000 }).toBeGreaterThan(0);
 
-  const before = await nonWhitePixels(guesser.page);
+  // The guesser's view fits the drawing to their paper, so a stroke that widens it can leave less
+  // ink on screen, not more: the picture changing is what shows the stroke arrived.
+  const picture = () => guesser.page.getByTestId('canvas').evaluate((el) => (el as HTMLCanvasElement).toDataURL());
+  const before = await picture();
   await drawStroke(drawer.page, 0.6, 0.9);
-  await expect.poll(() => nonWhitePixels(guesser.page), { timeout: 2_000 }).toBeGreaterThan(before);
+  await expect.poll(picture, { timeout: 2_000 }).not.toBe(before);
+  await expect.poll(() => nonWhitePixels(guesser.page), { timeout: 2_000 }).toBeGreaterThan(0);
 
   await sendGuess(guesser.page, word);
   await expect(drawer.page.getByTestId('overlay-turn-end')).toBeVisible();

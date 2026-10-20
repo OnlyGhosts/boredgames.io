@@ -454,7 +454,8 @@ const TABLETS = [
 ];
 
 /**
- * At each tablet size the canvas has the room: at least half the screen's width, its 4:3 kept, and
+ * At each tablet size the canvas has the room: at least half the screen's width, the drawer's 4:3
+ * kept and a guesser's paper filling the whole stage, and
  * the page still never scrolls, with the drawer's toolbar (44px targets), the players and the
  * guesses all on the screen, none of them over the canvas. The players panel lists the room's
  * `count` players: at least six of them (all of them in a smaller room) as whole rows, the first
@@ -473,7 +474,9 @@ async function canvasHasTheRoom(p: Player, drawing: boolean, count: number): Pro
           const canvas = box('.canvas-frame');
           if (!canvas) return ['no canvas'];
           if (canvas.width < window.innerWidth / 2) out.push(`the canvas is ${Math.round(canvas.width)}x${Math.round(canvas.height)}`);
-          if (Math.abs(canvas.width / canvas.height - 4 / 3) > 0.02) out.push('the canvas is not 4:3');
+          if (drawer && Math.abs(canvas.width / canvas.height - 4 / 3) > 0.02) out.push('the canvas is not 4:3');
+          const stage = box('.canvas-stage');
+          if (!drawer && (!stage || stage.width - canvas.width > 1.5 || stage.height - canvas.height > 1.5)) out.push(`the paper (${Math.round(canvas.width)}x${Math.round(canvas.height)}) does not fill its stage`);
           if (document.documentElement.scrollHeight > window.innerHeight + 1 || document.documentElement.scrollWidth > window.innerWidth + 1) out.push('the page scrolls');
           const parts: [string, string][] = [['.game__players', 'the players'], ['.game__guesses', 'the guesses'], ['[data-testid="guess-input"], .guess-idle', 'the guess bar']];
           if (drawer) parts.push(['.toolbar', 'the toolbar']);

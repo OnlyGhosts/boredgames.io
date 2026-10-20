@@ -179,6 +179,7 @@ export function ScribbleScreen({ room, meId, isHost }: GameScreenProps<ScribbleV
           session={scribbleCanvas}
           canDraw={canDraw}
           settings={tools}
+          avoid=".canvas-caption, .game__top"
           footer={canDraw ? <Toolbar settings={tools} onChange={setTools} canUndo={canUndo} onUndo={undoStroke} canRedo={canRedo} onRedo={redoStroke} onClear={clearCanvas} /> : undefined}
         >
           {phase.kind === 'choosing' && <ChoosingOverlay phase={phase} room={room} isDrawer={isDrawer} paused={holding} />}

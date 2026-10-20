@@ -1,10 +1,13 @@
 import { CANVAS_HEIGHT, CANVAS_WIDTH, type CanvasAction, type DrawOp, type Tool } from '@shared/platform/canvas';
+import { spansBox, type Box, type View } from './fit';
 import { FILL_TOLERANCE, floodFillImage, paintSpans, type FillSpans } from './floodFill';
 
 export const ERASER_COLOR = '#ffffff';
 export { FILL_TOLERANCE };
-/** Upper bound keeps the backing store small on 3x phones (1600x1200 at most). */
+/** Upper bound keeps the backing store small on 3x phones. */
 const MAX_DPR = 2;
+/** And on a big screen the display bitmap stays under about 16 MB, whatever the surface's size. */
+const MAX_BACKING_PIXELS = 4_000_000;
 
 type FillAction = Extract<CanvasAction, { kind: 'fill' }>;
 
@@ -99,6 +102,10 @@ export class CanvasRenderer {
   /** Spans each fill action painted. A replay repaints them instead of flooding the bitmap again. */
   private readonly fillCache = new WeakMap<FillAction, FillSpans>();
   private dpr = 0;
+  /** The surface's size in CSS pixels, and where the logical picture sits on it. */
+  private width = CANVAS_WIDTH;
+  private height = CANVAS_HEIGHT;
+  private view: View = { scale: 1, x: 0, y: 0 };
   private readonly live = new Map<number, LiveStroke>();
 
   constructor(
@@ -117,16 +124,53 @@ export class CanvasRenderer {
     this.resize(opts.dpr ?? window.devicePixelRatio);
   }
 
-  /** (Re)allocates the backing store for a device pixel ratio. Returns true when the bitmap was reset. */
-  resize(devicePixelRatio: number): boolean {
-    const dpr = clampDpr(devicePixelRatio);
-    if (dpr === this.dpr) return false;
+  /**
+   * (Re)allocates the display bitmap for a surface of `width` x `height` CSS pixels (the logical
+   * size until the host measures one) at a device pixel ratio. Returns true when the bitmap was
+   * reset, after which the caller sets the view and replays.
+   */
+  resize(devicePixelRatio: number, width = this.width, height = this.height): boolean {
+    const w = Math.max(1, width);
+    const h = Math.max(1, height);
+    const dpr = Math.min(clampDpr(devicePixelRatio), Math.sqrt(MAX_BACKING_PIXELS / (w * h)));
+    const bw = Math.max(1, Math.round(w * dpr));
+    const bh = Math.max(1, Math.round(h * dpr));
+    if (dpr === this.dpr && w === this.width && h === this.height && bw === this.canvas.width && bh === this.canvas.height) return false;
     this.dpr = dpr;
-    this.canvas.width = Math.round(CANVAS_WIDTH * dpr);
-    this.canvas.height = Math.round(CANVAS_HEIGHT * dpr);
-    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    this.width = w;
+    this.height = h;
+    this.canvas.width = bw;
+    this.canvas.height = bh;
+    this.applyTransform();
     this.clear();
     return true;
+  }
+
+  /** Places the logical picture on the surface. Nothing is redrawn: `redraw` (or a replay) follows. */
+  setView(view: View): void {
+    this.view = view;
+    this.applyTransform();
+  }
+
+  getView(): View {
+    return this.view;
+  }
+
+  /** The logical point under a surface point (CSS pixels from the surface's top left). */
+  toLogical(x: number, y: number): { x: number; y: number } {
+    const { scale, x: ox, y: oy } = this.view;
+    return { x: (x - ox) / scale, y: (y - oy) / scale };
+  }
+
+  /** The logical box a fill painted, null when it painted nothing, undefined when it is not known here. */
+  fillBox(action: FillAction): Box | null | undefined {
+    const spans = this.fillCache.get(action);
+    return spans ? spansBox(spans) : undefined;
+  }
+
+  private applyTransform(): void {
+    const k = this.dpr * this.view.scale;
+    this.ctx.setTransform(k, 0, 0, k, this.dpr * this.view.x, this.dpr * this.view.y);
   }
 
   clear(): void {
@@ -138,6 +182,28 @@ export class CanvasRenderer {
       c.fillRect(0, 0, c.canvas.width, c.canvas.height);
       c.restore();
     }
+  }
+
+  /**
+   * Redraws the display alone at the current view (the fit easing calls it every frame). Fills
+   * repaint their remembered spans; a fill with none yet takes the full replay instead.
+   */
+  redraw(actions: readonly CanvasAction[]): void {
+    if (actions.some((a) => a.kind === 'fill' && !this.fillCache.has(a))) {
+      this.replayAll(actions);
+      return;
+    }
+    const c = this.ctx;
+    c.save();
+    c.setTransform(1, 0, 0, 1, 0, 0);
+    c.fillStyle = '#ffffff';
+    c.fillRect(0, 0, c.canvas.width, c.canvas.height);
+    c.restore();
+    const lastIndex = actions.length - 1;
+    actions.forEach((action, i) => {
+      if (action.kind === 'fill') paintSpans(c, this.fillCache.get(action) ?? [], action.color);
+      else drawStroke(c, action, action.points, i !== lastIndex || action.done === true);
+    });
   }
 
   /** Redraws everything from a white background. Used for undo, clear, canvas resync and rejoin. */
