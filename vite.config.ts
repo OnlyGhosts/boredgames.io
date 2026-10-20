@@ -1,12 +1,13 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { fileURLToPath } from 'node:url';
+import { buildStamp } from './scripts/buildStamp';
 
 const serverPort = process.env.PORT ?? '3001';
 
 export default defineConfig({
   root: 'client',
-  plugins: [react()],
+  plugins: [react(), buildStamp()],
   resolve: {
     alias: {
       '@shared': fileURLToPath(new URL('./shared', import.meta.url)),

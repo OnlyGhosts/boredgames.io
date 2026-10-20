@@ -9,6 +9,7 @@ import { setSoundEnabled, unlockAudio, type AnySoundBank } from './platform/lib/
 import { startConnectionNotice, useConnectionNotice } from './platform/lib/connectionNotice';
 import { DEFAULT_THEME } from './platform/lib/storage';
 import { roomTitle } from './platform/lib/tabTitle';
+import { useAutoUpdate } from './platform/lib/useAutoUpdate';
 import { useLive } from './platform/lib/useLive';
 import { useViewport } from './platform/lib/useViewport';
 import { wakeLock } from './platform/lib/wakeLock';
@@ -140,6 +141,7 @@ export function App() {
   useViewport();
   useUrlSync();
   useSound();
+  useAutoUpdate();
 
   const room = usePlatformStore((s) => s.room);
   useWakeLock(room !== null);

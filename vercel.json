@@ -10,6 +10,11 @@
       "excludeFiles": "dist/**"
     }
   },
+  "headers": [
+    { "source": "/version.json", "headers": [{ "key": "Cache-Control", "value": "no-store" }] },
+    { "source": "/index.html", "headers": [{ "key": "Cache-Control", "value": "no-cache" }] },
+    { "source": "/((?!api/|ws$)[^.]*)", "headers": [{ "key": "Cache-Control", "value": "no-cache" }] }
+  ],
   "rewrites": [
     { "source": "/ws", "destination": "/api/server" },
     { "source": "/api/(.*)", "destination": "/api/server" },

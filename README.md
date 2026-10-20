@@ -236,6 +236,11 @@ Good to know:
 - Custom domain: once `boredgames.io` is registered, add it under **Settings → Domains** in the
   Vercel project and create the DNS records Vercel shows at the registrar. Share links use whatever
   origin the site is served from, so nothing in the code changes.
+- Open tabs pick up a new deployment by themselves. Every build writes its commit SHA to
+  `/version.json`; a tab that finds a different one reloads at once between games and waits for a
+  running game to end (or the tab to go to the background), once per version. `vercel.json` serves
+  `version.json` with `no-store` and the page with `no-cache`; the hashed files under `/assets/`
+  keep Vercel's default caching.
 - `VITE_GAME_SERVER` is the only link between the two hosts. To move the server, run the Dockerfile
   anywhere that allows WebSocket upgrades and point the variable at it.
 - Adding a game needs no deploy setup: both the Fly build and `api/server.ts` bundle whatever the

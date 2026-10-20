@@ -118,6 +118,19 @@ export function clearSession(): void {
   writeRaw('session', SESSION_STORAGE_KEY, null);
 }
 
+/** sessionStorage: the newer build this tab last reloaded for (lib/update.ts reloads for a build once). */
+const RELOADED_FOR_KEY = 'boredgames.reloadedFor';
+
+export function loadReloadedFor(): string | null {
+  return readRaw('session', RELOADED_FOR_KEY);
+}
+
+/** Whether it stuck: a tab that cannot remember a reload must not make one, or it could loop. */
+export function saveReloadedFor(id: string): boolean {
+  writeRaw('session', RELOADED_FOR_KEY, id);
+  return readRaw('session', RELOADED_FOR_KEY) === id;
+}
+
 /**
  * A seat remembered in localStorage, keyed by room code. sessionStorage only survives reloads;
  * when a phone discards the tab (iOS does so freely in the background) and the player opens the

@@ -240,6 +240,20 @@ and goes the moment the link is back. There is no header pill, banner or connect
 it, and while it shows the waiting overlay steps aside (its list of who is missing is stale then).
 A game never draws its own.
 
+**New versions.** A tab left open picks up a new version of the site by itself
+([`lib/update.ts`](../client/src/platform/lib/update.ts), wired in by
+[`lib/useAutoUpdate.ts`](../client/src/platform/lib/useAutoUpdate.ts)). `vite build` stamps a build
+id (Vercel's commit SHA, else `git rev-parse HEAD`, else the build time) into the bundle and the same
+id into `/version.json` ([`scripts/buildStamp.ts`](../scripts/buildStamp.ts)); the dev server has no
+id and never checks. The tab fetches `/version.json` uncached when it comes back into view, when the
+connection comes back after a drop, and every 5 minutes while visible; a failed fetch is ignored and
+only a different id counts. It reloads at once on the front door and in a room's lobby or results,
+waits while a text field has focus (until it is left), and in a running game waits until the room is
+back in its lobby or the tab goes to the background. It reloads for a given id once per tab
+(`sessionStorage`), so a CDN still serving the old page cannot make it loop. Nothing shows on
+screen; the last decision is on `<html data-update>` for [`e2e/update.spec.ts`](../e2e/update.spec.ts).
+A game needs no part in it: its state comes back after the reload like after any other.
+
 **Design system and mobile rules.** Tokens, cards, buttons, inputs, pills, sheets, toasts, the
 timer, the player list, the code input, avatars, light/dark themes, the phone layout
 helpers. Section 8 lists them.

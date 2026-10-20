@@ -74,7 +74,18 @@ export function createApp(options: AppOptions): App {
   if (options.serveStatic ?? true) {
     const clientDir = options.clientDir ?? path.resolve(process.cwd(), 'dist/client');
     if (existsSync(path.join(clientDir, 'index.html'))) {
-      app.use(express.static(clientDir, { index: 'index.html', maxAge: '1h' }));
+      // index.html is checked with the server every time and version.json never stored, so a tab
+      // reloading for a new version (client lib/update.ts) gets it; hashed assets keep the hour.
+      app.use(
+        express.static(clientDir, {
+          index: 'index.html',
+          maxAge: '1h',
+          setHeaders: (res, file) => {
+            if (file.endsWith('index.html')) res.setHeader('Cache-Control', 'no-cache');
+            else if (file.endsWith('version.json')) res.setHeader('Cache-Control', 'no-store');
+          },
+        }),
+      );
       // SPA fallback so share links such as https://host/scribble/XK4P load the app.
       app.use((req: Request, res: Response, next: NextFunction) => {
         if (req.method !== 'GET' && req.method !== 'HEAD') return next();
