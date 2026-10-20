@@ -526,6 +526,16 @@ test('a tablet gives the canvas the room, upright and on its side, for the drawe
   await expect.poll(findDrawer, { timeout: 10_000 }).not.toBeNull();
   const drawer = await findDrawer();
   if (!drawer) throw new Error('no drawer');
+  // The word picker shows all three words, whole, on an upright tablet (it once showed none at 768x1024).
+  const own = drawer.page.viewportSize();
+  await drawer.page.setViewportSize({ width: 768, height: 1024 });
+  const choices = drawer.page.getByTestId('word-choice');
+  await expect(choices).toHaveCount(3);
+  for (const choice of await choices.all()) {
+    await expect(choice).toBeInViewport({ ratio: 1 });
+    await expect(choice).toHaveText(/\p{L}/u);
+  }
+  if (own) await drawer.page.setViewportSize(own);
   await drawer.page.getByTestId('word-choice').first().click();
   const guesser = players.find((p) => p !== drawer);
   if (!guesser) throw new Error('unreachable');

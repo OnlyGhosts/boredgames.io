@@ -16,8 +16,6 @@ interface Props {
   room: BlackjackRoomState;
   view: BlackjackView;
   ids: string[];
-  /** Me: the sheet would title my own hands "Your hands" (nothing opens them there now: my row of hands scrolls on the stage). */
-  meId: string;
   /** Whose hands are on my stage: that seat leaves its cards to the stage. */
   staged: string | null;
   table: TableModel | null;
@@ -152,12 +150,13 @@ function SeatDetail({ room, view, id, table, timeline, now, leaving, chips }: { 
  * the Playing tag; a settled seat its outcome's colour. Tapping a tile opens its hands. The seat
  * whose hands are on my stage (I am not dealt in) leaves its cards to the stage.
  */
-export function Seats({ room, view, ids, meId, staged, table, timeline, now, leaving, wide, chipsOf }: Props) {
+export function Seats({ room, view, ids, staged, table, timeline, now, leaving, wide, chipsOf }: Props) {
   const turnId = view.phase === 'acting' ? view.turn?.playerId : undefined;
   const open = useBlackjack((s) => s.seat);
   const openSeat = useBlackjackStore.getState().openSeat;
   const dealerPlaying = Boolean(table?.settled) && !outcomesShown(timeline, now);
-  const openPlayer = open !== null && (ids.includes(open) || open === meId) ? playerOf(room, open) : undefined;
+  // Another player's seat only: my own hands are my row on the stage, which scrolls through them all.
+  const openPlayer = open !== null && ids.includes(open) ? playerOf(room, open) : undefined;
   return (
     <>
       {ids.length > 0 && (
@@ -204,7 +203,7 @@ export function Seats({ room, view, ids, meId, staged, table, timeline, now, lea
           }}
         </PlayersGrid>
       )}
-      <SeatSheet title={openPlayer ? (openPlayer.id === meId ? 'Your hands' : openPlayer.name) : null} onClose={() => openSeat(null)}>
+      <SeatSheet title={openPlayer ? openPlayer.name : null} onClose={() => openSeat(null)}>
         {openPlayer && <SeatDetail room={room} view={view} id={openPlayer.id} table={table} timeline={timeline} now={now} leaving={leaving} chips={chipsOf(openPlayer.id)} />}
       </SeatSheet>
     </>

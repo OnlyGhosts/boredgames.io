@@ -1,9 +1,9 @@
 /**
- * Cheeky tier: rude but harmless adult words and short phrases (pants, bums, booze, snogging, body
- * horrors, embarrassment), all drawable in one turn. Never a word from the language list: an Unhinged
- * room draws from this tier and ./unhinged.ts alone, so a clean word here would dilute it. Same hard
- * lines as every tier: no slurs, nothing aimed at a group, nothing sexual involving anyone under 18.
- * Pooled (and deduplicated) by ./index.ts.
+ * Cheeky tier: rude but harmless adult words, one word or a two-word name (pants, bums, booze,
+ * snogging, body horrors, embarrassment), all drawable in one turn. Never a word from the language
+ * list: an Unhinged room draws from this tier and ./unhinged.ts alone, so a clean word here would
+ * dilute it. Same hard lines as every tier: no slurs, nothing aimed at a group, nothing sexual
+ * involving anyone under 18. Pooled (and deduplicated) by ./index.ts.
  */
 export const CHEEKY_WORDS: string[] = [
   'fart', 'hickey', 'beer belly', 'bikini wax', 'bra', 'thong', 'bum', 'butt crack', "plumber’s crack",

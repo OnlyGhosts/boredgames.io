@@ -26,7 +26,8 @@ export interface GameMeta {
   maxPlayers: number | null;
   /**
    * The game's 24px line glyph (branding/pocket-party/assets/icons): SVG path data for a 24x24
-   * viewBox, drawn with a 1.8px round stroke in currentColor on the lobby tile and the game's header.
+   * viewBox, drawn with a round stroke in currentColor (GameGlyph). Today only the How to play card
+   * shows it, on the game's accent plate, for a game with no illustration of its own.
    */
   glyph: string;
   /** Accent colour (#rrggbb), the same as `--game-<id>` in tokens.css: icon plates and decorations, always with ink on top. */

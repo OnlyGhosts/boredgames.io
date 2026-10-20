@@ -63,8 +63,8 @@ called Scribble), the owner's decisions win. The short version:
   shape borrows the deep edge of its neighbour; the picked lilac tile cuts both edges deeper and
   pales the lilac fill), no shadow, on a half-unit grid so it stays clean at 69 to 96px on every
   screen (`e2e/art.spec.ts` scans the real tiles for hairlines and slivers), and
-  a 24px line icon (`GameMeta.glyph`) on its accent, which the How to play card draws on the plate
-  of a game with no illustration of its own (Scribble's and Quip Game's heroes are drawn in the
+  a 24px line icon (`GameMeta.glyph`), which the How to play card draws on the game's accent plate
+  when the game has no illustration of its own (Scribble's and Quip Game's heroes are drawn in the
   tiles' flat style instead). The app icon is the lime smile (`node scripts/brand-icons.mjs`
   renders the opaque apple-touch and maskable PNGs).
 - **Copy.** Short, plain and human. No taglines, no filler, and no em dashes in anything a player

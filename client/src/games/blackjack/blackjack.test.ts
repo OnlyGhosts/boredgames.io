@@ -1329,14 +1329,14 @@ describe('many hands', () => {
     expect(html).not.toContain('bj-chip');
   });
 
-  it('lists every one of my hands in the seat sheet, should it open on them', () => {
+  it('never opens the seat sheet on my own hands: they are my row on the stage', () => {
     const hands = Array.from({ length: 6 }, (_, i) => hand([c('8'), c('9', 'H')], { status: i === 0 ? 'acting' : 'waiting', fromSplit: true, bet: 10 }));
     const v = acting({ players: { ...acting().players, host: { chips: 800, bet: 10, hands, inRound: true, sittingOut: false, bustedOut: false } } });
     useBlackjackStore.getState().openSeat('host');
     const html = render(bjRoom(v), 'host');
-    // My own hands open in the sheet, under "Your hands".
-    expect(html).toContain('Your hands');
-    expect(tagsWith(html, 'detail-hand')).toHaveLength(6);
+    // Asked for my own seat, the sheet stays shut; my six hands are my row on the stage.
+    expect(tagsWith(html, 'detail-hand')).toHaveLength(0);
+    expect(tagsWith(html, 'my-hand')).toHaveLength(6);
   });
 });
 

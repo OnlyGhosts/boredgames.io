@@ -89,7 +89,7 @@ export function Table({ room, view, meId, truth, frame, now, isPhone, focus, lin
         }
         note={<BjTurnLine room={room} view={view} meId={meId} focus={focus} frame={frame} extra={line} />}
       />
-      <Seats room={room} view={view} ids={others} meId={meId} staged={staged} table={table} timeline={timeline} now={now} leaving={leaving} wide={!isPhone} chipsOf={chipsOf} />
+      <Seats room={room} view={view} ids={others} staged={staged} table={table} timeline={timeline} now={now} leaving={leaving} wide={!isPhone} chipsOf={chipsOf} />
       <Stage room={room} view={view} meId={meId} owner={staged} focus={focus} frame={frame} now={now} />
     </section>
   );
