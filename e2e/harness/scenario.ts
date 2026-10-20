@@ -29,6 +29,11 @@ export interface Scenario {
   active: number;
   /** Hands the player on turn holds on another player's turn. */
   otherHands: number;
+  /** On another player's turn: which of the others it is (0 the first), and the hand of theirs in play. */
+  turn: number;
+  otherActive: number;
+  /** One of the others (by place, 0 the first) whose hand is a bust (10, 6, K) once they have played; -1 for none. */
+  bustOther: number;
   /** Cards in each of my hands. */
   cards: number;
   /** The beat between two snapshots of a phase that moves; 0 waits for the test to call `window.harnessNext()`. */
@@ -81,6 +86,9 @@ export function parseScenario(params: URLSearchParams): Scenario {
     hands,
     active: Math.min(hands - 1, Math.max(0, int(params, 'active', 0))),
     otherHands: Math.max(1, int(params, 'otherHands', 1)),
+    turn: Math.max(0, int(params, 'turn', 0)),
+    otherActive: Math.max(0, Math.min(int(params, 'otherHands', 1) - 1, int(params, 'otherActive', 0))),
+    bustOther: int(params, 'bustOther', -1),
     cards: Math.max(1, int(params, 'cards', 2)),
     stepMs: int(params, 'stepMs', 400),
     myBet: Math.max(0, int(params, 'myBet', 0)),
@@ -182,7 +190,9 @@ function seatedRooms(s: Scenario): BlackjackRoomState[] {
   const myCards = (status: (i: number) => HandStatus, count = s.hands) =>
     Array.from({ length: count }, (_, i) => hand(special && i === s.active ? special : cardsFor(i, i === s.active || s.allCards ? s.cards : 2), status(i), s.hands > 1, s.stake, s.doubled));
   const otherHands = (id: string, status: HandStatus, count = 1) =>
-    Array.from({ length: count }, (_, i) => hand(cardsFor(i + others.indexOf(id) + 3, 2), status, count > 1, s.bet));
+    status === 'stood' && others.indexOf(id) === s.bustOther
+      ? [hand(BUST, 'bust', false, s.bet)]
+      : Array.from({ length: count }, (_, i) => hand(cardsFor(i + others.indexOf(id) + 3, 2), status, count > 1, s.bet));
   const seat = (hands: HandView[], bet: number, extra: Partial<BlackjackPlayerView> = {}): BlackjackPlayerView => ({ chips: s.chips, bet, hands, inRound: true, sittingOut: false, bustedOut: false, ...extra });
   const base: BlackjackView = {
     phase: 'betting',
@@ -253,7 +263,7 @@ function seatedRooms(s: Scenario): BlackjackRoomState[] {
     case 'deal':
       return [room(betting()), room(acting(firstOther, 0))];
     case 'other':
-      return [room(acting(firstOther, 0))];
+      return [room(acting(others[s.turn] ?? firstOther, s.otherActive))];
     case 'mine':
       return [room(last === ME ? acting(ME, s.active) : acting(last, 0))];
     case 'dealer':

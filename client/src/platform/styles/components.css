@@ -1344,26 +1344,35 @@
 /*
  * A box that scrolls sideways (.scroll-fade--x, useScrollFade's axis x: Blackjack's row of hands)
  * fades its left and right ends. It shows no scrollbar, so it fades with a mask: its content goes
- * to the surface behind it over the last 28px (a band would be one more item in its row).
+ * to the surface behind it over the last 28px (a band would be one more item in its row), or
+ * --fade-x where the row is small (a seat's split hands on a narrow phone tile: the next hand's
+ * edge).
  */
+/* A length, so a row reads its fade in pixels (the tests too) however it was worked out. */
+@property --fade-x {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 28px;
+}
+
 .scroll-fade--x::before,
 .scroll-fade--x::after {
   content: none;
 }
 
 .scroll-fade--x[data-fade='left'] {
-  -webkit-mask-image: linear-gradient(to right, transparent, #000 28px);
-  mask-image: linear-gradient(to right, transparent, #000 28px);
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 var(--fade-x, 28px));
+  mask-image: linear-gradient(to right, transparent, #000 var(--fade-x, 28px));
 }
 
 .scroll-fade--x[data-fade='right'] {
-  -webkit-mask-image: linear-gradient(to left, transparent, #000 28px);
-  mask-image: linear-gradient(to left, transparent, #000 28px);
+  -webkit-mask-image: linear-gradient(to left, transparent, #000 var(--fade-x, 28px));
+  mask-image: linear-gradient(to left, transparent, #000 var(--fade-x, 28px));
 }
 
 .scroll-fade--x[data-fade='left right'] {
-  -webkit-mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent);
-  mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent);
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 var(--fade-x, 28px), #000 calc(100% - var(--fade-x, 28px)), transparent);
+  mask-image: linear-gradient(to right, transparent, #000 var(--fade-x, 28px), #000 calc(100% - var(--fade-x, 28px)), transparent);
 }
 
 /* ---------- Bottom sheet (phones): 20px top corners, max 90dvh, scrolls its own content ---------- */

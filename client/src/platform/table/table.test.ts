@@ -466,7 +466,23 @@ describe('the components', () => {
     expect(html(createElement(PlayerTile, { ...props, tier: 'dense' }))).toContain('tbl-tile--dense');
   });
 
-  it('a narrow full tile (three on a phone, six across a desktop) gives the name, the stack, the bet with the status and the cards a row each, so nothing is drawn over anything', () => {
+  it('a narrow full tile on a phone, dealt in: the words on the left under the name, the cards on the right half as big again, the total on the last card', () => {
+    const css = readFileSync(join(import.meta.dirname, '../styles/table.css'), 'utf8');
+    const phone = css.slice(css.indexOf('@container tile (max-width: 199px) and (min-height: 80px) {'));
+    const block = phone.slice(0, phone.indexOf('\n}\n'));
+    expect(block).toMatch(/\.tbl-grid:not\(\.tbl-grid--arc\) \.tbl-tile--full \{[^}]*grid-template-columns: var\(--face\) fit-content\(30px\) minmax\(0, 1fr\);[^}]*grid-template-areas: 'face name name' 'face chips chips' '\. \. cards' 'bet bet cards' 'line line cards' '\. \. cards';/);
+    // As tall as the room under the stack (34.6px on a 96px tile, 22px before), as wide as the room the words leave (the cards' own box), a split row keeping its peek.
+    expect(block).toMatch(/--tbl-w: min\(calc\(\(100cqh - 40px\) \/ 1\.62\), calc\(100cqw \/ var\(--tile-k\)\), max\(22px, calc\(\(100cqw - 2 \* var\(--tile-peek\)\) \/ var\(--tile-k\)\)\)\);\s*container-type: inline-size;/);
+    expect((96 - 40) / 1.62 / 22).toBeGreaterThan(1.5);
+    expect(block).toMatch(/\.tbl-hand--mini \.tbl-hand__head \{\s*position: absolute;\s*top: auto;\s*right: 0;\s*bottom: 0;/);
+    // A wide tile's words keep their room beside a row of split hands.
+    expect(css).toMatch(/\.tbl-tile\.tbl-tile--full \.tbl-tile__cards \{[^}]*max-width: calc\(100cqw - 160px\);/);
+    const props = { playerId: 'p1', name: 'Pia', avatar: { color: 1, emoji: 2 }, connected: true, tier: 'full' as const, turn: false, line: { state: 'waiting', text: 'Waiting', tone: 'quiet' as const }, mark: 'waiting' as const, cards: createElement('i', null, 'cards') };
+    expect(html(createElement(PlayerTile, { ...props, fan: { cards: 4, hands: 3 } }))).toContain('<span class="tbl-tile__cards" style="--tile-fan:4;--tile-hands:3"><i>cards</i></span>');
+    expect(html(createElement(PlayerTile, props))).toContain('<span class="tbl-tile__cards"><i>cards</i></span>');
+  });
+
+  it('a narrow full tile before the deal, and on a desktop (three on a phone, six across a desktop), gives the name, the stack, the bet with the status and the cards a row each, so nothing is drawn over anything', () => {
     const css = readFileSync(join(import.meta.dirname, '../styles/table.css'), 'utf8');
     const narrow = css.slice(css.indexOf('@container tile (max-width: 199px)'));
     const block = narrow.slice(0, narrow.indexOf('\n}\n'));

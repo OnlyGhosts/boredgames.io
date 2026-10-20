@@ -18,7 +18,7 @@ function headWidth(el: HTMLElement): number {
  * keeps room for those words. They never shrink while the row keeps its hands, so the slots never
  * flip back and forth.
  */
-function useRowSize<T extends HTMLElement>(count: number): [RefObject<T | null>, { width: number; head: number }] {
+function useRowSize<T extends HTMLElement>(count: number, words = true): [RefObject<T | null>, { width: number; head: number }] {
   const ref = useRef<T | null>(null);
   const [size, setSize] = useState({ width: 0, head: 0 });
   // A new number of hands starts the words' width over.
@@ -29,9 +29,9 @@ function useRowSize<T extends HTMLElement>(count: number): [RefObject<T | null>,
     const fresh = counted.current !== count;
     counted.current = count;
     const width = el.clientWidth;
-    const words = headWidth(el);
+    const said = words ? headWidth(el) : 0;
     setSize((s) => {
-      const head = fresh ? words : Math.max(s.head, words);
+      const head = fresh ? said : Math.max(s.head, said);
       return s.width === width && s.head === head ? s : { width, head };
     });
   };
@@ -90,9 +90,11 @@ interface Props {
   leaving: boolean;
   /** The hand in play, or -1. */
   activeIndex: number;
-  /** `mine`: my hands on the stage at the bottom of the table; `stage`: another player's there, when I am not dealt in. */
+  /** `mine`: my hands on the stage at the bottom of the table; `stage`: another player's there, when I am not dealt in; `seat`: a seat's on its tile. */
   place: HandPlace;
   size: PlayingCardSize;
+  /** A seat's hands in miniature (Hand's `mini`): each total by its own cards. */
+  mini?: boolean;
   /** Each hand's stake by its total (my hands while they play). */
   stakes?: boolean;
   /** Another player's hands on my stage: their name by the hand in play's total (the first's, between turns). */
@@ -108,9 +110,11 @@ interface Props {
  * more hands wait, and it brings the hand in play to its middle as play moves on. The stage never
  * moves or resizes and the page never scrolls. Two or more hands mark the row `bj-hands--side`: on
  * a phone their stakes pack tighter (blackjack.css), and a hand on its own keeps its stake in full.
+ * A seat's tile holds the same row in miniature (`mini`), its totals by its cards, so nothing is
+ * said over a hand's corner and the row has no words to measure.
  */
-export function HandRow({ playerId, hands, start, timeline, now, leaving, activeIndex, place, size, stakes = false, ownerName, testId }: Props) {
-  const [ref, box] = useRowSize<HTMLDivElement>(hands.length);
+export function HandRow({ playerId, hands, start, timeline, now, leaving, activeIndex, place, size, mini = false, stakes = false, ownerName, testId }: Props) {
+  const [ref, box] = useRowSize<HTMLDivElement>(hands.length, !mini);
   const [fade, refade] = useScrollFade(ref, true, 'x');
   // A new hand or a new size changes what the row holds, which the fade's own observer cannot see.
   useLayoutEffect(refade);
@@ -123,7 +127,7 @@ export function HandRow({ playerId, hands, start, timeline, now, leaving, active
       {hands.map((hand, i) => (
         // Each slot keeps the room its own hand's words reach left of its own fan (blackjack.css --bj-head-room).
         <div key={i} className="bj-slot" style={{ '--slot-fan': Math.max(2, hand.cards.length) } as CSSProperties}>
-          <Hand playerId={playerId} index={i} hand={hand} start={start} timeline={timeline} now={now} leaving={leaving} size={size} active={i === activeIndex} narrow={side} stake={stakes} ownerName={i === named ? ownerName : undefined} testId={testId} />
+          <Hand playerId={playerId} index={i} hand={hand} start={start} timeline={timeline} now={now} leaving={leaving} size={size} active={i === activeIndex} mini={mini} narrow={side} stake={stakes} ownerName={i === named ? ownerName : undefined} testId={testId} />
         </div>
       ))}
     </div>

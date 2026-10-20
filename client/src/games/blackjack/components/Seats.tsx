@@ -10,6 +10,7 @@ import { outcomesShown, type Timeline } from '../lib/timeline';
 import { outcomeLabel, payoutText } from '../lib/text';
 import { useBlackjack, useBlackjackStore } from '../store';
 import { Hand, handOnScreen } from './Hand';
+import { HandRow } from './HandRow';
 
 interface Props {
   room: BlackjackRoomState;
@@ -59,7 +60,10 @@ export function seatLine(view: BlackjackView, id: string, hands: TableHand[], se
     const order = view.order.indexOf(id);
     const turn = view.turn ? view.order.indexOf(view.turn.playerId) : -1;
     if (order > turn) return { state: 'waiting', text: 'Waiting', tone: 'quiet' };
-    return { state: 'done', text: hands.every((h) => h.status === 'bust') ? 'Bust' : hands[0].status === 'blackjack' ? 'Blackjack' : 'Stands', tone: 'quiet' };
+    if (hands.every((h) => h.status === 'bust')) return { state: 'done', text: 'Bust', tone: 'quiet' };
+    // A narrow phone tile with no room for the word leaves it to the star on the avatar and the gold total by the cards.
+    if (hands[0].status === 'blackjack') return { state: 'done', text: 'Blackjack', tone: 'quiet', short: [''] };
+    return { state: 'done', text: 'Stands', tone: 'quiet' };
   }
   // Away while the bets are open: the deal does not wait for them, and they sit the hand out.
   if (betting && !view.waitingFor.includes(id)) return { state: 'away', text: 'Away', tone: 'quiet' };
@@ -142,9 +146,11 @@ function SeatDetail({ room, view, id, table, timeline, now, leaving, chips }: { 
 
 /**
  * The other players as tiles in seat order, never scrolling: the cards in miniature while the
- * table is small, a total and a status mark as it grows. The seat whose turn it is gets the lime
- * ring and the Playing tag; a settled seat its outcome's colour. Tapping a tile opens its hands.
- * The seat whose hands are on my stage (I am not dealt in) leaves its cards to the stage.
+ * table is small, a total and a status mark as it grows. A seat's hands are a row like mine on the
+ * stage (HandRow): every hand its cards at one size with its total, sliding sideways to the hand in
+ * play, its ends fading where more hands wait. The seat whose turn it is gets the lime ring and
+ * the Playing tag; a settled seat its outcome's colour. Tapping a tile opens its hands. The seat
+ * whose hands are on my stage (I am not dealt in) leaves its cards to the stage.
  */
 export function Seats({ room, view, ids, meId, staged, table, timeline, now, leaving, wide, chipsOf }: Props) {
   const turnId = view.phase === 'acting' ? view.turn?.playerId : undefined;
@@ -187,10 +193,11 @@ export function Seats({ room, view, ids, meId, staged, table, timeline, now, lea
                   onOpen={() => openSeat(id)}
                   data={{ 'data-chips': seat.chips, 'data-bet': seat.bet }}
                   cards={
-                    hands.length > 0 && id !== staged
-                      ? hands.map((hand, i) => <Hand key={i} playerId={id} index={i} hand={hand} start={room.settings.startingChips} timeline={timeline} now={now} leaving={leaving} size="sm" active={turn && view.turn?.handIndex === i} mini testId="seat-hand" />)
-                      : undefined
+                    hands.length > 0 && id !== staged ? (
+                      <HandRow playerId={id} hands={hands} start={room.settings.startingChips} timeline={timeline} now={now} leaving={leaving} activeIndex={turn ? (view.turn?.handIndex ?? -1) : -1} place="seat" size="sm" mini testId="seat-hand" />
+                    ) : undefined
                   }
+                  fan={{ cards: Math.max(2, ...hands.map((h) => h.cards.length)), hands: hands.length }}
                 />
               );
             });

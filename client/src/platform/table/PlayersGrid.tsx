@@ -191,6 +191,12 @@ interface TileProps {
   tag?: string | null;
   /** The cards in miniature, on full tiles. */
   cards?: ReactNode;
+  /**
+   * How the cards lie, for their size on a narrow phone tile (table.css): the most cards in any one
+   * hand and how many hands there are (a row of split hands keeps room for the next one to peek
+   * in). Unset: one hand of two (Poker's hole cards).
+   */
+  fan?: { cards: number; hands: number };
   /** Laid over the tile (a payout rising). */
   extra?: ReactNode;
   /** Opens the seat's sheet with its full hand. */
@@ -220,7 +226,8 @@ export function tileChips(tier: TileTier): number {
 }
 
 /** One player in the grid; how much it shows depends on the tier (table.css lays each tier out). */
-export function PlayerTile({ playerId, name, avatar, connected, tier, turn, turnNote, line, mark, outcome = null, chips, bet, total, dimmed = false, badge, tag, cards, extra, onOpen, shortBadge = false, data }: TileProps) {
+export function PlayerTile({ playerId, name, avatar, connected, tier, turn, turnNote, line, mark, outcome = null, chips, bet, total, dimmed = false, badge, tag, cards, fan, extra, onOpen, shortBadge = false, data }: TileProps) {
+  const fanStyle = fan ? ({ '--tile-fan': Math.max(2, fan.cards), '--tile-hands': Math.max(1, fan.hands) } as CSSProperties) : undefined;
   return (
     <div
       className={`tbl-tile tbl-tile--${tier}${turn ? ' tbl-tile--turn' : ''}${dimmed ? ' tbl-tile--dim' : ''}${outcome ? ` tbl-tile--${outcome}` : ''}${shortBadge ? ' tbl-tile--short-badge' : ''}`}
@@ -256,7 +263,11 @@ export function PlayerTile({ playerId, name, avatar, connected, tier, turn, turn
           </TotalPill>
         </span>
       )}
-      {tier === 'full' && cards && <span className="tbl-tile__cards">{cards}</span>}
+      {tier === 'full' && cards && (
+        <span className="tbl-tile__cards" style={fanStyle}>
+          {cards}
+        </span>
+      )}
       {turn ? (
         <span className={`tbl-tile__tag${turnNote ? '' : ' tbl-tile__tag--turn'}`} data-testid="seat-playing">
           {turnNote ?? 'Playing'}

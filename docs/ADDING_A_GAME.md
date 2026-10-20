@@ -347,8 +347,11 @@ left, never narrower than the tier's `minWidth` so names, totals and a full tile
 stay whole (104px on a phone: three full tiles across a 360px phone, two across a 320px one, where
 three others take a row of compact tiles instead; a full tile 270px or wider, which a lone one on
 a phone and a desktop's row of three grow to, has the avatar and name on top, the stack, bet and
-status on one line under them and the cards on the right, 6px over the miniature; a narrow full tile gives its name, stack, bet and
-cards a row each; a compact tile under 150px wide and 70px tall
+status on one line under them and the cards on the right, 6px over the miniature; a narrow full tile on a phone, once the cards are
+out, has the avatar, name and stack on top, the bet pill over the status on the left under them and the cards on the right, sized
+to the room the words leave (give `PlayerTile` a `fan` of the most cards in a hand and how many hands; a row of split hands keeps
+room for the next hand to peek in), while before the deal and on a desktop it gives its name, stack, bet and cards a row each;
+a compact tile under 150px wide and 70px tall
 puts its stack and total on one line (the stack alone across it while there is no total), the hand
 in play's total alone for split hands, and its bet pill on a line of its own; a
 narrow small tile wears its total as a badge on its corner), keeps a full tile to its top rows before the deal (`bare`), and a desktop sets them on

@@ -1206,6 +1206,26 @@ describe("the table’s focus and the stage", () => {
     expect(table).toMatch(/--fan-dy: min\(calc\(var\(--tbl-w\) \* 0\.09\), calc\(var\(--tbl-w\) \* 0\.27 \/ max\(1, var\(--fan, 2\) - 1\)\)\);/);
   });
 
+  it('another player’s split hands sit in their tile as a row like mine on the stage: each its cards and its total, sized for the tile', () => {
+    const split = acting({
+      turn: { playerId: 'bob', handIndex: 1 },
+      actions: NO_ACTIONS,
+      players: { ...acting().players, bob: { chips: 260, bet: 20, hands: [hand([c('8'), c('3'), c('10')], { total: 21, status: 'stood', fromSplit: true }), hand([c('8'), c('2')], { total: 10, status: 'acting', fromSplit: true })], inRound: true, sittingOut: false, bustedOut: false } },
+    });
+    const html = render(bjRoom(split), 'host');
+    const row = tagWith(html, 'seat-hands-row');
+    expect(attr(row, 'class')).toBe('bj-hands bj-hands--seat scroll-fade scroll-fade--x bj-hands--side');
+    expect(attr(row, 'data-count')).toBe('2');
+    // Every hand is there with its own total (the row slides to the one in play, lit), none left out or cut.
+    expect(tagsWith(html, 'seat-hand')).toHaveLength(2);
+    expect(html).toMatch(/data-testid="seat-hand"[^>]*data-index="1"[^>]*data-active="true"/);
+    expect(html.slice(html.indexOf('data-testid="seat-hands-row"'), html.indexOf('data-testid="seat-open"')).match(/data-testid="hand-total"/g)).toHaveLength(2);
+    // The tile sizes the cards for its longest hand and keeps room for the next hand to peek in (table.css).
+    expect(html).toContain('<span class="tbl-tile__cards" style="--tile-fan:3;--tile-hands:2">');
+    const css = readFileSync(fileURLToPath(new URL('./blackjack.css', import.meta.url)), 'utf8');
+    expect(css).toMatch(/\.bj-hands--seat > \.bj-slot \{\s*display: flex;\s*flex: none;\s*scroll-snap-align: center;\s*contain: layout;/);
+  });
+
   it("another player’s split hands share the stage when I watch, the line under the banner says which is in play", () => {
     const split = acting({
       turn: { playerId: 'bob', handIndex: 1 },
@@ -1218,11 +1238,13 @@ describe("the table’s focus and the stage", () => {
     // Each slot keeps the room its own hand's words reach left of its own fan: by its own cards, not the row's longest hand
     // (a two-card hand beside a five-card one once let its stake run 23px off the stage), the words ending 3px inside the hand's
     // box (taken as 6px, two hands with the same words over them ran 2.6px off the stage during the deal).
-    expect(html.match(/<div class="bj-slot" style="--slot-fan:(\d+)">/g)).toEqual(['<div class="bj-slot" style="--slot-fan:3">', '<div class="bj-slot" style="--slot-fan:3">']);
+    // (The seats' tiles hold rows of slots too, ahead of the stage: only the stage's are read here.)
+    const onStage = (h: string) => h.slice(h.indexOf('data-testid="hand-stage"'));
+    expect(onStage(html).match(/<div class="bj-slot" style="--slot-fan:(\d+)">/g)).toEqual(['<div class="bj-slot" style="--slot-fan:3">', '<div class="bj-slot" style="--slot-fan:3">']);
     const css = readFileSync(fileURLToPath(new URL('./blackjack.css', import.meta.url)), 'utf8');
     expect(css).toMatch(/\.bj-hands--mine > \.bj-slot,\s*\.bj-hands--stage > \.bj-slot \{\s*--bj-fan-w: calc\(6px \+ var\(--tbl-w\) \* \(1 \+ var\(--fan-step\) \* \(var\(--slot-fan, 2\) - 1\)\)\);\s*--bj-head-room: max\(0px, calc\(var\(--bj-head-w, 0px\) - 3px - var\(--tbl-w\) \* \(1 \+ var\(--fan-step\) \* \(var\(--slot-fan, 2\) - 1\)\)\)\);/);
     const long = render(bjRoom(acting({ players: { ...acting().players, bob: { chips: 260, bet: 20, hands: [hand([c('8'), c('3')], { total: 11, status: 'stood', fromSplit: true }), hand([c('8'), c('2'), c('A'), c('2'), c('3')], { total: 16, status: 'acting', fromSplit: true })], inRound: true, sittingOut: false, bustedOut: false } }, turn: { playerId: 'bob', handIndex: 1 }, actions: NO_ACTIONS })), 'carol');
-    expect(long.match(/--slot-fan:\d+/g)).toEqual(['--slot-fan:2', '--slot-fan:5']);
+    expect(onStage(long).match(/--slot-fan:\d+/g)).toEqual(['--slot-fan:2', '--slot-fan:5']);
     // Their name rides on the hand in play, by its total.
     expect(html).toMatch(/data-testid="stage-hand"[^>]*data-index="1"[\s\S]*?<span class="tbl-hand__owner" data-testid="stage-owner">Pia<\/span>/);
     expect(tagsWith(html, 'stage-owner')).toHaveLength(1);

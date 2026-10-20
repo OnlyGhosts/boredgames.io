@@ -1396,6 +1396,61 @@
 }
 
 /*
+ * A narrow full tile on a phone once the cards are out (three across, 96px tall; before the deal a
+ * bare tile, 68px, keeps the rows above, and a desktop's narrow tiles on the arc keep them too):
+ * the avatar, the name and the stack along the top, and under them the bet pill over the status
+ * on the left and the cards on the right. The words take what they need up to 58px (the widest
+ * pill, a chip, a plus and "1.2k", is 53px; a longer status reads short, fit.tsx), and the cards
+ * the rest, as wide as it lets them and as tall as the room under the stack (34.6px on a 96px
+ * tile, where they were 22px along the bottom). A hand of more cards gets narrower cards for the
+ * same room; a row of split hands keeps 9px each side for the next hand to peek in under its fade,
+ * while its cards stay at least 22px, and always fits a hand whole. The hand's total sits on its
+ * last card's bottom right corner, under the rank and the suit (Blackjack's; Poker's has none).
+ */
+@container tile (max-width: 199px) and (min-height: 80px) {
+  .tbl-grid:not(.tbl-grid--arc) .tbl-tile--full {
+    row-gap: 0;
+    grid-template-columns: var(--face) fit-content(30px) minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(0, 1fr) auto auto minmax(0, 1fr);
+    grid-template-areas: 'face name name' 'face chips chips' '. . cards' 'bet bet cards' 'line line cards' '. . cards';
+  }
+
+  .tbl-grid:not(.tbl-grid--arc) .tbl-tile--full .tbl-tile__line {
+    margin-top: 3px;
+  }
+
+  /*
+   * The cards' room is their own box (100cqw inside it; 100cqh is still the tile's). A hand spans
+   * --tile-k card widths.
+   */
+  .tbl-grid:not(.tbl-grid--arc) .tbl-tile--full .tbl-tile__cards {
+    --tile-peek: calc(min(1, var(--tile-hands, 1) - 1) * 9px);
+    --tile-k: calc(1 + var(--fan-step) * (var(--tile-fan, 2) - 1));
+    --tbl-w: min(calc((100cqh - 40px) / 1.62), calc(100cqw / var(--tile-k)), max(22px, calc((100cqw - 2 * var(--tile-peek)) / var(--tile-k))));
+    container-type: inline-size;
+    justify-content: flex-end;
+    padding-top: 0;
+  }
+
+  /* A row of split hands fades only what lies beside the hand in play: the next hand's edge, never the hand itself. */
+  .tbl-grid:not(.tbl-grid--arc) .tbl-tile--full .tbl-tile__cards > .scroll-fade--x {
+    --fade-x: max(0px, calc((100cqw - var(--tbl-w) * var(--tile-k)) / 2));
+  }
+
+  .tbl-grid:not(.tbl-grid--arc) .tbl-tile--full .tbl-hand--mini .tbl-hand__head {
+    position: absolute;
+    top: auto;
+    right: 0;
+    bottom: 0;
+  }
+
+  /* Lifted off the card like a piece on it, so a light theme's pale pill reads on a white card too. */
+  .tbl-grid:not(.tbl-grid--arc) .tbl-tile--full .tbl-hand--mini .tbl-hand__head .tbl-pill {
+    box-shadow: var(--shadow-piece);
+  }
+}
+
+/*
  * A full tile 200px to 239px wide (two players on a phone, four on a 1024px desktop, five on a
  * wider one): the stack and the bet pill share the line under the name, and three chips, a plus and
  * "12,000" beside "88,000 chips" (or "9,000" beside "150,000 chips") overran it. The pill dropped to
@@ -1438,6 +1493,9 @@
     --tbl-w: min(calc(var(--tbl-mini-w, 24px) + 6px), calc((100cqh - 16px) / 1.62));
     align-self: center;
     justify-content: flex-end;
+    /* The words keep 160px less the padding (the avatar, a name and the Playing tag); past that a seat's split hands slide in a row (blackjack.css), fading clear of the hand in play. */
+    --fade-x: 20px;
+    max-width: calc(100cqw - 160px);
   }
 }
 

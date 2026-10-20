@@ -601,6 +601,141 @@ test.describe('many hands (the harness)', () => {
     });
   }
 
+  /**
+   * The seats' tiles as they show: each one's height, its cards' widths, whether its cards keep clear
+   * of its words (the name, the stack, the bet pill, the status) and inside the tile, and every
+   * hand's total whole inside its own hand's slot and the tile; with a row of hands (`name`'s), the
+   * row: its hands, the hand in play, the ends that fade and should, and whether the hand in play
+   * lies inside the row's visible box, clear of its fades (--fade-x, read in px).
+   */
+  async function tilesShown(page: Page, name = '') {
+    return page.evaluate((who) => {
+      const meet = (a: DOMRect, b: DOMRect) => Math.min(a.right, b.right) - Math.max(a.left, b.left) > 0.5 && Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 0.5;
+      const within = (a: DOMRect, b: DOMRect) => a.left >= b.left - 0.5 && a.right <= b.right + 0.5 && a.top >= b.top - 0.5 && a.bottom <= b.bottom + 0.5;
+      const tiles = Array.from(document.querySelectorAll<HTMLElement>('[data-testid="seat"]')).map((tile) => {
+        const t = tile.getBoundingClientRect();
+        const cardsBox = tile.querySelector('.tbl-tile__cards')?.getBoundingClientRect();
+        const words = ['.tbl-tile__face', '.tbl-tile__name-text', '[data-testid="seat-chips"]', '.tbl-tile__bet .tbl-stake', '[data-testid="seat-line"]'].map((q) => tile.querySelector(q)?.getBoundingClientRect()).filter((r): r is DOMRect => r !== undefined && r.width > 0 && r.height > 0);
+        const cards = Array.from(tile.querySelectorAll('.playing-card')).map((c) => Math.round(c.getBoundingClientRect().width * 2) / 2);
+        // A total is whole inside its own slot (its hand's own box), and, scrolled into view or not, inside the tile's height.
+        const cut = Array.from(tile.querySelectorAll<HTMLElement>('[data-testid="hand-total"]')).filter((p) => {
+          const r = p.getBoundingClientRect();
+          const slot = p.closest('.bj-slot')?.getBoundingClientRect();
+          return !slot || !within(r, slot) || r.top < t.top - 0.5 || r.bottom > t.bottom + 0.5;
+        }).length;
+        return {
+          name: tile.dataset.name ?? '',
+          height: Math.round(t.height * 10) / 10,
+          cards,
+          least: cards.length > 0 ? Math.min(...cards) : 0,
+          clear: !cardsBox || cardsBox.width === 0 || (within(cardsBox, t) && words.every((w) => !meet(w, cardsBox))),
+          cut,
+        };
+      });
+      const row = Array.from(document.querySelectorAll<HTMLElement>('[data-testid="seat"]')).find((t) => t.dataset.name === who)?.querySelector<HTMLElement>('[data-testid="seat-hands-row"]');
+      if (!row) return { tiles, row: null };
+      const box = row.getBoundingClientRect();
+      const fadeX = parseFloat(getComputedStyle(row).getPropertyValue('--fade-x')) || 0;
+      const fade = row.dataset.fade ?? '';
+      const lit = row.querySelector<HTMLElement>('.bj-hand[data-active="true"]');
+      const slot = lit?.closest('.bj-slot')?.getBoundingClientRect();
+      const left = row.scrollLeft > 1;
+      const right = row.scrollLeft + row.clientWidth < row.scrollWidth - 1;
+      const sizes = [...new Set(Array.from(row.querySelectorAll('.playing-card')).map((c) => Math.round(c.getBoundingClientRect().width * 2) / 2))];
+      return {
+        tiles,
+        row: {
+          hands: row.querySelectorAll('.bj-slot > .bj-hand').length,
+          sizes: sizes.length,
+          active: lit ? Number(lit.dataset.index) : -1,
+          fade,
+          due: [left ? 'left' : '', right ? 'right' : ''].filter(Boolean).join(' '),
+          // The fade reaches the next hand, never the one in play (0.5px of rounding).
+          inView: slot ? slot.left >= box.left + (fade.includes('left') ? fadeX : 0) - 0.5 && slot.right <= box.right - (fade.includes('right') ? fadeX : 0) + 0.5 : null,
+          fadeX,
+        },
+      };
+    }, name);
+  }
+
+  // A narrow full tile on a phone (three across; two on a 320px one) once the cards are out: the cards beside the words, half as big again
+  // as the 22px they had along the bottom where the phone is 390px or wider, never smaller than that anywhere, clear of every word, every
+  // total whole, and the tile no taller than before (96px dealt, 68px before the deal: grid.ts). A seat that stands, one that waits, one
+  // on turn and one that bust (three cards, so its cards are narrower for the same room).
+  for (const [size, others, least] of [
+    [{ width: 320, height: 568 }, 2, 33],
+    [{ width: 360, height: 740 }, 3, 29],
+    [{ width: 390, height: 844 }, 3, 33],
+    [{ width: 428, height: 753 }, 3, 33],
+  ] as const) {
+    test(`${size.width}x${size.height}: a narrow tile's cards sit beside its words, bigger, every word and total whole, the tile no taller`, async ({ browser }) => {
+      const pages = harnessPages(browser, size);
+      try {
+        for (const query of [`phase=mine&others=${others}`, `phase=other&others=${others}&turn=1&bustOther=0`, `phase=mine&others=${others}&bustOther=1&start=1000&bet=1250&chips=12500`, `phase=betting&others=${others}`]) {
+          const page = await pages.go(query);
+          await expect(page.getByTestId('seats'), query).toHaveAttribute('data-tier', 'full');
+          await tilesReadable(page, query);
+          await stakesShown(page, query);
+          const { tiles } = await tilesShown(page);
+          const dealt = !query.startsWith('phase=betting');
+          for (const t of tiles) {
+            const label = `${query}: ${t.name}`;
+            expect(t.height, `${label}: no taller than before`).toBeLessThanOrEqual(dealt ? 96 : 68);
+            expect(t, `${label}: the cards clear of the words and every total whole`).toMatchObject({ clear: true, cut: 0 });
+            if (!dealt) continue;
+            expect(new Set(t.cards).size, `${label}: one card size`).toBe(1);
+            // Two cards take the full size (beside the widest pill, "1.2k" with a chip and a plus, a little less); a hit (the bust, three
+            // cards) takes narrower ones, whole: the 22px they were but beside that pill on a 360px phone (20.3px).
+            expect(t.least, `${label}: the cards`).toBeGreaterThanOrEqual(t.cards.length > 2 ? 20 : query.includes('bet=1250') ? 26 : least);
+          }
+        }
+        expect(pages.errors).toEqual([]);
+      } finally {
+        await pages.close();
+      }
+    });
+  }
+
+  // Another player's split hands in their tile take the rule my hands have on the stage: every hand its cards at one size with its total,
+  // a row that slides to the hand in play (in view, clear of the fades) and fades its ends where more hands wait, no total ever cut, on a
+  // phone's narrow tile and a desktop's wide one. The tile, the dealer's row and my hand stay where a seat of one hand leaves them.
+  for (const [size, others] of [
+    [{ width: 320, height: 568 }, 2],
+    [{ width: 390, height: 844 }, 3],
+    [{ width: 428, height: 753 }, 3],
+    [{ width: 1440, height: 900 }, 3],
+  ] as const) {
+    test(`${size.width}x${size.height}: another player's split hands slide in their tile to the hand in play, every total whole`, async ({ browser }) => {
+      const pages = harnessPages(browser, size);
+      try {
+        let page = await pages.go(`phase=other&others=${others}`);
+        const one = await tilesShown(page, 'Pia');
+        const fixed = await places(page);
+        for (const [hands, active] of [[2, 1], [4, 0], [4, 1], [4, 3]]) {
+          const query = `phase=other&others=${others}&otherHands=${hands}&otherActive=${active}`;
+          page = await pages.go(query);
+          await expect(page.getByTestId('table-turn')).toContainText(`hand ${active + 1} of ${hands}`);
+          await tilesReadable(page, query);
+          const shown = await tilesShown(page, 'Pia');
+          await expect.poll(async () => (await tilesShown(page, 'Pia')).row?.inView, { message: `${query}: the hand in play in view`, timeout: 1300 }).toBe(true);
+          const row = (await tilesShown(page, 'Pia')).row;
+          expect(row, query).toMatchObject({ hands, sizes: 1, active });
+          expect(row?.fade, `${query}: the ends that fade`).toBe(row?.due);
+          for (const [i, t] of shown.tiles.entries()) {
+            expect(t, `${query}: ${t.name}`).toMatchObject({ clear: true, cut: 0 });
+            expect(t.height, `${query}: ${t.name} as tall as with one hand`).toBe(one.tiles[i].height);
+          }
+          const now = await places(page);
+          expectSame(`${query}: the dealer`, now.dealer, fixed.dealer);
+          expectSame(`${query}: my hand`, now.mine, fixed.mine);
+        }
+        expect(pages.errors).toEqual([]);
+      } finally {
+        await pages.close();
+      }
+    });
+  }
+
   for (const size of [{ width: 320, height: 568 }, { width: 360, height: 740 }, { width: 390, height: 844 }, { width: 1440, height: 900 }]) {
     test(`${size.width}x${size.height}: my next stake, a soft total and a long wait all read in full`, async ({ browser }) => {
       const ctx = await browser.newContext({ viewport: size });

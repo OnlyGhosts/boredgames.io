@@ -6,8 +6,8 @@
  * hand in play. The stage around it never moves or resizes, and the page never scrolls.
  */
 
-/** Where a row of hands sits: my hands on the stage, or another player's there when I am not dealt in. */
-export type HandPlace = 'mine' | 'stage';
+/** Where a row of hands sits: my hands on the stage, another player's there when I am not dealt in, or a seat's on its tile (in miniature). */
+export type HandPlace = 'mine' | 'stage' | 'seat';
 
 /** A hand's slot in its row: from its left edge in the row's content (not moved by scrolling), and its width, in px. */
 export interface SlotBox {

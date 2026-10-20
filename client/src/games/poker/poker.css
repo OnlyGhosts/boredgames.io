@@ -228,6 +228,13 @@
   margin-left: calc(var(--tbl-w) * -0.3);
 }
 
+/* A narrow phone tile's cards beside the words (table.css): a Blackjack hand's step, the rank and suit of the first left in view, so two take 1.44 card widths. */
+@container tile (max-width: 199px) and (min-height: 80px) {
+  .pk .tbl-grid:not(.tbl-grid--arc) .tbl-tile__cards > .tbl-card + .tbl-card {
+    margin-left: calc(var(--tbl-w) * (var(--fan-step) - 1));
+  }
+}
+
 /* The payout rises inside the tile (the grid clips anything that sticks out), on its right edge. */
 .pk .tbl-tile .tbl-payout {
   left: auto;
