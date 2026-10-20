@@ -307,10 +307,11 @@ the stage (`stageOwner` in each game's `lib/focus.ts`). Blackjack's split hands 
 stake and total, at the size a hand on its own gets on the stage: a split never shrinks them, and
 a hand never turns into a number. While they fit side by side each hand has an equal share of
 the row, never narrower than its own fan or the words over its corner (measured as the row lays
-out); past that the row scrolls sideways inside its box (a hand to a snap, by swipe, wheel or
-trackpad, no scrollbar), its cut ends fading where more hands wait (`.scroll-fade--x`), and it
+out); past that the row scrolls sideways inside its box (by swipe, wheel or trackpad, no scrollbar;
+no snapping, which once chased a card in flight past the last hand), its cut ends fading where more hands wait (`.scroll-fade--x`), and it
 brings the hand in play to its middle as play moves on or a split adds a hand (smoothly, at once
-for less motion); with no hand in play it stays where the player left it. The stage never moves
+for less motion); with no hand in play it stays where the player left it. The row and its fades
+measure the hands as laid out (`laidOutWidth`), never a dealt card still in the air. The stage never moves
 or resizes and the page never scrolls. Poker's stage holds my two cards whenever I hold some (the hand in play when I am
 not dealt in), with what they make in the pill and, left of it, the dealer button, my bet and where
 I stand ("All in", "Folded"), or how the hand ended ("Win +300"); those words sit in the hand's own

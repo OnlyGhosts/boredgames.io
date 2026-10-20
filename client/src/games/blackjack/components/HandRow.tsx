@@ -1,7 +1,7 @@
-import { useLayoutEffect, useRef, useState, type CSSProperties, type RefObject } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type RefObject } from 'react';
 import type { PlayingCardSize } from '../../../platform/components/PlayingCard';
 import { prefersReducedMotion } from '../../../platform/lib/media';
-import { useScrollFade } from '../../../platform/lib/useScrollFade';
+import { laidOutWidth, useScrollFade } from '../../../platform/lib/useScrollFade';
 import { scrollToHand, type HandPlace } from '../lib/hands';
 import type { TableHand } from '../lib/table';
 import type { Timeline } from '../lib/timeline';
@@ -62,22 +62,47 @@ export function fanStyle(hands: readonly { cards: readonly unknown[] }[]): CSSPr
  * Brings the hand in play (`activeIndex`) to the middle of the row in `ref` as play moves on or a
  * split adds a hand: smoothly, or at once for a viewer who asked for less motion and when the row
  * itself changed (its first layout, its size, the words over its hands). With no hand in play
- * (the bets, the dealer's turn, the settled table) the row stays where the player left it.
+ * (the bets, the dealer's turn, the settled table) the row stays where the player left it. The row
+ * is measured as laid out (`laidOutWidth`), so a dealt card still in the air never carries it past
+ * its last hand.
  */
 function useFollowHand(ref: RefObject<HTMLElement | null>, activeIndex: number, count: number, layout: string): void {
   const last = useRef<{ active: number; count: number } | null>(null);
+  // Where the row was last sent for the hand in play (null with none in play).
+  const target = useRef<number | null>(null);
   useLayoutEffect(() => {
     const el = ref.current;
     const before = last.current;
     last.current = { active: activeIndex, count };
+    target.current = null;
     if (!el || activeIndex < 0) return;
     const slot = el.children[activeIndex];
     if (!(slot instanceof HTMLElement)) return;
-    const left = scrollToHand({ left: slot.offsetLeft, width: slot.offsetWidth }, el.clientWidth, el.scrollWidth);
+    const left = scrollToHand({ left: slot.offsetLeft, width: slot.offsetWidth }, el.clientWidth, laidOutWidth(el));
+    target.current = left;
     if (Math.abs(el.scrollLeft - left) < 1) return;
     const moved = before !== null && (before.active !== activeIndex || before.count !== count);
     el.scrollTo({ left, behavior: moved && !prefersReducedMotion() ? 'smooth' : 'auto' });
   }, [ref, activeIndex, count, layout]);
+  // A hand that changes size after the row laid out (its cards sized to the room it was given, a
+  // font arriving) moves where the hand in play sits: the row follows it again, at once. A glide
+  // already on its way to the right place carries on.
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver !== 'function') return undefined;
+    const observer = new ResizeObserver(() => {
+      if (target.current === null) return;
+      const slot = el.children[last.current?.active ?? -1];
+      if (!(slot instanceof HTMLElement)) return;
+      const left = scrollToHand({ left: slot.offsetLeft, width: slot.offsetWidth }, el.clientWidth, laidOutWidth(el));
+      if (Math.abs(left - target.current) < 1) return;
+      target.current = left;
+      el.scrollTo({ left, behavior: 'auto' });
+    });
+    observer.observe(el);
+    for (const child of el.children) observer.observe(child);
+    return () => observer.disconnect();
+  }, [ref, count]);
 }
 
 interface Props {

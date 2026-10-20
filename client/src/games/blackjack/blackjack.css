@@ -111,7 +111,7 @@
  * most cards in any hand): a split never shrinks them. While the hands fit side by side each slot
  * is an equal share of the row (fanStyle's --hands); a slot never narrows below its own hand (its
  * fan, the words over its corner, a pill with a word in it), and past what fits the row scrolls
- * sideways inside its box: a hand to a snap, by swipe, wheel or trackpad, no scrollbar, its cut
+ * sideways inside its box: by swipe, wheel or trackpad, no scrollbar and no snapping, its cut
  * ends fading where more hands wait (.scroll-fade--x), the hand in play brought to the middle
  * (HandRow). The stage around it never moves or resizes. In its slot a hand starts from a fixed
  * spot (two cards centred) and grows to the right.
@@ -130,7 +130,6 @@
   overflow-x: auto;
   overflow-y: hidden;
   overscroll-behavior-x: contain;
-  scroll-snap-type: x mandatory;
   scrollbar-width: none;
 }
 
@@ -163,13 +162,6 @@
   align-items: flex-end;
   justify-content: flex-start;
   height: 100%;
-  scroll-snap-align: center;
-  /*
-   * A card still flying in from the shoe reaches past its hand for a moment. Layout containment
-   * makes that ink overflow: still drawn over the row, but never part of how far the row scrolls,
-   * so the snap never chases it past the last hand and snaps back as the card lands.
-   */
-  contain: layout;
 }
 
 /* Centred on two cards (its slot's middle), but never so far right that its fan runs out of its slot. */
@@ -262,9 +254,8 @@
 
 /*
  * A seat's hands on its tile (HandRow, place seat): side by side while they fit the room the tile
- * gives its cards (table.css), then a row that slides sideways to the hand in play (each hand to a
- * snap at its middle), its ends fading where more hands wait. Every hand is its cards at one size
- * with its total by them, never cut; a card flying in never stretches the row (contain: layout).
+ * gives its cards (table.css), then a row that slides sideways to the hand in play, its ends fading where more hands wait. Every hand is its cards at one size
+ * with its total by them, never cut.
  */
 .bj-hands--seat {
   gap: 4px;
@@ -277,8 +268,6 @@
 .bj-hands--seat > .bj-slot {
   display: flex;
   flex: none;
-  scroll-snap-align: center;
-  contain: layout;
 }
 
 /* ---------- A seat's sheet ---------- */

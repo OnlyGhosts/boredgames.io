@@ -34,7 +34,7 @@ const { useBlackjackStore } = await import('./store');
 const { dealOrder, discardedCount, tableOf, totalText, shownTotal } = await import('./lib/table');
 const T = await import('./lib/timeline');
 const H = await import('./lib/hands');
-const { fadeOf } = await import('../../platform/lib/useScrollFade');
+const { fadeOf, sideFade } = await import('../../platform/lib/useScrollFade');
 const { betAmount, betWindow, defaultBet, doubleBet, halfBet, parseBet, suggestedBet } = await import('./lib/bet');
 const { roundLabel, RIBBON_TEXT, DEALER_RULE_TEXT, payoutText, joinNames, ruleText, standingOf, focusLine } = await import('./lib/text');
 const { player, registryOf, resetStore, room, welcome } = await import('../../test/fixtures');
@@ -1223,7 +1223,7 @@ describe("the table’s focus and the stage", () => {
     // The tile sizes the cards for its longest hand and keeps room for the next hand to peek in (table.css).
     expect(html).toContain('<span class="tbl-tile__cards" style="--tile-fan:3;--tile-hands:2">');
     const css = readFileSync(fileURLToPath(new URL('./blackjack.css', import.meta.url)), 'utf8');
-    expect(css).toMatch(/\.bj-hands--seat > \.bj-slot \{\s*display: flex;\s*flex: none;\s*scroll-snap-align: center;\s*contain: layout;/);
+    expect(css).toMatch(/\.bj-hands--seat > \.bj-slot \{\s*display: flex;\s*flex: none;\s*\}/);
   });
 
   it("another player’s split hands share the stage when I watch, the line under the banner says which is in play", () => {
@@ -1293,11 +1293,11 @@ describe('many hands', () => {
   });
 
   it('fades the ends of a sideways row that has more hands past them', () => {
-    const row = (scrollLeft: number) => ({ scrollLeft, clientWidth: 290, scrollWidth: 856 }) as HTMLElement;
-    expect(fadeOf(row(0), 'x')).toBe('right');
-    expect(fadeOf(row(200), 'x')).toBe('left right');
-    expect(fadeOf(row(566), 'x')).toBe('left');
-    expect(fadeOf({ scrollLeft: 0, clientWidth: 290, scrollWidth: 290 } as HTMLElement, 'x')).toBe('');
+    // The row's width is its hands as laid out (laidOutWidth), never a dealt card still in the air.
+    expect(sideFade(0, 290, 856)).toBe('right');
+    expect(sideFade(200, 290, 856)).toBe('left right');
+    expect(sideFade(566, 290, 856)).toBe('left');
+    expect(sideFade(0, 290, 290)).toBe('');
     // A box that scrolls down keeps its top and bottom.
     expect(fadeOf({ scrollTop: 10, clientHeight: 100, scrollHeight: 300 } as HTMLElement)).toBe('top bottom');
   });
@@ -1308,8 +1308,11 @@ describe('many hands', () => {
     expect(sheet).toMatch(/--fit-w: max\(14px, calc\(\(100cqw - 8px\) \/ \(1 \+ var\(--fan-step\) \* \(var\(--fan, 2\) - 1\)\)\)\);/);
     expect(sheet).toMatch(/--tbl-w: min\(var\(--bj-card-w\), var\(--fit-w\), var\(--fit-h\)\);/);
     // An equal share of the row while the hands fit, never narrower than its own hand: past that the row scrolls sideways, a hand to a snap, no scrollbar.
-    expect(sheet).toMatch(/flex: 0 1 max\(var\(--bj-hand-least\), calc\(\(100cqw - \(var\(--hands, 1\) - 1\) \* 8px\) \/ var\(--hands, 1\)\)\);\s*min-width: var\(--bj-hand-least\);[^}]*scroll-snap-align: center;/);
-    expect(sheet).toMatch(/\.bj-hands\.scroll-fade--x \{[^}]*overflow-x: auto;\s*overflow-y: hidden;\s*overscroll-behavior-x: contain;\s*scroll-snap-type: x mandatory;\s*scrollbar-width: none;/);
+    expect(sheet).toMatch(/flex: 0 1 max\(var\(--bj-hand-least\), calc\(\(100cqw - \(var\(--hands, 1\) - 1\) \* 8px\) \/ var\(--hands, 1\)\)\);\s*min-width: var\(--bj-hand-least\);/);
+    expect(sheet).toMatch(/\.bj-hands\.scroll-fade--x \{[^}]*overflow-x: auto;\s*overflow-y: hidden;\s*overscroll-behavior-x: contain;\s*scrollbar-width: none;/);
+    // No snapping and no layout containment: a snap chased a card in flight past the last hand, and
+    // containing each slot's layout left stale card trails on screen in Chrome on Windows.
+    expect(sheet).not.toMatch(/scroll-snap|contain: layout/);
     // No hand ever folds into a number.
     expect(sheet).not.toContain('bj-chip');
   });

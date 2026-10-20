@@ -10,12 +10,27 @@ export type Fade = '' | 'top' | 'bottom' | 'top bottom' | 'left' | 'right' | 'le
 /** The way a `.scroll-fade` box scrolls: down (`y`, the bands at its top and bottom) or sideways (`x`, `.scroll-fade--x`). */
 export type FadeAxis = 'x' | 'y';
 
+/**
+ * How wide a sideways box's content is as laid out: the right edge of its furthest child plus its
+ * end padding. Unlike `scrollWidth` it leaves out a child's moving parts (a dealt card still in the
+ * air reaches past its hand for a moment), so the fades and a scroll to a hand never chase them.
+ */
+export function laidOutWidth(el: HTMLElement): number {
+  const box = el.getBoundingClientRect();
+  let right = 0;
+  for (const child of el.children) right = Math.max(right, child.getBoundingClientRect().right - box.left + el.scrollLeft);
+  return Math.max(el.clientWidth, Math.ceil(right + (parseFloat(getComputedStyle(el).paddingRight) || 0)));
+}
+
+/** The fades of a sideways box scrolled `scrollLeft` into `content` px of hands, `view` px wide. */
+export function sideFade(scrollLeft: number, view: number, content: number): Fade {
+  const left = scrollLeft > 1;
+  const right = scrollLeft + view < content - 1;
+  return left && right ? 'left right' : left ? 'left' : right ? 'right' : '';
+}
+
 export function fadeOf(el: HTMLElement, axis: FadeAxis = 'y'): Fade {
-  if (axis === 'x') {
-    const left = el.scrollLeft > 1;
-    const right = el.scrollLeft + el.clientWidth < el.scrollWidth - 1;
-    return left && right ? 'left right' : left ? 'left' : right ? 'right' : '';
-  }
+  if (axis === 'x') return sideFade(el.scrollLeft, el.clientWidth, laidOutWidth(el));
   const top = el.scrollTop > 1;
   const bottom = el.scrollTop + el.clientHeight < el.scrollHeight - 1;
   return top && bottom ? 'top bottom' : top ? 'top' : bottom ? 'bottom' : '';
