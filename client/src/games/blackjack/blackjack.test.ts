@@ -1174,7 +1174,7 @@ describe("the table’s focus and the stage", () => {
     expect(css.slice(css.indexOf('@media (max-width: 760px) and (max-height: 620px)'))).toMatch(/\.bj-table \{\s*--bj-card-base: 30px;/);
     // The shoe is the size of the cards it deals wherever the dealer's four cards leave it the room (always on a phone, whose
     // cards stop where they would not), never under its least: a crowded phone's 34px (28px on the shortest), a desktop's old size.
-    expect(css).toMatch(/\.bj-table \{[^}]*--bj-deck-least: clamp\(48px, 7cqh, 72px\);\s*--tbl-deck-w: max\(var\(--bj-deck-least\), min\(var\(--bj-card-w\), calc\(50cqw - var\(--tbl-pad\) - 18px - var\(--bj-card-w\) \* 1\.6\)\)\);/);
+    expect(css).toMatch(/\.bj-table \{[^}]*--bj-deck-least: clamp\(44px, 6cqh, 60px\);\s*--tbl-deck-w: max\(var\(--bj-deck-least\), min\(calc\(var\(--bj-card-w\) \* 0\.7\), calc\(50cqw - var\(--tbl-pad\) - 18px - var\(--bj-card-w\) \* 1\.6\)\)\);/);
     expect(phone).toMatch(/\.bj-table \{[^}]*--bj-deck-least: 34px;/);
     expect(css.slice(css.indexOf('@media (max-width: 760px) and (max-height: 620px)'))).toMatch(/\.bj-table \{[^}]*--bj-deck-least: 28px;/);
     expect(css.slice(css.indexOf('/* ---------- Dealer'))).not.toMatch(/--tbl-deck-w:/);
