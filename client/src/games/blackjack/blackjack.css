@@ -34,13 +34,12 @@
   --tbl-mini-w: clamp(30px, 4.6cqh, 40px);
   --tbl-pill-h: clamp(28px, 3.9cqh, 36px);
   /*
-   * The shoe is the size of the cards it deals, as far as the dealer's row leaves it the room: the
-   * dealer's four cards at full size end 1.6 card widths right of the middle (2.32 from the
-   * anchor, 0.72 left of it), and the shoe beside them keeps 18px of the half-table spare (about
-   * 13px clear of the fourth card). Never smaller than --bj-deck-least, its old size. A phone's
-   * cards stop where a shoe their own size would no longer fit (the phone block), so there the
-   * shoe is always the cards' size. The owner found a full card-size shoe too big: it is about
-   * 70% of a card (still well over the old 34px on a phone).
+   * The shoe is sized by the cards it deals: 70% of a card (a full card read as too big), as far
+   * as the dealer's row leaves it the room: the dealer's four cards at full size end 1.6 card
+   * widths right of the middle (2.32 from the anchor, 0.72 left of it), and the shoe beside them
+   * keeps 18px of the half-table spare. Never smaller than --bj-deck-least (its old size, 34px on
+   * a phone). A phone's cards stop where a card-wide shoe would no longer fit (the phone block),
+   * so there the shoe is always 70% of the cards.
    */
   --bj-deck-least: clamp(44px, 6cqh, 60px);
   --tbl-deck-w: max(var(--bj-deck-least), min(calc(var(--bj-card-w) * 0.7), calc(50cqw - var(--tbl-pad) - 18px - var(--bj-card-w) * 1.6)));
@@ -343,8 +342,8 @@
      * seats leave them (--tbl-spare: the table works it out from the seats the round was dealt
      * with, room.ts useSeatRoom), shared by the dealer's hand and mine, 1.67 card widths each
      * (--hand-k): a card pixel takes 3.34px. They stop at 76px, and where the dealer's four cards
-     * (1.6 card widths right of the middle) and the shoe beside them, as wide as a card, would no
-     * longer fit the half of the table right of the middle: 2.6 card widths and 18px, 61.9px on a
+     * (1.6 card widths right of the middle) and a card-wide shoe beside them would no longer fit
+     * the half of the table right of the middle: 2.6 card widths and 18px, 61.9px on a
      * 390px phone. A crowd that needs all its room keeps the least card; a few players leave the
      * cards the felt. --tbl-grow tells the table how much taller the two rows are for it.
      */

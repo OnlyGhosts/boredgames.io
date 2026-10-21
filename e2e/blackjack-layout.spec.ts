@@ -139,12 +139,14 @@ async function fixedPlaces(browser: Browser, base: string, size: { width: number
     const botIds = new Set(bots.map((b) => b.id));
     const ref = await places(page);
     // A 390x844 phone with one other player: the cards take the felt the seat leaves them (55.5px when they went by the
-    // table's height alone) up to where the dealer's four and a shoe their own size still fit beside each other, 61.9px (71px
-    // beside the old 34px shoe), the shoe as wide as they are, and keep that size through the round (the places below).
+    // table's height alone) up to where the dealer's four and a card-wide shoe would still fit beside each other, 61.9px (71px
+    // beside the old 34px shoe); the shoe itself is 70% of a card (the owner found a full card too big), and the cards keep
+    // their size through the round (the places below).
     if (size.width === 390 && size.height === 844 && players === 2) {
-      expect(await cardWidth(page), `${label}: the cards`).toBeGreaterThanOrEqual(61.5);
+      const card = await cardWidth(page);
+      expect(card, `${label}: the cards`).toBeGreaterThanOrEqual(61.5);
       const deck = await page.getByTestId('bj-table').evaluate((el) => Math.round(parseFloat(getComputedStyle(el).getPropertyValue('--tbl-deck-w')) * 10) / 10);
-      expect(deck, `${label}: the shoe as wide as the cards`).toBe(await cardWidth(page));
+      expect(deck, `${label}: the shoe is 70% of a card`).toBe(Math.round(card * 7) / 10);
     }
     if (size.width === 320 && players === 4) await expect(page.getByTestId('seats'), `${label}: the seats`).toHaveAttribute('data-tier', 'compact');
     const seen = new Set<string>();
