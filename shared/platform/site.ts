@@ -1,5 +1,7 @@
 /** Site identity: the one place to rename the site. Games keep their own names in the registry. */
 export const SITE_NAME = 'boredgames.io';
+/** The name as two words, for search engines and screen readers: what people type and say. */
+export const BRAND_NAME = 'Bored Games';
 /** The one-line description for the document head, the manifest and link previews. */
 /**
  * Canonical public origin, used for social previews and docs only. The running app always uses

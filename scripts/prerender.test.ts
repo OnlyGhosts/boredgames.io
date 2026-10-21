@@ -11,10 +11,10 @@ const shell = readFileSync(fileURLToPath(new URL('../client/index.html', import.
 describe('prerender', () => {
   it('puts the home head, structured data and markup into the shell', () => {
     const html = withRoot(withHead(shell, homeHead(), jsonLd()), '<main>front door</main>', '/');
-    expect(html).toContain('<title>boredgames.io: party games for phones in the same room</title>');
+    expect(html).toContain('<title>Bored Games: party games for phones in the same room</title>');
     expect(html).toContain('<meta name="robots" content="index, follow"');
     expect(html).toContain('<link rel="canonical" href="https://boredgames.io/"');
-    expect(html).toContain('<meta property="og:title" content="boredgames.io: party games for phones in the same room"');
+    expect(html).toContain('<meta property="og:title" content="Bored Games: party games for phones in the same room"');
     expect(html).toContain('<script type="application/ld+json">');
     expect(html).toContain('<div id="root" data-prerendered="/"><main>front door</main></div>');
     expect(html.match(/<title>/g)).toHaveLength(1);
@@ -46,7 +46,7 @@ describe('prerender', () => {
   it('writes the front door, the 404 page and the sitemap into the build', () => {
     const dir = mkdtempSync(join(tmpdir(), 'pre-'));
     writeFileSync(join(dir, 'index.html'), shell);
-    prerender(dir, (path) => `<main data-path="${path}"><h1 class="sr-only">boredgames.io</h1><button data-testid="home-join">Join</button><button data-testid="home-create">Create a room</button></main>`, '2026-10-21');
+    prerender(dir, (path) => `<main data-path="${path}"><h1 class="sr-only">Bored Games</h1><button data-testid="home-join">Join</button><button data-testid="home-create">Create a room</button></main>`, '2026-10-21');
     const index = readFileSync(join(dir, 'index.html'), 'utf8');
     expect(index).toContain('<div id="root" data-prerendered="/"><main data-path="/">');
     expect(index).toContain('<meta name="robots" content="index, follow"');

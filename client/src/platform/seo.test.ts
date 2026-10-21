@@ -9,9 +9,9 @@ const { parseRoute } = await import('./router');
 describe('seo', () => {
   it('describes the home page within the limits search engines show', () => {
     const head = homeHead();
-    expect(head.title).toBe('boredgames.io: party games for phones in the same room');
+    expect(head.title).toBe('Bored Games: party games for phones in the same room');
     expect(head.title.length).toBeLessThanOrEqual(60);
-    expect(head.description).toBe('Free party games for friends in the same room: drawing, who is the spy, comedy answers, blackjack and poker. One room code, a phone each, no app, no accounts.');
+    expect(head.description).toBe('Free party games for friends in one room, on boredgames.io: drawing, who is the spy, comedy answers, blackjack and poker. One room code, a phone each, no app.');
     // Google shows about 160 characters of a description; a longer one is cut mid-sentence.
     expect(head.description.length).toBeLessThanOrEqual(160);
     expect(head.canonical).toBe('https://boredgames.io/');
@@ -35,7 +35,8 @@ describe('seo', () => {
     const app = jsonLd()[2] as Record<string, unknown>;
     expect(app).toMatchObject({
       '@context': 'https://schema.org',
-      name: 'boredgames.io',
+      name: 'Bored Games',
+      alternateName: 'boredgames.io',
       url: 'https://boredgames.io/',
       applicationCategory: 'GameApplication',
       operatingSystem: 'Any',
@@ -43,7 +44,7 @@ describe('seo', () => {
       isAccessibleForFree: true,
       offers: { '@type': 'Offer', price: '0', priceCurrency: 'GBP' },
     });
-    expect(jsonLd()[0]).toMatchObject({ '@type': 'Organization', name: 'boredgames.io', url: 'https://boredgames.io/', logo: 'https://boredgames.io/icons/icon-512.png' });
+    expect(jsonLd()[0]).toMatchObject({ '@type': 'Organization', name: 'Bored Games', alternateName: 'boredgames.io', url: 'https://boredgames.io/', logo: 'https://boredgames.io/icons/icon-512.png' });
     expect(JSON.parse(JSON.stringify(jsonLd()))).toHaveLength(3);
   });
 });

@@ -5,7 +5,7 @@
  * (scripts/prerender.ts). A new public page joins PUBLIC_ROUTES and gets its head here, and the
  * prerender, the sitemap and the tests pick it up at once. Nothing here is shown to a player.
  */
-import { SITE_NAME, SITE_URL } from '@shared/platform/site';
+import { BRAND_NAME, SITE_NAME, SITE_URL } from '@shared/platform/site';
 import { roomTitle } from './lib/tabTitle';
 
 export { SITE_URL };
@@ -30,8 +30,8 @@ export interface Head {
 export type HeadRoute = { kind: 'home'; code: string | null } | { kind: 'game' } | { kind: 'unknown' };
 
 const HOME_URL = `${SITE_URL}/`;
-const HOME_TITLE = `${SITE_NAME}: party games for phones in the same room`;
-const HOME_DESCRIPTION = 'Free party games for friends in the same room: drawing, who is the spy, comedy answers, blackjack and poker. One room code, a phone each, no app, no accounts.';
+const HOME_TITLE = `${BRAND_NAME}: party games for phones in the same room`;
+const HOME_DESCRIPTION = 'Free party games for friends in one room, on boredgames.io: drawing, who is the spy, comedy answers, blackjack and poker. One room code, a phone each, no app.';
 /** The share image until the 1200x630 card lands: then '/og.png' here and twitter:card summary_large_image in index.html. */
 const OG_IMAGE = `${SITE_URL}/icons/icon-512.png`;
 
@@ -64,12 +64,13 @@ export function headFor(route: HeadRoute): Head {
 export function jsonLd(): object[] {
   const context = 'https://schema.org';
   return [
-    { '@context': context, '@type': 'Organization', name: SITE_NAME, url: HOME_URL, logo: OG_IMAGE },
-    { '@context': context, '@type': 'WebSite', name: SITE_NAME, url: HOME_URL },
+    { '@context': context, '@type': 'Organization', name: BRAND_NAME, alternateName: SITE_NAME, url: HOME_URL, logo: OG_IMAGE },
+    { '@context': context, '@type': 'WebSite', name: BRAND_NAME, alternateName: SITE_NAME, url: HOME_URL },
     {
       '@context': context,
       '@type': 'WebApplication',
-      name: SITE_NAME,
+      name: BRAND_NAME,
+      alternateName: SITE_NAME,
       url: HOME_URL,
       applicationCategory: 'GameApplication',
       operatingSystem: 'Any',

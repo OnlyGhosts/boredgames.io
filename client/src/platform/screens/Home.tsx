@@ -3,7 +3,7 @@ import { randomAvatar, type Avatar as AvatarData } from '@shared/platform/avatar
 import { NAME_MAX_LENGTH } from '@shared/platform/constants';
 import { GAME_LIST, gameById, type GameMeta } from '@shared/platform/games';
 import { ROOM_CODE_LENGTH, isValidRoomCode, roomCodeHint } from '@shared/platform/roomCode';
-import { SITE_NAME } from '@shared/platform/site';
+import { BRAND_NAME } from '@shared/platform/site';
 import { AvatarPicker } from '../components/AvatarPicker';
 import { CodeInput, type CodeInputHandle } from '../components/CodeInput';
 import { AlertIcon, LinkIcon } from '../components/Icons';
@@ -230,7 +230,7 @@ export function Home({ code: linkedCode, game: linkedGame }: Props) {
       <SiteHeader hero />
 
       <main className="home__main">
-        <h1 className="sr-only">{SITE_NAME}</h1>
+        <h1 className="sr-only">{BRAND_NAME}</h1>
 
         {view === 'rejoining' && (
           <div className="banner banner--info home__banner" role="status" data-testid="rejoining-banner">
@@ -400,7 +400,7 @@ export function Home({ code: linkedCode, game: linkedGame }: Props) {
 export function QuietHome() {
   return (
     <div className="home" aria-busy="true" data-testid="home-quiet">
-      <h1 className="sr-only">{SITE_NAME}</h1>
+      <h1 className="sr-only">{BRAND_NAME}</h1>
     </div>
   );
 }

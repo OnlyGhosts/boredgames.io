@@ -40,7 +40,7 @@ export function isOwnPage404(msg: ConsoleMessage): boolean {
 }
 
 /** The browser tab on the front door: the site and what it is for, as search results show it. */
-export const HOME_TAB_TITLE = 'boredgames.io: party games for phones in the same room';
+export const HOME_TAB_TITLE = 'Bored Games: party games for phones in the same room';
 
 /** The browser tab inside a room: the site, a door and the code in Mathematical Sans-Serif Bold ("boredgames.io 🚪 𝗔𝗕𝟮𝟯"). */
 export function roomTabTitle(code: string): string {

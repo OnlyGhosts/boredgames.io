@@ -26,8 +26,8 @@ test('the front door is real HTML before any script runs', async ({ request }) =
   expect(html).toContain(HOME_TITLE_TAG);
   expect(html).toContain('<link rel="canonical" href="https://boredgames.io/"');
   expect(html).toContain('<meta name="robots" content="index, follow"');
-  expect(html).toContain('<meta property="og:title" content="boredgames.io: party games for phones in the same room"');
-  expect(html).toContain('<h1 class="sr-only">boredgames.io</h1>');
+  expect(html).toContain('<meta property="og:title" content="Bored Games: party games for phones in the same room"');
+  expect(html).toContain('<h1 class="sr-only">Bored Games</h1>');
   expect(html).toContain('data-testid="home-create"');
   expect(html).toContain('data-testid="home-join"');
   expect(html).toContain('data-prerendered="/"');
