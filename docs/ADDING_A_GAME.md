@@ -240,6 +240,20 @@ and goes the moment the link is back. There is no header pill, banner or connect
 it, and while it shows the waiting overlay steps aside (its list of who is missing is stale then).
 A game never draws its own.
 
+**Search engines.** The public pages are listed in [`seo.ts`](../client/src/platform/seo.ts)
+(`PUBLIC_ROUTES`, one entry today: `/`), each with its title, description, canonical and robots
+value (`headFor`), which the app writes into the head on every route change
+([`lib/head.ts`](../client/src/platform/lib/head.ts)) and the build writes into real HTML:
+[`scripts/prerender.ts`](../scripts/prerender.ts) renders each public route with
+[`entry-prerender.tsx`](../client/src/entry-prerender.tsx) (no browser: the first render must read
+nothing from `window`, storage or `Math.random`, or hydration mismatches), writes `404.html` and
+`sitemap.xml`, and the client hydrates a page marked `data-prerendered`. Room links are `noindex`
+(`isRoomPath` in [`roomCode.ts`](../shared/platform/roomCode.ts), mirrored by `vercel.json`), a
+bare game slug redirects to `/`, and anything else is a real 404. A new public page is a new route
+kind, an entry in `PUBLIC_ROUTES` with its head, and a check in `e2e/seo.spec.ts`. Nothing is added
+on screen for crawlers: hidden text is spam to Google, and the only screen-reader-only text is what
+accessibility needs.
+
 **New versions.** A tab left open picks up a new version of the site by itself
 ([`lib/update.ts`](../client/src/platform/lib/update.ts), wired in by
 [`lib/useAutoUpdate.ts`](../client/src/platform/lib/useAutoUpdate.ts)). `vite build` stamps a build

@@ -88,8 +88,15 @@ export function Home({ code: linkedCode, game: linkedGame }: Props) {
   const rejoining = usePlatformStore((s) => s.rejoining);
   const clearJoinError = usePlatformStore((s) => s.clearJoinError);
 
-  const [name, setName] = useState(loadName);
-  const [avatar, setAvatar] = useState<AvatarData>(() => loadAvatar() ?? randomAvatar());
+  // What this device remembers comes in after mount, never in the first render: the prerendered
+  // front door must hydrate against the same markup for every visitor (the name only shows in
+  // the "Who's playing?" step, after a tap, so nobody sees the moment in between).
+  const [name, setName] = useState('');
+  const [avatar, setAvatar] = useState<AvatarData | null>(null);
+  useEffect(() => {
+    setName(loadName());
+    setAvatar(loadAvatar() ?? randomAvatar());
+  }, []);
   const [code, setCode] = useState(linkedCode ?? '');
   const [codeHint, setCodeHint] = useState<string | null>(null);
   const [nameError, setNameError] = useState<string | null>(null);
@@ -120,10 +127,6 @@ export function Home({ code: linkedCode, game: linkedGame }: Props) {
   }, [rejoining]);
   const view = homeView(rejoining, rejoinStale, rejoinQuiet);
   const formShown = view === 'form' || view === 'stale';
-
-  useEffect(() => {
-    document.title = SITE_NAME;
-  }, []);
 
   // An invite link fills the boxes; one tap (or Enter) joins.
   useEffect(() => {
@@ -157,11 +160,12 @@ export function Home({ code: linkedCode, game: linkedGame }: Props) {
   }, [step]);
 
   const submit = (which: Intent, clean: string) => {
+    const chosen = avatar ?? randomAvatar();
     saveName(clean);
-    saveAvatar(avatar);
+    saveAvatar(chosen);
     setIntent(which);
-    if (which === 'create') createRoom(initialGame(linkedGame).id, clean, avatar);
-    else joinRoom(code, clean, avatar);
+    if (which === 'create') createRoom(initialGame(linkedGame).id, clean, chosen);
+    else joinRoom(code, clean, chosen);
   };
 
   /** Join: the code must be complete and well-formed before anything is sent; then the name, then the request. */
@@ -359,7 +363,7 @@ export function Home({ code: linkedCode, game: linkedGame }: Props) {
                   </p>
                 )}
               </div>
-              <AvatarPicker value={avatar} onChange={setAvatar} />
+              {avatar && <AvatarPicker value={avatar} onChange={setAvatar} />}
               <div className="panel__actions">
                 <button type="submit" className="btn btn--primary panel__action" data-testid="home-continue" disabled={joinPending} aria-busy={joinPending}>
                   {joinPending ? (

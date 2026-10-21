@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  isGameSlugPath,
+  isRoomPath,
   ROOM_CODE_ALPHABET,
   ROOM_CODE_LENGTH,
   extractRoomCode,
@@ -41,5 +43,25 @@ describe('room codes', () => {
     expect(extractRoomCode('xk4p')).toBe('XK4P');
     expect(extractRoomCode('hello')).toBeNull();
     expect(extractRoomCode('')).toBeNull();
+  });
+});
+
+describe('isGameSlugPath', () => {
+  it('knows the old per-game landing pages, any case, current or former slug', () => {
+    for (const path of ['/scribble', '/SPYGAME', '/skribble', '/template/']) expect(isGameSlugPath(path), path).toBe(true);
+    for (const path of ['/', '/hangman', '/scribble/MRAN', '/MRAN', '/nope/path']) expect(isGameSlugPath(path), path).toBe(false);
+  });
+});
+
+describe('isRoomPath', () => {
+  it('knows a room link by its shape: a game slug (current or former, any case) and a four-character code, or the bare code', () => {
+    for (const path of ['/scribble/MRAN', '/SPYGAME/mran', '/Scribble/MRAN', '/skribble/AB2K', '/template/AB2K', '/MRAN', '/mran', '/scribble/MRAN/']) {
+      expect(isRoomPath(path), path).toBe(true);
+    }
+  });
+  it('leaves everything else to the 404 page', () => {
+    for (const path of ['/', '/scribble', '/nope/path', '/hangman', '/battleships/MRAN', '/scribble/MRAN/extra', '/MRANX', '/MR-N', '/scribble/MR', '/api/rooms/MRAN']) {
+      expect(isRoomPath(path), path).toBe(false);
+    }
   });
 });

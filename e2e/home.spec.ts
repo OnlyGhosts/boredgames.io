@@ -1,5 +1,5 @@
 import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test';
-import { closeResults, createParty, enterNameIfAsked, joinByLink, leaveLobby, readyAll, roomTabTitle } from './party';
+import { HOME_TAB_TITLE, closeResults, createParty, enterNameIfAsked, isOwnPage404, joinByLink, leaveLobby, readyAll, roomTabTitle } from './party';
 
 /**
  * The front door and the routing around it: Join a room and Create a room and nothing else, the four code
@@ -31,7 +31,7 @@ async function newPlayer(browser: Browser, name: string, options: Parameters<Bro
   const errors: string[] = [];
   page.on('pageerror', (err) => errors.push(`${name}: ${err.message}`));
   page.on('console', (msg) => {
-    if (msg.type() === 'error') errors.push(`${name}: ${msg.text()}`);
+    if (msg.type() === 'error' && !isOwnPage404(msg)) errors.push(`${name}: ${msg.text()}`);
   });
   const player: Player = { name, context, page, errors };
   players.push(player);
@@ -81,7 +81,7 @@ test.afterAll(async () => {
 
 test('the front door has exactly two action paths, four visible boxes and no catalogue or menu', async () => {
   await host.page.goto('/');
-  await expect(host.page).toHaveTitle('boredgames.io');
+  await expect(host.page).toHaveTitle(HOME_TAB_TITLE);
   // Connected: no connection notice at all (it only shows once the link has been gone a moment).
   await expect(host.page.getByTestId('home-create')).toBeVisible();
   await expect(host.page.getByTestId('connection-notice')).toHaveCount(0);
@@ -388,7 +388,7 @@ test('Back and the wordmark link leave the room and land on the front door', asy
   await expect(host.page.getByTestId('player-item')).toHaveCount(2);
   await guest.page.getByTestId('brand-link').click();
   await expect(guest.page).toHaveURL(/\/$/);
-  await expect(guest.page).toHaveTitle('boredgames.io');
+  await expect(guest.page).toHaveTitle(HOME_TAB_TITLE);
   await expect(guest.page.getByTestId('create-panel')).toBeVisible();
   await expect(host.page.getByTestId('player-item')).toHaveCount(1);
   expect(await (await guest.page.request.get(`/api/rooms/${scribbleCode}`)).json()).toMatchObject({ exists: true, players: 1 });

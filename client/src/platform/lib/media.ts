@@ -27,6 +27,10 @@ export function matchesMedia(query: string): boolean {
   return typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia(query).matches;
 }
 
+/**
+ * Whether the query matches, read in the first render (a lobby or game screen is never
+ * prerendered, so there is no server markup for it to match) and followed from then on.
+ */
 export function useMediaQuery(query: string): boolean {
   const [matches, setMatches] = useState(() => matchesMedia(query));
   useEffect(() => {

@@ -5,7 +5,8 @@ import { buildStamp } from './scripts/buildStamp';
 
 const serverPort = process.env.PORT ?? '3001';
 
-export default defineConfig({
+// The SSR pass (the prerender bundle, see scripts/prerender.ts) needs no copy of client/public.
+export default defineConfig(({ isSsrBuild }) => ({
   root: 'client',
   plugins: [react(), buildStamp()],
   resolve: {
@@ -25,5 +26,6 @@ export default defineConfig({
     outDir: '../dist/client',
     emptyOutDir: true,
     sourcemap: false,
+    copyPublicDir: !isSsrBuild,
   },
-});
+}));

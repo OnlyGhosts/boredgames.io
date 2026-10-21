@@ -5,6 +5,7 @@ import express, { type Express, type NextFunction, type Request, type Response }
 import { WebSocketServer } from 'ws';
 import { MAX_WS_MESSAGE_BYTES } from '../../shared/platform/constants.js';
 import { CLOSE_RESTARTING, ROOM_PREVIEW_PATH, WS_PATH } from '../../shared/platform/protocol.js';
+import { isGameSlugPath, isRoomPath } from '../../shared/platform/roomCode.js';
 import { asSocketLike, handleConnection } from './connection.js';
 import { after, type GameDriver } from './drivers/types.js';
 
@@ -17,6 +18,12 @@ export interface AppOptions {
   clientDir?: string;
   /** Request paths that accept the WebSocket upgrade; defaults to WS_PATH. */
   wsPaths?: string[];
+  /**
+   * The host the site is the site on (CANONICAL_HOST, default boredgames.io). On any other host
+   * (the Fly machine's own hostname) the pages ask not to be indexed and robots.txt disallows all,
+   * so search engines never take that copy for the site.
+   */
+  canonicalHost?: string;
 }
 
 export interface App {
@@ -38,6 +45,7 @@ export function createApp(options: AppOptions): App {
   const { driver } = options;
   const log = options.log ?? (() => undefined);
   const wsPaths = options.wsPaths ?? [WS_PATH];
+  const canonicalHost = options.canonicalHost ?? process.env.CANONICAL_HOST ?? 'boredgames.io';
 
   const app = express();
   app.disable('x-powered-by');
@@ -74,6 +82,18 @@ export function createApp(options: AppOptions): App {
   if (options.serveStatic ?? true) {
     const clientDir = options.clientDir ?? path.resolve(process.cwd(), 'dist/client');
     if (existsSync(path.join(clientDir, 'index.html'))) {
+      // A build from before the prerender has no 404 page: the shell with a 404 status does then.
+      const notFoundPage = existsSync(path.join(clientDir, '404.html')) ? '404.html' : 'index.html';
+      app.use((req: Request, res: Response, next: NextFunction) => {
+        // A local run (dev, the e2e suite) is the site itself, not a copy of it.
+        if (req.hostname === canonicalHost || req.hostname === 'localhost' || req.hostname === '127.0.0.1') return next();
+        if (req.path === '/robots.txt') {
+          res.type('text/plain').send('User-agent: *\nDisallow: /\n');
+          return;
+        }
+        res.setHeader('X-Robots-Tag', 'noindex');
+        next();
+      });
       // index.html is checked with the server every time and version.json never stored, so a tab
       // reloading for a new version (client lib/update.ts) gets it; hashed assets keep the hour.
       app.use(
@@ -86,7 +106,9 @@ export function createApp(options: AppOptions): App {
           },
         }),
       );
-      // SPA fallback so share links such as https://host/scribble/XK4P load the app.
+      // Room links such as https://host/scribble/XK4P load the app (never indexed: a room is not a
+      // page); any other unknown path is a real 404 carrying the 404 page, where the app still
+      // mounts and shows the front door. The same shapes as vercel.json's rewrites.
       app.use((req: Request, res: Response, next: NextFunction) => {
         if (req.method !== 'GET' && req.method !== 'HEAD') return next();
         if (req.path.startsWith('/api') || wsPaths.some((p) => req.path.startsWith(p))) return next();
@@ -94,7 +116,16 @@ export function createApp(options: AppOptions): App {
         res.setHeader('Cache-Control', 'no-cache');
         // `root` keeps the path relative: an absolute path would make sendFile apply its dotfiles
         // policy to every directory on the way and 404 from a checkout under a dot-directory.
-        res.sendFile('index.html', { root: clientDir, dotfiles: 'allow' });
+        const file = { root: clientDir, dotfiles: 'allow' } as const;
+        if (isRoomPath(req.path)) {
+          res.setHeader('X-Robots-Tag', 'noindex, nofollow');
+          res.sendFile('index.html', file);
+        } else if (isGameSlugPath(req.path)) {
+          // The old per-game landing pages: the front door, as Vercel's redirect sends them.
+          res.redirect(308, '/');
+        } else {
+          res.status(404).sendFile(notFoundPage, file);
+        }
       });
       log(`serving client from ${clientDir}`);
     } else {

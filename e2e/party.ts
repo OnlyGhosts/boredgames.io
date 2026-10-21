@@ -1,4 +1,4 @@
-import { expect, type Locator, type Page } from '@playwright/test';
+import { type ConsoleMessage, type Locator, type Page, expect } from '@playwright/test';
 import { GAME_LIST } from '../shared/platform/games';
 
 /** The slug a new party starts on: the first live game (Scribble). */
@@ -26,6 +26,21 @@ export async function expectReadyCount(hostPage: Page, count: number): Promise<v
 }
 
 export const ROOM_CODE_RE = /^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{4}$/;
+
+/**
+ * The browser noting a page's own 404 status in the console: an unknown path is a real 404 that
+ * still carries the app (the front door with a note), so it is no page error. A missing asset
+ * (a path with an extension) stays one.
+ */
+export function isOwnPage404(msg: ConsoleMessage): boolean {
+  const url = msg.location().url;
+  if (!url || !msg.text().includes('status of 404')) return false;
+  const { pathname } = new URL(url);
+  return !pathname.startsWith('/api/') && !/\.[a-zA-Z0-9]+$/.test(pathname);
+}
+
+/** The browser tab on the front door: the site and what it is for, as search results show it. */
+export const HOME_TAB_TITLE = 'boredgames.io: party games for phones in the same room';
 
 /** The browser tab inside a room: the site, a door and the code in Mathematical Sans-Serif Bold ("boredgames.io 🚪 𝗔𝗕𝟮𝟯"). */
 export function roomTabTitle(code: string): string {

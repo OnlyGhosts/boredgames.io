@@ -4,20 +4,29 @@
   "outputDirectory": "dist/client",
   "framework": null,
   "fluid": true,
+  "trailingSlash": false,
   "functions": {
     "api/server.ts": {
       "maxDuration": 300,
       "excludeFiles": "dist/**"
     }
   },
+  "redirects": [
+    { "source": "/index.html", "destination": "/", "permanent": true },
+    { "source": "/(scribble|skribble|spygame|quipgame|blackjack|poker|template)", "destination": "/", "permanent": true }
+  ],
   "headers": [
     { "source": "/version.json", "headers": [{ "key": "Cache-Control", "value": "no-store" }] },
+    { "source": "/assets/(.*)", "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }] },
     { "source": "/index.html", "headers": [{ "key": "Cache-Control", "value": "no-cache" }] },
-    { "source": "/((?!api/|ws$)[^.]*)", "headers": [{ "key": "Cache-Control", "value": "no-cache" }] }
+    { "source": "/((?!api/|ws$)[^.]*)", "headers": [{ "key": "Cache-Control", "value": "no-cache" }] },
+    { "source": "/:slug(scribble|skribble|spygame|quipgame|blackjack|poker|template)/:code([A-Za-z0-9]{4})", "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }] },
+    { "source": "/:code([A-Za-z0-9]{4})", "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }] }
   ],
   "rewrites": [
     { "source": "/ws", "destination": "/api/server" },
     { "source": "/api/(.*)", "destination": "/api/server" },
-    { "source": "/((?!api/|ws$|assets/|icons/|manifest.webmanifest|favicon.svg).*)", "destination": "/index.html" }
+    { "source": "/:slug(scribble|skribble|spygame|quipgame|blackjack|poker|template)/:code([A-Za-z0-9]{4})", "destination": "/index.html" },
+    { "source": "/:code([A-Za-z0-9]{4})", "destination": "/index.html" }
   ]
 }

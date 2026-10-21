@@ -1,8 +1,10 @@
+import { gameByFormerSlug, gameBySlug } from './games.js';
 /**
  * Room codes: 4 characters from an alphabet without look-alike glyphs
  * (no I, L, O, 0, 1) so they are easy to read aloud and type.
  * 31^4 = 923,521 possible codes.
  */
+
 export const ROOM_CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 export const ROOM_CODE_LENGTH = 4;
 
@@ -50,4 +52,28 @@ export function extractRoomCode(text: string): string | null {
   }
   const c = normalizeRoomCode(text);
   return isValidRoomCode(c) ? c : null;
+}
+
+/**
+ * Whether a path is a room link the app opens: '/:slug/CODE' with a current or former game slug,
+ * or the legacy '/CODE', the code four letters or digits in any case (the app normalises it).
+ * The server's fallback and vercel.json's rewrites agree on these shapes: they get the app with a
+ * noindex header; any other unknown path is a real 404.
+ */
+export function isRoomPath(pathname: string): boolean {
+  const segments = pathname.split('/').filter(Boolean);
+  const code = segments[segments.length - 1];
+  if (!code || !/^[A-Za-z0-9]{4}$/.test(code)) return false;
+  if (segments.length === 1) return true;
+  if (segments.length !== 2) return false;
+  const slug = segments[0].toLowerCase();
+  return gameBySlug(slug) !== undefined || gameByFormerSlug(slug) !== undefined;
+}
+
+/** A bare game slug, current or former, any case: the old per-game landing pages, sent to the front door. */
+export function isGameSlugPath(pathname: string): boolean {
+  const segments = pathname.split('/').filter(Boolean);
+  if (segments.length !== 1) return false;
+  const slug = segments[0].toLowerCase();
+  return gameBySlug(slug) !== undefined || gameByFormerSlug(slug) !== undefined;
 }

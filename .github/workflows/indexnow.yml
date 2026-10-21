@@ -1,0 +1,17 @@
+name: IndexNow
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # Vercel deploys the push within a couple of minutes; the ping must find the new sitemap.
+      - run: sleep 120
+      - run: node scripts/indexnow.mjs

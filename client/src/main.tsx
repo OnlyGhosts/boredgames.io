@@ -11,7 +11,7 @@ import './platform/styles/results.css';
 import './platform/styles/home.css';
 import './platform/styles/lobby.css';
 import { StrictMode } from 'react';
-import { createRoot } from 'react-dom/client';
+import { createRoot, hydrateRoot } from 'react-dom/client';
 import { App } from './App';
 import { GAMES } from './games';
 import { registerGames } from './platform/registry';
@@ -22,8 +22,12 @@ registerGames(GAMES);
 const container = document.getElementById('root');
 if (!container) throw new Error('Missing #root element');
 
-createRoot(container).render(
+const tree = (
   <StrictMode>
     <App />
-  </StrictMode>,
+  </StrictMode>
 );
+// The build writes the front door into index.html as real HTML (scripts/prerender.ts): that markup
+// is hydrated; any other page (a room link, the 404 page) is rendered afresh as before.
+if (container.dataset.prerendered === window.location.pathname) hydrateRoot(container, tree);
+else createRoot(container).render(tree);

@@ -240,7 +240,13 @@ Good to know:
   `/version.json`; a tab that finds a different one reloads at once between games and waits for a
   running game to end (or the tab to go to the background), once per version. `vercel.json` serves
   `version.json` with `no-store` and the page with `no-cache`; the hashed files under `/assets/`
-  keep Vercel's default caching.
+  are cached for a year (they change name with every build).
+- Search engines get real pages with nothing new on screen. The build renders the front door to
+  HTML (`scripts/prerender.ts`, hydrated on load), writes a `404.html` and a `sitemap.xml`, and
+  `client/src/platform/seo.ts` names every public page's title, description and structured data.
+  Room links answer `noindex`, unknown paths a real 404, the old per-game paths a redirect to `/`,
+  and the Fly copy of the site tells crawlers to stay away. `docs/SEO.md` has the Search Console
+  steps and the checks to run after a deploy.
 - `VITE_GAME_SERVER` is the only link between the two hosts. To move the server, run the Dockerfile
   anywhere that allows WebSocket upgrades and point the variable at it.
 - Adding a game needs no deploy setup: both the Fly build and `api/server.ts` bundle whatever the

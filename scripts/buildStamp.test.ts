@@ -16,9 +16,9 @@ describe('resolveBuildId', () => {
 
 type Hook = (...args: unknown[]) => unknown;
 
-function run(command: 'build' | 'serve') {
+function run(command: 'build' | 'serve', isSsrBuild = false) {
   const plugin = buildStamp(() => 'id-1');
-  const config = (plugin.config as Hook)({}, { command, mode: 'production' });
+  const config = (plugin.config as Hook)({}, { command, mode: 'production', isSsrBuild });
   const emitted: { fileName: string; source: string }[] = [];
   (plugin.generateBundle as Hook).call({ emitFile: (f: { fileName: string; source: string }) => emitted.push(f) });
   return { config, emitted };
@@ -31,6 +31,11 @@ describe('buildStamp', () => {
     expect(emitted).toHaveLength(1);
     expect(emitted[0].fileName).toBe(VERSION_FILE);
     expect(JSON.parse(emitted[0].source)).toEqual({ id: 'id-1' });
+  });
+  it('gives the prerender bundle the same id and no version.json', () => {
+    const { config, emitted } = run('build', true);
+    expect(config).toEqual({ define: { __BUILD_ID__: '"id-1"' } });
+    expect(emitted).toHaveLength(0);
   });
   it('leaves the dev server unstamped', () => {
     const { config, emitted } = run('serve');

@@ -28,19 +28,22 @@ export function resolveBuildId(
 
 /**
  * Stamps `vite build`: `__BUILD_ID__` in the bundle and the same id in `version.json`. The dev
- * server gets no id, and with no id the client never checks for a new version.
+ * server gets no id, and with no id the client never checks for a new version. The SSR pass (the
+ * prerender bundle) gets the same id but no version.json: only the client build is a version.
  */
 export function buildStamp(resolve: () => string = resolveBuildId): Plugin {
   let id = '';
+  let ssr = false;
   return {
     name: 'build-stamp',
-    config(_config, { command }) {
+    config(_config, { command, isSsrBuild }) {
       if (command !== 'build') return;
       id = resolve();
+      ssr = Boolean(isSsrBuild);
       return { define: { __BUILD_ID__: JSON.stringify(id) } };
     },
     generateBundle() {
-      if (id) this.emitFile({ type: 'asset', fileName: VERSION_FILE, source: `${JSON.stringify({ id })}\n` });
+      if (id && !ssr) this.emitFile({ type: 'asset', fileName: VERSION_FILE, source: `${JSON.stringify({ id })}\n` });
     },
   };
 }

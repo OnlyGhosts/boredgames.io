@@ -84,8 +84,12 @@ export function inviteLink(game: GameMeta | GameId, code: string): string {
   return `${window.location.origin}${roomPath(game, code)}`;
 }
 
-/** The route the address bar names, after replacing an old link's former slug with the current one (no history entry). */
+/**
+ * The route the address bar names, after replacing an old link's former slug with the current one
+ * (no history entry). With no browser (the build prerendering the front door) it is the front door.
+ */
 function currentRoute(): Route {
+  if (typeof window === 'undefined') return parseRoute('/');
   const { pathname, search, hash } = window.location;
   const canonical = canonicalPath(pathname);
   if (canonical !== pathname) window.history.replaceState(null, '', canonical + search + hash);

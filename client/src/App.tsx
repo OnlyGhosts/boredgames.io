@@ -8,7 +8,7 @@ import { loadPlatformSoundsAfterGesture } from './platform/lib/platformSounds';
 import { setSoundEnabled, unlockAudio, type AnySoundBank } from './platform/lib/sound';
 import { startConnectionNotice, useConnectionNotice } from './platform/lib/connectionNotice';
 import { DEFAULT_THEME } from './platform/lib/storage';
-import { roomTitle } from './platform/lib/tabTitle';
+import { applyHead } from './platform/lib/head';
 import { useAutoUpdate } from './platform/lib/useAutoUpdate';
 import { useLive } from './platform/lib/useLive';
 import { useViewport } from './platform/lib/useViewport';
@@ -19,6 +19,7 @@ import { codeFromLocation, navigate, roomPath, startRouter, useRouter } from './
 import { startRouteSync } from './platform/routeSync';
 import { Home } from './platform/screens/Home';
 import { Lobby } from './platform/screens/Lobby';
+import { headFor, roomHead } from './platform/seo';
 import { selectIsHost } from './platform/store/selectors';
 import { usePlatformStore } from './platform/store/usePlatformStore';
 
@@ -36,8 +37,8 @@ function useTheme(): void {
 }
 
 /**
- * Mirrors the room into the address bar ('/:slug/:CODE') and the title. The other direction
- * (navigating away leaves the room) is routeSync's; moving the URL after a leave is resetRoom's.
+ * Mirrors the room into the address bar ('/:slug/:CODE'). The other direction (navigating away
+ * leaves the room) is routeSync's; moving the URL after a leave is resetRoom's.
  */
 function useUrlSync(): void {
   const code = usePlatformStore((s) => s.room?.code ?? null);
@@ -45,8 +46,20 @@ function useUrlSync(): void {
   useEffect(() => {
     if (!code || !gameId) return;
     navigate(roomPath(gameId, code), { replace: codeFromLocation() === code });
-    document.title = roomTitle(code);
   }, [code, gameId]);
+}
+
+/**
+ * The head on every route: the tab title, description, canonical, robots and the share card from
+ * seo.ts, written into the shell's own elements. Inside a room the room's head (the code in the
+ * tab, never indexed); otherwise the route's.
+ */
+function useHead(): void {
+  const route = useRouter((s) => s.route);
+  const code = usePlatformStore((s) => s.room?.code ?? null);
+  useEffect(() => {
+    applyHead(code ? roomHead(code) : headFor(route), document);
+  }, [route, code]);
 }
 
 function useSound(): void {
@@ -140,6 +153,7 @@ export function App() {
   useTheme();
   useViewport();
   useUrlSync();
+  useHead();
   useSound();
   useAutoUpdate();
 
