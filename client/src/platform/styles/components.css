@@ -1198,8 +1198,9 @@
 }
 
 .player__name {
+  /* One line: a long name shortens with an ellipsis, so the host's crown after it stays beside it. */
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 2px 6px;
   font-size: 0.875rem;

@@ -71,12 +71,12 @@ export function AccuseList({ room, view, meId }: Props) {
               <Avatar avatar={player.avatar} size="md" dimmed={!player.connected} />
               <span className="spy-accuse__body">
                 <span className="spy-accuse__name">
+                  <span className="spy-accuse__name-text">{player.name}</span>
                   {player.isHost && (
                     <span className="player__crown" title="Host" aria-label="Host">
                       <CrownIcon size={14} />
                     </span>
                   )}
-                  <span className="spy-accuse__name-text">{player.name}</span>
                   {player.id === meId && <span className="player__you">you</span>}
                 </span>
                 <span className="spy-accuse__meta">

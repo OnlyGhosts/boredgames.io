@@ -863,12 +863,17 @@ describe('player rows', () => {
     expect(tagWith(markup, 'host-crown')).toContain('role="img"');
     expect(tagWith(markup, 'host-crown')).toContain('aria-label="Host"');
     expect(markup).toContain('player__name-text">host<');
+    // The crown comes after the name, so every name in the list starts on the same line.
+    expect(markup.indexOf('player__name-text">host<')).toBeLessThan(markup.indexOf('data-testid="host-crown"'));
     const lobby = renderToString(createElement(PlayerList, { room: room(), meId: 'bob', isHost: false, mode: 'lobby', game: null }));
     expect(tagWith(lobby, 'host-crown')).toContain('class="player__crown"');
     expect(lobby).not.toContain('player__tag');
     expect(lobby).not.toMatch(/>\s*Host</);
     const css = stylesheet('components.css');
-    expect(ruleOf(css, '.player__name')).toContain('flex-wrap: wrap');
+    // One line, the name shortening, so the crown after a long name stays beside it.
+    expect(ruleOf(css, '.player__name')).toContain('flex-wrap: nowrap');
+    expect(ruleOf(css, '.player__name-text')).toContain('text-overflow: ellipsis');
+    expect(ruleOf(css, '.player__crown')).toContain('flex: none');
   });
 
   it('never cut a score or this turn’s points: the points take a second line when the column is narrow', () => {

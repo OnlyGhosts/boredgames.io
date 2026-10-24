@@ -71,14 +71,14 @@ export function PlayerList({ room, meId, isHost, mode, game }: Props) {
               )}
             </span>
             <span className="player__body">
-              {/* One badge a player at most: in a game that is the avatar's (the game's state); the host's crown sits by the name, in the room and in a game alike. */}
+              {/* One badge a player at most: in a game that is the avatar's (the game's state); the host's crown sits after the name, in the room and in a game alike, so every name starts on the same line. */}
               <span className="player__name">
+                <span className="player__name-text">{p.name}</span>
                 {p.isHost && (
                   <span className="player__crown" role="img" title="Host" aria-label="Host" data-testid="host-crown">
                     <CrownIcon size={14} />
                   </span>
                 )}
-                <span className="player__name-text">{p.name}</span>
                 {isMe && <span className="sr-only">(you)</span>}
               </span>
               {mode === 'game' && (
