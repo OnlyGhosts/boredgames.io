@@ -473,6 +473,15 @@ describe('the components', () => {
     expect(css).toMatch(/\n\.tbl-tile--full \.tbl-tile__face \{\s*align-self: start;/);
   });
 
+  it('a full tile keeps a token padding and steps, and 200px to 269px wide puts the status beside the cards', () => {
+    const css = readFileSync(join(import.meta.dirname, '../styles/table.css'), 'utf8');
+    expect(css).toMatch(/\n\.tbl-tile--full \{[^}]*row-gap: var\(--space-1\);\s*padding: var\(--space-2\);/);
+    expect(css).toMatch(/\n\.tbl-tile--full\.tbl-tile--turn \{\s*padding: calc\(var\(--space-2\) - 1\.5px\);/);
+    const block = css.slice(css.indexOf('@container tile (min-width: 200px) and (max-width: 269px) {'));
+    expect(block).toMatch(/^@container[^@]*grid-template-areas: 'face name tag' 'face money money' 'cards cards line';/);
+    expect(block).toMatch(/^@container[^@]*\.tbl-tile--full \.tbl-tile__meta \{\s*display: contents;/);
+  });
+
   it('a narrow full tile on a phone, dealt in: the words on the left under the name, the cards on the right half as big again, the total on the last card', () => {
     const css = readFileSync(join(import.meta.dirname, '../styles/table.css'), 'utf8');
     const phone = css.slice(css.indexOf('@container tile (max-width: 199px) and (min-height: 80px) {'));

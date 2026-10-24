@@ -252,8 +252,10 @@ export function PlayerTile({ playerId, name, avatar, connected, tier, turn, turn
         {badge}
       </span>
       <span className="tbl-tile__meta">
-        {chips !== undefined && <StackCount value={chips} format={tileFigures(tier)} className="tbl-tile__chips" testId="seat-chips" fit={TILE_FIT} />}
-        {bet !== undefined && <span className="tbl-tile__bet">{bet}</span>}
+        <span className="tbl-tile__money">
+          {chips !== undefined && <StackCount value={chips} format={tileFigures(tier)} className="tbl-tile__chips" testId="seat-chips" fit={TILE_FIT} />}
+          {bet !== undefined && <span className="tbl-tile__bet">{bet}</span>}
+        </span>
         <FitText forms={[line.text, ...(line.short ?? [])]} className={`tbl-tile__line tbl-tile__line--${line.tone}`} testId="seat-line" />
       </span>
       {total && (
