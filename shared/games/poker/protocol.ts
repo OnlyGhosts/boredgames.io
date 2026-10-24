@@ -15,7 +15,8 @@ export type { Card } from '../../platform/cards.js';
 // ---------------------------------------------------------------------------
 
 export const POKER_SETTINGS_LIMITS = {
-  startingChips: { min: 100, max: 100_000 },
+  // No real top: a trillion only keeps every pot and payout a whole number JavaScript counts exactly.
+  startingChips: { min: 100, max: 1_000_000_000_000 },
   /** The big blind is always twice the small blind. */
   smallBlind: { min: 1, max: 1000 },
   /** Hands between blind increases; 0 never raises them. */

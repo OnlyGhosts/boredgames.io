@@ -20,7 +20,8 @@ export type { Card, CardRank } from '../../platform/cards.js';
 // ---------------------------------------------------------------------------
 
 export const BLACKJACK_SETTINGS_LIMITS = {
-  startingChips: { min: 100, max: 100_000 },
+  // No real top: a trillion only keeps every pot and payout a whole number JavaScript counts exactly.
+  startingChips: { min: 100, max: 1_000_000_000_000 },
 } as const;
 
 const limited = (key: keyof typeof BLACKJACK_SETTINGS_LIMITS) => z.number().int().min(BLACKJACK_SETTINGS_LIMITS[key].min).max(BLACKJACK_SETTINGS_LIMITS[key].max);

@@ -73,13 +73,15 @@ export function formatChips(n: number): string {
   return thousands(n);
 }
 
-/** A chip count for a small tile: "950", "1.2k", "15k", "2.5M". */
+/** A chip count for a small tile: "950", "1.2k", "15k", "2.5M", "3B", "1T". */
 export function shortChips(n: number): string {
   const trim = (x: number) => String(Math.round(x * 10) / 10);
   if (Math.abs(n) < 1000) return String(n);
   if (Math.abs(n) < 10_000) return `${trim(n / 1000)}k`;
   if (Math.abs(n) < 1_000_000) return `${Math.round(n / 1000)}k`;
-  return `${trim(n / 1_000_000)}M`;
+  if (Math.abs(n) < 1_000_000_000) return `${trim(n / 1_000_000)}M`;
+  if (Math.abs(n) < 1_000_000_000_000) return `${trim(n / 1_000_000_000)}B`;
+  return `${trim(n / 1_000_000_000_000)}T`;
 }
 
 /** A typed chip amount clamped to the limits, or null for a blank or unreadable entry (the field keeps its value). */

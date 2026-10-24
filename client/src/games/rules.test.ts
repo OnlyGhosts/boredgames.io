@@ -128,7 +128,7 @@ describe('every game’s How to play', () => {
     expect(GAMES.blackjack.rules.end).toContain('one stack left, or none, or at the host’s word, after the hand');
     // The host's End game ends the point games at once on the scores as they stand.
     for (const id of ['scribble', 'spygame', 'quipgame'] as const) expect(GAMES[id].rules.end, id).toContain('or when the host ends it');
-    expect(GAMES.blackjack.rules.settings).toContain('100 to 100,000');
+    expect(GAMES.blackjack.rules.settings).toContain('Starting chips (100 or more).');
     expect(factsOf('poker')[2]).toBe(`To act: ${POKER_ACT_SECONDS} s (Else you check or fold)`);
     expect(GAMES.poker.rules.round).not.toMatch(/\d/);
     expect(GAMES.poker.rules.watchers).toContain(`seats ${gameById('poker').maxPlayers}`);

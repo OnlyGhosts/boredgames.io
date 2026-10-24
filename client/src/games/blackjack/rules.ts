@@ -20,6 +20,6 @@ export const blackjackRules: GameRules = {
   round: 'Bet 1 chip to your whole stack, or sit out. Cards go out once all have bet. Ace or ten up, the dealer checks for blackjack, which ends the hand. Then hit, stand, double your first two cards for one more, or split a pair (again while chips last; split aces get one card).',
   scoring: 'Beat the dealer to win your bet. A tie returns your bet. A bust loses even if the dealer busts.',
   end: 'Out of chips, you watch. It ends with one stack left, or none, or at the host’s word, after the hand. Most chips wins.',
-  settings: `Starting chips (${thousands(L.startingChips.min)} to ${thousands(L.startingChips.max)}).`,
+  settings: `Starting chips (${thousands(L.startingChips.min)} or more).`,
   watchers: JOIN_MID_GAME_TEXT,
 };

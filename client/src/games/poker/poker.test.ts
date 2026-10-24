@@ -910,7 +910,7 @@ describe('settings rows', () => {
     const host = renderToString(createElement(pokerClient.SettingsFields, { settings, patch: () => undefined }));
     const chips = tagWith(host, 'settings-startingChips');
     expect(chips).toContain('type="number"');
-    expect(chips).toContain('max="100000"');
+    expect(chips).toContain('max="1000000000000"');
     expect(tagWith(host, 'settings-smallBlind-5')).toContain('aria-pressed="true"');
     expect(tagWith(host, 'settings-hands')).toContain('max="100"');
     // A slider's value reads beside it, never on the title row.
