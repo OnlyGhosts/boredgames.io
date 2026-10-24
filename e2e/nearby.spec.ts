@@ -39,7 +39,7 @@ test('phones on the same network see the room, join with one tap, watch a game o
 
   const guest = await phone(browser, here, 'Gus');
   await guest.goto('/');
-  await expect(guest.getByTestId('nearby')).toContainText('On your Wi-Fi');
+  await expect(guest.getByRole('region', { name: 'On your Wi-Fi' })).toBeVisible();
   await expect(card(guest, code)).toContainText('Hera’s room');
   await expect(card(guest, code).getByTestId('nearby-meta')).toHaveText(/ · 1 player · just now$/);
   // The meta stays on one line beside the avatar and the button.

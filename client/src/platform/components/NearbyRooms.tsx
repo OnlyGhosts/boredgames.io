@@ -11,10 +11,7 @@ interface Props {
 export function NearbyRooms({ rooms, disabled, onJoin }: Props) {
   if (rooms.length === 0) return null;
   return (
-    <section className="nearby" aria-labelledby="nearby-heading" data-testid="nearby">
-      <h2 className="nearby__heading" id="nearby-heading">
-        On your Wi-Fi
-      </h2>
+    <section className="nearby" aria-label="On your Wi-Fi" data-testid="nearby">
       <ul className="nearby__list">
         {rooms.map((room) => (
           <li key={room.code} className="nearby__card" data-testid="nearby-room" data-code={room.code}>

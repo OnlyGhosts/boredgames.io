@@ -29,7 +29,8 @@ describe('the nearby list', () => {
   it('renders one card per room with a Join button, and nothing at all for none', () => {
     expect(renderToString(createElement(NearbyRooms, { rooms: [], onJoin: () => undefined }))).toBe('');
     const html = renderToString(createElement(NearbyRooms, { rooms: [card(), card({ code: 'CD3M', host: { name: 'Sam', avatar: { color: 1, emoji: 2 } } })], onJoin: () => undefined }));
-    expect(html).toContain('On your Wi-Fi');
+    expect(html).toContain('aria-label="On your Wi-Fi"');
+    expect(html).not.toContain('<h2');
     expect(html.match(/data-testid="nearby-room"/g)).toHaveLength(2);
     expect(html).toContain('Jord’s room');
     expect(html).toContain('Scribble · 3 players · 2 min ago');
