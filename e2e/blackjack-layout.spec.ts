@@ -496,6 +496,86 @@ test.describe('many hands (the harness)', () => {
     }, row);
   }
 
+  /** My split hands' words (each total, stake chip and outcome) that spill out of their own cell, and cells that meet, in my row. */
+  async function labelsInCells(page: Page): Promise<{ spill: number; overlap: number }> {
+    return page.evaluate(() => {
+      const slots = Array.from(document.querySelectorAll<HTMLElement>('[data-testid="my-hands-row"] > .bj-slot')).map((el) => ({ el, r: el.getBoundingClientRect() }));
+      let spill = 0;
+      let overlap = 0;
+      for (const { el, r } of slots) {
+        for (const w of Array.from(el.querySelectorAll<HTMLElement>('.tbl-hand__head, .bj-hand__foot'))) {
+          const b = w.getBoundingClientRect();
+          if (b.width > 0 && (b.left < r.left - 1 || b.right > r.right + 1)) spill += 1;
+        }
+      }
+      for (let i = 0; i < slots.length; i += 1) {
+        for (let j = i + 1; j < slots.length; j += 1) {
+          const a = slots[i].r;
+          const b = slots[j].r;
+          if (Math.min(a.right, b.right) - Math.max(a.left, b.left) > 1 && Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 1) overlap += 1;
+        }
+      }
+      return { spill, overlap };
+    });
+  }
+
+  /** How far the stage's top sits below every other row of the table (the dealer, the banner, the seats): never negative. */
+  async function stageClear(page: Page): Promise<number> {
+    return page.evaluate(() => {
+      const stage = document.querySelector<HTMLElement>('[data-testid="hand-stage"]');
+      const felt = stage?.closest<HTMLElement>('.tbl-felt');
+      if (!stage || !felt) return -999;
+      const top = stage.getBoundingClientRect().top;
+      const over = Array.from(felt.children)
+        .filter((c) => c !== stage && !c.contains(stage) && !['absolute', 'fixed'].includes(getComputedStyle(c).position) && getComputedStyle(c).display !== 'none')
+        .map((c) => c.getBoundingClientRect())
+        .filter((r) => r.height > 0 && r.top < top);
+      return Math.round(Math.min(...over.map((r) => top - r.bottom)));
+    });
+  }
+
+  // The owner's screenshot: six split hands with big stakes on a wide stage. Each stake and total once set its hand's width, and the
+  // cards shrank to ~20px slivers in one row at the stage's foot, the sixth cut off behind the fade, the table's middle empty.
+  for (const size of [{ width: 1040, height: 1060 }, { width: 1440, height: 900 }, { width: 390, height: 844 }, { width: 360, height: 640 }]) {
+    test(`${size.width}x${size.height}: six and eight split hands with big stakes wrap into a grid of readable cards, every word on its own hand`, async ({ browser }) => {
+      const pages = harnessPages(browser, size);
+      try {
+        // The card a hand on its own gets here.
+        const one = await rowShown(await pages.go('phase=mine&others=3&hands=1&cards=2&start=100000&stake=50000&bet=40500&chips=150000'), 'my-hands-row');
+        const solo = one?.sizes[0] ?? 0;
+        for (const hands of [2, 4, 6, 8]) {
+          for (const phase of ['mine', 'results']) {
+            const page = await pages.go(`phase=${phase}&others=3&hands=${hands}&active=2&cards=2&start=100000&stake=50000&bet=40500&chips=150000`);
+            const label = `${hands} hands, ${phase}`;
+            await expect(page.getByTestId('my-hand'), label).toHaveCount(hands);
+            const shown = await rowShown(page, 'my-hands-row');
+            if (!shown) throw new Error(`${label}: no row of hands`);
+            expect(shown, label).toMatchObject({ hands, sideways: false, fade: '', taller: 0 });
+            expect(shown.sizes, `${label}: one card size`).toHaveLength(1);
+            // Readable cards: never the slivers of a row the words had set.
+            // Two hands keep (near enough) a hand alone's cards; more never shrink to the slivers of a row the words had set.
+            const least = hands === 2 ? solo - 3 : Math.min(solo - 3, size.width >= 1000 ? (hands <= 6 ? 56 : 48) : hands <= 4 ? 34 : hands <= 6 ? 28 : 20);
+            expect(shown.sizes[0], `${label}: the cards (a hand alone ${solo})`).toBeGreaterThanOrEqual(least);
+            await expect.poll(() => allInside(page, 'hand-stage', '.bj-hand, .playing-card, .bj-hand__foot'), { message: `${label}: every hand inside the stage` }).toMatchObject({ outside: 0 });
+            expect(await labelsInCells(page), `${label}: the words keep to their hand`).toEqual({ spill: 0, overlap: 0 });
+            expect(await stageClear(page), `${label}: the stage clear of the banner and the seats`).toBeGreaterThanOrEqual(0);
+            await nothingScrolls(page, label);
+            await cornersClear(page, label, { dealer: true });
+            if (phase === 'mine') {
+              // Each stake short, under its cards; the hand in play lit.
+              expect(await page.getByTestId('hand-bet').first().innerText(), label).toBe('50k');
+              await expect(page.locator('[data-testid="my-hand"][data-active="true"]'), label).toHaveAttribute('data-index', String(Math.min(2, hands - 1)));
+            } else {
+              await expect(page.getByTestId('hand-outcome'), label).toHaveCount(hands);
+            }
+          }
+        }
+      } finally {
+        await pages.close();
+      }
+    });
+  }
+
   for (const size of [{ width: 320, height: 568 }, { width: 390, height: 844 }, { width: 428, height: 753 }, { width: 1440, height: 900 }]) {
     test(`${size.width}x${size.height}: every hand of mine shows at once, its cards at one size, shrunk to fit, scrolling only past the least card`, async ({ browser }) => {
       const pages = harnessPages(browser, size);
@@ -520,26 +600,33 @@ test.describe('many hands (the harness)', () => {
             if (hands === 1) expect(shown.sizes[0], label).toBe(card);
             else expect(shown.sizes[0], `${label}: never bigger than a hand alone`).toBeLessThanOrEqual(card);
             expect(card, label).toBeGreaterThanOrEqual(30);
-            // Up to four hands always show at once, every one inside the stage: no sideways scroll, no fade.
-            if (hands <= 4) expect(shown.sideways, `${label}: every hand shows at once`).toBe(false);
-            if (hands <= 4) await expect.poll(() => allInside(page, 'my-hands-row', '.bj-hand, .playing-card'), { message: `${label}: no hand clipped` }).toMatchObject({ outside: 0 });
-            // The row only scrolls once its cards are at the least size.
-            if (shown.sideways) expect(shown.sizes[0], `${label}: scrolls only at the least card`).toBeLessThanOrEqual(26.5);
-            // Past what fits the row scrolls sideways and fades the end(s) with more hands; the page never scrolls.
+            // Up to eight hands (any realistic run of splits) all show at once in a grid, never a row scrolling sideways, every hand and card inside the stage,
+            // the words on a hand (its total, its stake chip, how it ended) inside its own cell and no two cells meeting. Past that (16 on a 320px phone)
+            // the hands still never leave the stage, their words may crowd.
+            if (hands <= 8) {
+              expect(shown.sideways, `${label}: every hand shows at once`).toBe(false);
+              expect(shown.fade, `${label}: no fade`).toBe('');
+              await expect.poll(() => allInside(page, 'hand-stage', '.bj-hand, .playing-card, .bj-hand__foot'), { message: `${label}: no hand clipped` }).toMatchObject({ outside: 0 });
+              expect(await labelsInCells(page), `${label}: the words keep to their hand`).toEqual({ spill: 0, overlap: 0 });
+            } else {
+              await expect
+                .poll(async () => {
+                  const r = await rowShown(page, 'my-hands-row');
+                  return r && { fade: r.fade === r.due, masked: r.masked === (r.due !== '') };
+                }, { message: `${label}: the ends with more hands past them fade` })
+                .toEqual({ fade: true, masked: true });
+            }
             await nothingScrolls(page, label);
-            await expect
-              .poll(async () => {
-                const r = await rowShown(page, 'my-hands-row');
-                return r && { fade: r.fade === r.due, masked: r.masked === (r.due !== '') };
-              }, { message: `${label}: the ends with more hands past them fade` })
-              .toEqual({ fade: true, masked: true });
-            // The rank and suit of every card in my row and the dealer's read whole, wherever my row scrolls to.
+            // The rank and suit of every card in my row and the dealer's read whole.
             await cornersClear(page, label, { dealer: true });
-            // My row and the dealer's never move, however many hands.
+            // The dealer never moves; the stage keeps its bottom and width, and only grows up into the room the table leaves empty, clear of the banner and the seats.
             const fixed = await places(page);
             if (ref === null) ref = fixed;
             expectSame(`${label}: the dealer’s hand`, ref.dealer, fixed.dealer);
-            expectSame(`${label}: the stage`, ref.mine, fixed.mine);
+            expect(Math.abs(fixed.mine.y + fixed.mine.height - (ref.mine.y + ref.mine.height)), `${label}: the stage’s bottom`).toBeLessThanOrEqual(1);
+            expect(Math.abs(fixed.mine.width - ref.mine.width), `${label}: the stage’s width`).toBeLessThanOrEqual(1);
+            expect(fixed.mine.height, `${label}: the stage never shrinks`).toBeGreaterThanOrEqual(ref.mine.height - 1);
+            expect(await stageClear(page), `${label}: the stage clear of the rows over it`).toBeGreaterThanOrEqual(0);
             if (phase === 'mine') {
               // The hand in play is lit and in view, clear of the fades.
               const lit = page.locator('[data-testid="my-hand"][data-active="true"]');
@@ -1072,9 +1159,8 @@ test.describe('many hands (the harness)', () => {
   // ("1,250,000" beside my empty places) reads short rather than run off it, measured again once the cards have grown into the room the
   // seats leave (on a 412x915 phone the full figure fit the stage at the least card, and sat 2px off it at the 81px card).
   for (const size of [{ width: 320, height: 568 }, { width: 375, height: 667 }, { width: 390, height: 844 }, { width: 412, height: 915 }, { width: 430, height: 932 }, { width: 768, height: 1024 }, { width: 1440, height: 900 }]) {
-    test(`${size.width}x${size.height}: a hand on its own keeps its stake in full, split hands side by side read it short on a phone`, async ({ browser }) => {
+    test(`${size.width}x${size.height}: a hand on its own keeps its stake in full, split hands read it short under their cards`, async ({ browser }) => {
       const pages = harnessPages(browser, size);
-      const phone = size.width <= 760;
       try {
         let page = await pages.go('phase=mine&others=3&hands=1&stake=1250&start=1000');
         await expect.poll(() => shownText(page, '[data-testid="hand-bet"]')).toEqual(['1,250']);
@@ -1084,7 +1170,8 @@ test.describe('many hands (the harness)', () => {
         await expect.poll(() => page.locator('[data-testid="hand-bet"] .tbl-stake__chip:visible').count(), { message: 'three chips by a hand on its own' }).toBe(3);
         page = await pages.go('phase=mine&others=3&hands=2&stake=1250&start=1000');
         await expect.poll(async () => (await rowShown(page, 'my-hands-row'))?.sideways).toBe(false);
-        await expect.poll(() => shownText(page, '[data-testid="hand-bet"]')).toEqual(phone ? ['1.3k', '1.3k'] : ['1,250', '1,250']);
+        // Split hands, on any screen: each stake a small chip under its cards, short.
+        await expect.poll(() => shownText(page, '[data-testid="hand-bet"]')).toEqual(['1.3k', '1.3k']);
         // A 100,000 table: "12,000" by my hand and by my empty places (its figure, after three chips and a plus), in every phase my stake
         // is out, as the seats' pills read beside it.
         for (const phase of ['mine', 'other', 'deal']) {

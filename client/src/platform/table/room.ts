@@ -51,7 +51,9 @@ export function roomLeft(table: HTMLElement, seats: Element | null): number {
     const r = child.getBoundingClientRect();
     spans.push({ top: r.top, bottom: r.bottom });
   }
-  const { height, rows } = rowsTaken(spans);
+  const { height: taken, rows } = rowsTaken(spans);
+  // A stage grown into the empty room (Blackjack's split hands, --tbl-stage-more) only borrows it: the seats keep planning for it.
+  const height = taken - (parseFloat(style.getPropertyValue('--tbl-stage-more')) || 0);
   const all = rows + (seats ? 1 : 0);
   const inner = table.clientHeight - (parseFloat(style.paddingTop) || 0) - (parseFloat(style.paddingBottom) || 0);
   return Math.max(0, inner - height - Math.max(0, all - 1) * (parseFloat(style.rowGap) || 0));

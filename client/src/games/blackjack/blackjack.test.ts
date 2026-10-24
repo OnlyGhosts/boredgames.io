@@ -630,23 +630,22 @@ describe('the screen', () => {
     expect(out(12_000, 10_000)).toMatch(/<span class="tbl-stake__value tbl-figure"><span class="tbl-figure__full">12,000<\/span><span class="tbl-figure__short">12k<\/span><\/span>/);
     expect(out(1_250_000, 100_000)).toMatch(/<span class="tbl-figure__full">1,250,000<\/span><span class="tbl-figure__short">1.3M<\/span>/);
     expect(out(200, 1000)).toMatch(/<span class="tbl-stake__value">200<\/span>/);
-    // Split hands side by side on a phone's stage (under 460px) pack the pill tighter, draw two chips at most with the plus for the rest, and read the short figure:
-    // more hands share the row before it scrolls ("1,200" with three chips once outgrew a hand's share at 320px).
-    const css = readFileSync(fileURLToPath(new URL('./blackjack.css', import.meta.url)), 'utf8');
-    const phone = css.slice(css.indexOf('@container (max-width: 459px) {'));
-    expect(phone).toMatch(/^@container \(max-width: 459px\) \{\s*\.bj-hands--side \.tbl-hand__head:has\(> \.tbl-hand__stake\) \{\s*gap: 2px;\s*\}\s*\.bj-hands--side \.tbl-hand__stake \{\s*gap: 0\.15em;\s*padding: 0 0\.25em;/);
-    expect(phone).toMatch(/\.bj-hands--side \.tbl-hand__stake \.tbl-stake__chip:nth-child\(n \+ 3\) \{\s*display: none;/);
-    expect(phone).toMatch(/\.bj-hands--side \.tbl-hand__stake \.tbl-stake__chips\[data-count='3'\] \+ \.tbl-stake__more--spare \{\s*display: inline;/);
-    expect(phone).toMatch(/\.bj-hands--side \.tbl-hand__stake \.tbl-figure__full \{\s*display: none;\s*\}\s*\.bj-hands--side \.tbl-hand__stake \.tbl-figure__short \{\s*display: inline;/);
-    // Only a row of two or more hands is marked: a hand on its own (or my empty places with my next stake) has the room, and keeps three chips and "1,250" in full.
-    expect(phone.slice(0, phone.indexOf('\n}'))).not.toMatch(/\.bj-hands(?!--side)[ .:]/);
     const row = (hands: number) => {
       const mineHands = Array.from({ length: hands }, (_, i) => hand([c('8'), c('9', 'H')], { status: i === 0 ? 'acting' : 'waiting', fromSplit: hands > 1, bet: 1250 }));
       const v = acting({ players: { ...acting().players, host: { chips: 800, bet: 1250, hands: mineHands, inRound: true, sittingOut: false, bustedOut: false } } });
       return tagWith(render(bjRoom(v), 'host'), 'my-hands-row');
     };
     expect(attr(row(1), 'class')).toBe('bj-hands bj-hands--mine scroll-fade scroll-fade--x');
-    expect(attr(row(2), 'class')).toBe('bj-hands bj-hands--mine scroll-fade scroll-fade--x bj-hands--side');
+    expect(attr(row(2), 'class')).toBe('bj-hands bj-hands--mine scroll-fade scroll-fade--x bj-hands--side bj-hands--grid');
+    // Split hands, on any screen: the stake is a small chip under each hand's cards, one chip and the short figure ("1.3k"), never over the corner by the total.
+    const split = (() => {
+      const mineHands = Array.from({ length: 2 }, (_, i) => hand([c('8'), c('9', 'H')], { status: i === 0 ? 'acting' : 'waiting', fromSplit: true, bet: 1250 }));
+      return render(bjRoom(acting({ players: { ...acting().players, host: { chips: 800, bet: 1250, hands: mineHands, inRound: true, sittingOut: false, bustedOut: false } } })), 'host');
+    })();
+    expect(split).toMatch(/class="tbl-stake tbl-stake--bet[^"]*tbl-hand__stake bj-hand__foot"[^>]*data-testid="hand-bet"[^>]*><span class="tbl-stake__chips" aria-hidden="true" data-count="1">[\s\S]*?<span class="tbl-stake__value">1\.3k<\/span>/);
+    expect(split).not.toMatch(/tbl-hand__head"><span[^>]*tbl-hand__stake/);
+    const css = readFileSync(fileURLToPath(new URL('./blackjack.css', import.meta.url)), 'utf8');
+    expect(css).toMatch(/\n\.bj-hand__foot \{[^}]*position: absolute;\s*bottom: 0;/);
     const empty = render(bjRoom(view({ players: { ...view().players, host: { chips: 750, bet: 1250, hands: [], inRound: true, sittingOut: false, bustedOut: false } } })), 'host');
     expect(empty).toMatch(/<div class="bj-hands bj-hands--mine" style="[^"]*"><div class="bj-slot"><div class="bj-empty"><span class="bj-empty__stake">/);
   });
@@ -1150,7 +1149,7 @@ describe("the table’s focus and the stage", () => {
   it('sizes the dealer and the stage from the screen and, on a phone, the room the round’s seats leave: fixed rows, never the phase', () => {
     const css = readFileSync(fileURLToPath(new URL('./blackjack.css', import.meta.url)), 'utf8');
     // The calm table's fixed first and last rows (table.css) are the dealer's and the stage's.
-    expect(css).toMatch(/\.bj-table \{[^}]*--tbl-head-h: calc\(var\(--bj-label-h\) \+ var\(--bj-fan-h\)\);\s*--tbl-stage-h: var\(--bj-fan-h\);/);
+    expect(css).toMatch(/\.bj-table \{[^}]*--tbl-head-h: calc\(var\(--bj-label-h\) \+ var\(--bj-fan-h\)\);\s*--tbl-stage-h: calc\(var\(--bj-fan-h\) \+ var\(--tbl-stage-more, 0px\)\);/);
     // A hand there is its pill's height and 1.67 card widths (table.css --hand-k): the pill comes down over the cards only as far as
     // their corners begin, so it never covers a rank or a suit; a row of hands sizes its cards to that rule too.
     expect(css).toMatch(/--bj-fan-h: calc\(var\(--tbl-pill-h\) \+ var\(--bj-card-w\) \* var\(--hand-k\) \+ 4px\);/);
@@ -1308,6 +1307,8 @@ describe('many hands', () => {
     expect(sheet).toMatch(/--fit-w: max\(14px, calc\(\(100cqw - 8px\) \/ \(1 \+ var\(--fan-step\) \* \(var\(--fan, 2\) - 1\)\)\)\);/);
     expect(sheet).toMatch(/--bj-solo-w: min\(var\(--bj-card-w\), var\(--fit-w\), var\(--fit-h\)\);/);
     expect(sheet).toMatch(/--tbl-w: min\(var\(--bj-solo-w\), var\(--bj-fit, 9999px\)\);/);
+    // My split hands wrap into a grid of equal cells, never a scrolling row.
+    expect(sheet).toMatch(/\.bj-hands--grid \{\s*flex-wrap: wrap;/);
     // An equal share of the row while the hands fit, never narrower than its own hand: past that the row scrolls sideways, a hand to a snap, no scrollbar.
     expect(sheet).toMatch(/flex: 0 1 max\(var\(--bj-hand-least\), calc\(\(100cqw - \(var\(--hands, 1\) - 1\) \* 8px\) \/ var\(--hands, 1\)\)\);\s*min-width: var\(--bj-hand-least\);/);
     expect(sheet).toMatch(/\.bj-hands\.scroll-fade--x \{[^}]*overflow-x: auto;\s*overflow-y: hidden;\s*overscroll-behavior-x: contain;\s*scrollbar-width: none;/);
@@ -1323,7 +1324,7 @@ describe('many hands', () => {
     const v = acting({ turn: { playerId: 'host', handIndex: 4 }, players: { ...acting().players, host: { chips: 800, bet: 10, hands, inRound: true, sittingOut: false, bustedOut: false } } });
     const html = render(bjRoom(v), 'host');
     const row = tagWith(html, 'my-hands-row');
-    expect(row).toMatch(/class="bj-hands bj-hands--mine scroll-fade scroll-fade--x bj-hands--side"/);
+    expect(row).toMatch(/class="bj-hands bj-hands--mine scroll-fade scroll-fade--x bj-hands--side bj-hands--grid"/);
     expect(attr(row, 'data-count')).toBe('12');
     expect(tagsWith(html, 'my-hand')).toHaveLength(12);
     expect(tagsWith(html, 'my-hand').map((t) => attr(t, 'data-active')).indexOf('true')).toBe(4);
@@ -1686,22 +1687,39 @@ describe('a tap waiting for its answer', () => {
   });
 });
 
-describe('my split hands all at once (fitCardWidth)', () => {
-  const base = { width: 930, solo: 96, step: 0.32, head: 70, least: 70, gap: 8 };
-  it('keeps one hand, and hands that fit, at the solo size', () => {
-    expect(H.fitCardWidth({ ...base, fans: [2] })).toBe(96);
-    expect(H.fitCardWidth({ ...base, fans: [2, 2] })).toBe(96);
+describe('my split hands in a grid (planGrid)', () => {
+  const base = { solo: 96, step: 0.44, handK: 1.67, pill: 36, foot: 18, least: 85, gapX: 8, gapY: 6 };
+  const fits = (fit: Parameters<typeof H.planGrid>[0], p: ReturnType<typeof H.planGrid>) => {
+    expect(p.cols * p.cell + (p.cols - 1) * fit.gapX).toBeLessThanOrEqual(fit.width);
+    expect(p.height).toBeLessThanOrEqual(fit.height);
+    expect(p.cell).toBeGreaterThanOrEqual(Math.max(fit.least, 6 + p.card * (1 + fit.step * (Math.max(...fit.fans) - 1))) - 1);
+    expect(p.cols * p.rows).toBeGreaterThanOrEqual(fit.fans.length);
+  };
+  it('keeps two hands that fit in one row at the solo size', () => {
+    const fit = { ...base, width: 760, height: 260, fans: [2, 2] };
+    expect(H.planGrid(fit)).toMatchObject({ cols: 2, rows: 1, card: 96 });
   });
-  it('shrinks the cards so four split hands fit the row, never past it', () => {
-    const fans = [3, 2, 3, 2];
-    const w = H.fitCardWidth({ ...base, width: 360, fans });
-    expect(w).toBeLessThan(96);
-    expect(w).toBeGreaterThanOrEqual(H.LEAST_FIT_CARD);
-    const row = fans.reduce((s, n) => s + Math.max(6 + w * (1 + 0.32 * (n - 1)), 73, 70), 0) + 24;
-    expect(row).toBeLessThanOrEqual(360);
-    expect(row).toBeGreaterThan(360 - 4 * 2);
+  it('wraps six hands on a wide stage into rows, with cards far larger than one row allows (the screenshot)', () => {
+    const fit = { ...base, width: 760, height: 560, fans: [2, 2, 3, 2, 2, 2] };
+    const p = H.planGrid(fit);
+    expect(p.rows).toBeGreaterThan(1);
+    expect(p.card).toBeGreaterThanOrEqual(64);
+    fits(fit, p);
   });
-  it('stops at the least card when nothing would fit', () => {
-    expect(H.fitCardWidth({ ...base, width: 320, fans: Array(16).fill(3) })).toBe(H.LEAST_FIT_CARD);
+  it('stays in one row where the height does not pay for a second', () => {
+    const fit = { ...base, width: 760, height: 230, fans: [2, 2, 2, 2] };
+    expect(H.planGrid(fit).rows).toBe(1);
+  });
+  it('never takes a row whose cells are narrower than a hand\'s words while more rows fit them', () => {
+    const fit = { ...base, pill: 24, foot: 12, least: 59, width: 356, height: 173, fans: Array(6).fill(2) };
+    const p = H.planGrid(fit);
+    expect(p.cell).toBeGreaterThanOrEqual(59);
+    fits(fit, p);
+  });
+  it('fits eight hands on a 320px phone with no row scrolling', () => {
+    const fit = { ...base, pill: 22, foot: 11, least: 55, width: 304, height: 300, fans: Array(8).fill(3) };
+    const p = H.planGrid(fit);
+    expect(p.card).toBeGreaterThanOrEqual(24);
+    fits(fit, p);
   });
 });

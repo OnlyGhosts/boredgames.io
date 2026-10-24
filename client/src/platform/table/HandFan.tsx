@@ -15,6 +15,8 @@ interface Props {
   lead?: ReactNode;
   /** Laid over the hand: the payout rising out of it. */
   float?: ReactNode;
+  /** Under the cards: a split hand's stake (Blackjack). */
+  foot?: ReactNode;
   /** `big`: a hand on its own place on the table; `mini`: on a seat, the pill beside the cards. */
   size?: 'big' | 'mini';
   /** The cards (TableCards or slots), left to right. */
@@ -30,7 +32,7 @@ interface Props {
  * rank and suit left in view, the total in a pill over the top right corner. The fan keeps one
  * height however many cards it holds (the step shrinks past four), so a hit never moves the table.
  */
-export function HandFan({ tone, total, totalTestId, flag, lead, float, size = 'big', children, label, className, testId, data }: Props) {
+export function HandFan({ tone, total, totalTestId, flag, lead, float, foot, size = 'big', children, label, className, testId, data }: Props) {
   const cards = Children.toArray(children);
   const style = { '--fan': Math.max(2, cards.length) } as CSSProperties;
   return (
@@ -50,6 +52,7 @@ export function HandFan({ tone, total, totalTestId, flag, lead, float, size = 'b
           </span>
         ))}
       </div>
+      {foot}
       {float}
     </div>
   );

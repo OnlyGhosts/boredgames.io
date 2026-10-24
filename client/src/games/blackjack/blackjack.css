@@ -47,7 +47,10 @@
   /* A hand's height: its pill, its fan under the pill's overlap (table.css --hand-k) and its outline's room. */
   --bj-fan-h: calc(var(--tbl-pill-h) + var(--bj-card-w) * var(--hand-k) + 4px);
   --tbl-head-h: calc(var(--bj-label-h) + var(--bj-fan-h));
-  --tbl-stage-h: var(--bj-fan-h);
+  --tbl-stage-h: calc(var(--bj-fan-h) + var(--tbl-stage-more, 0px));
+  /* My split hands' grid grows the stage up into the room the table leaves empty (HandRow sets --tbl-stage-more). */
+  /* The room under a split hand's cards for its chip (its stake, then how it ended): the chip comes up over the cards' blank lower edge. */
+  --bj-foot-h: calc(var(--tbl-pill-h) * 0.2);
 }
 
 /* ---------- Dealer: top centre, the word Dealer over its first two cards, the cards fanning right from a fixed spot ---------- */
@@ -122,7 +125,7 @@
   --fit-w: max(14px, calc((100cqw - 8px) / (1 + var(--fan-step) * (var(--fan, 2) - 1))));
   --fit-h: calc((100cqh - var(--tbl-pill-h) - 4px) / var(--hand-k));
   --bj-solo-w: min(var(--bj-card-w), var(--fit-w), var(--fit-h));
-  /* Split hands shrink together so every one shows at once (HandRow's --bj-fit, fitCardWidth). */
+  /* Split hands share one size, the largest their grid fits (HandRow's --bj-fit, planGrid). */
   --tbl-w: min(var(--bj-solo-w), var(--bj-fit, 9999px));
   --bj-anchor: calc((var(--tbl-w) * (1 + var(--fan-step)) + 6px) / 2);
   justify-content: flex-start;
@@ -184,17 +187,108 @@
   opacity: 1;
 }
 
-/* Split hands whose words alone would overrun the row (HandRow packs them): each stake just its figure, the hands closer. */
-.bj-hands--packed {
-  gap: 4px;
+/*
+ * My split hands (HandRow, planGrid): a grid, never a scrolling row. As many columns as give the
+ * largest cards in the room the stage has (it grows up into the room the table leaves empty), all
+ * one size, each hand in a cell as wide as the widest fan or its words, the rows at the bottom of
+ * the stage and a short last row centred. Over each hand's corner its total alone; its stake is a
+ * small chip under its cards ("50k"), and once settled how it ended ("Lost"), so the words never
+ * set a hand's width beyond a short chip.
+ */
+.bj-hands--grid {
+  flex-wrap: wrap;
+  align-content: flex-end;
+  justify-content: center;
+  gap: var(--bj-gap);
+  width: min(100%, calc(var(--bj-cols) * var(--bj-cell) + (var(--bj-cols) - 1) * var(--bj-gap)));
+  margin: 0 auto;
 }
 
-.bj-hands--packed .tbl-hand__stake :is(.tbl-stake__chips, .tbl-stake__more) {
+.bj-hands--grid > .bj-slot {
+  /* Each card past the first a pixel further on: a small card's suit never meets the next card's edge (planGrid counts it). */
+  --bj-fan-w: calc(6px + (var(--slot-fan, 2) - 1) * 1px + var(--tbl-w) * (1 + var(--fan-step) * (var(--slot-fan, 2) - 1)));
+  flex: none;
+  width: var(--bj-cell);
+  min-width: 0;
+  height: auto;
+}
+
+.bj-hands--grid > .bj-slot > * {
+  /* Never wider than its cell: past eight hands on the narrowest phone the words may crowd, but no hand leaves the stage. */
+  min-width: min(100%, calc(var(--bj-head-w, 0px) + 3px));
+  margin-left: max(0px, min(calc(50% - var(--bj-anchor)), calc(100% - min(100%, max(var(--bj-fan-w), var(--bj-head-w, 0px) + 3px)))));
+}
+
+/* Split hands (mine, or another player's on my stage): the gap between them, and on a phone's stage a smaller pill, so eight hands keep a card a row can read. */
+.bj-hands--mine.bj-hands--side,
+.bj-hands--stage.bj-hands--side {
+  --bj-gap: 6px;
+}
+
+@container (max-width: 459px) {
+  .bj-hands--mine.bj-hands--side,
+  .bj-hands--stage.bj-hands--side {
+    --bj-gap: 3px;
+    --tbl-pill-h: 20px;
+  }
+}
+
+/* The total's pill hugs its figure: it never sets a hand's width. */
+.bj-hands--grid .tbl-hand__head .tbl-pill {
+  padding: 0 5px;
+}
+
+.bj-hands--grid .tbl-hand {
+  --fan-dx: calc(var(--tbl-w) * var(--fan-step) + 1px);
+}
+
+.bj-hand--footed {
+  padding-bottom: calc(var(--bj-foot-h) + 3px);
+}
+
+/* One row keeps a hand alone's height (planGrid): the chip sits over the cards' blank lower edge. */
+.bj-hands--grid[data-rows='1'] .bj-hand--footed {
+  padding-bottom: 3px;
+}
+
+.bj-hand__foot {
+  --stake-h: calc(var(--tbl-pill-h) * 0.68);
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  z-index: 1;
+  padding: 0 0.5em 0 0.3em;
+  font-size: calc(var(--tbl-pill-h) * 0.42);
+  transform: translateX(-50%);
+}
+
+/* How a split hand ended, under its cards in its colour: its total pill takes the colour too. */
+.tbl-flag.bj-hand__foot {
+  display: inline-flex;
+  align-items: center;
+  height: calc(var(--tbl-pill-h) * 0.68);
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-2);
+  padding: 0 0.4em;
+  font-size: calc(var(--tbl-pill-h) * 0.42);
+  white-space: nowrap;
+}
+
+/* One chip and the short figure: the plus for more chips would only widen it. */
+.bj-hand__foot .tbl-stake__more {
   display: none;
 }
 
-.bj-hands--packed .tbl-hand__stake {
-  padding: 0 0.45em;
+/* On a phone's stage the figure alone ("50k"), so eight hands keep a card a row can read. */
+@container (max-width: 459px) {
+  .bj-hand__foot .tbl-stake__chips {
+    display: none;
+  }
+
+  .tbl-hand__stake.bj-hand__foot {
+    padding: 0 0.45em;
+  }
 }
 
 /* My stake once it is down, left of the two empty places, level with them: never over a card or a place. */
@@ -215,46 +309,6 @@
   --stake-h: var(--tbl-pill-h);
   padding: 0 0.6em 0 0.4em;
   font-size: calc(var(--tbl-pill-h) * 0.5);
-}
-
-/*
- * Split hands side by side on a phone's stage (under 460px; HandRow marks the row): my stake by
- * each total keeps to the width the word Bet gave it, so more hands share the row before it
- * scrolls: packed tighter, two chips at most, the plus saying the rest, and a four-digit
- * figure short ("1.2k"). A hand on its own has the room, and keeps three chips and its figure in
- * full ("1,250"), as Poker's stage reads my stake (short there only where the full figure would
- * run the pill, or my hand, off the stage: fit.tsx STAGE_FIT).
- */
-@container (max-width: 459px) {
-  .bj-hands--side .tbl-hand__head:has(> .tbl-hand__stake) {
-    gap: 2px;
-  }
-
-  .bj-hands--side .tbl-hand__stake {
-    gap: 0.15em;
-    padding: 0 0.25em;
-  }
-
-  .bj-hands--side .tbl-hand__stake .tbl-stake__more {
-    margin-left: -0.25em;
-    font-size: 0.92em;
-  }
-
-  .bj-hands--side .tbl-hand__stake .tbl-stake__chip:nth-child(n + 3) {
-    display: none;
-  }
-
-  .bj-hands--side .tbl-hand__stake .tbl-stake__chips[data-count='3'] + .tbl-stake__more--spare {
-    display: inline;
-  }
-
-  .bj-hands--side .tbl-hand__stake .tbl-figure__full {
-    display: none;
-  }
-
-  .bj-hands--side .tbl-hand__stake .tbl-figure__short {
-    display: inline;
-  }
 }
 
 /* An empty hand (before my first deal): just the two places my cards will land. */

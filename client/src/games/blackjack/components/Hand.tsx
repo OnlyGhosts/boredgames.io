@@ -26,6 +26,8 @@ interface Props {
   mini?: boolean;
   /** One of several hands side by side: the outcome's word goes inside the pill, which stays over its own hand. */
   narrow?: boolean;
+  /** One of my split hands in their grid: its stake (while it plays) or how it ended goes under its cards, so the corner holds its total alone. */
+  footed?: boolean;
   /** On the stage while it plays: its stake by its total (its chips and the figure, read as "Bet 10"). */
   stake?: boolean;
   /** Another player's hand on my stage: their name by its total. */
@@ -88,26 +90,36 @@ function leadOf(hand: TableHand, start: number, stake: boolean, ownerName: strin
  * the pill ("Win +20"). While it plays its stake is there on the stage (a doubled one reads double),
  * or the owner's name when it is another player's hand on my stage; on a seat a doubled hand is tagged "2x".
  */
-export function Hand({ playerId, index, hand, start, timeline, now, leaving, size, active, mini = false, narrow = false, stake = false, ownerName, testId }: Props) {
+export function Hand({ playerId, index, hand, start, timeline, now, leaving, size, active, mini = false, narrow = false, footed = false, stake = false, ownerName, testId }: Props) {
   const { cards, total, outcome } = handOnScreen(playerId, index, hand, timeline, now);
   const bust = total !== null && total.total > 21;
   const tone = handTone(outcome, bust, hand.status === 'blackjack' && cards.length === 2, active);
   const payout = outcome && outcome !== 'push' && hand.payout !== null ? payoutText(hand.payout) : '';
   const word = outcome ? endWord(outcome, bust) : '';
   // Beside the pill on a hand of its own; inside it, before the total, when hands sit side by side.
-  const inPill = narrow && outcome !== null && !mini;
-  const flag = mini || inPill ? null : outcome ? <OutcomeFlag tone={tone} word={word} extra={payout} testId="hand-outcome" /> : leadOf(hand, start, stake, ownerName);
+  const inPill = narrow && outcome !== null && !mini && !footed;
+  // My split hands: the stake (one chip, short: "50k") and then how the hand ended go under the cards, so the words over the corner are the total alone.
+  const flag = mini || inPill || footed ? null : outcome ? <OutcomeFlag tone={tone} word={word} extra={payout} testId="hand-outcome" /> : leadOf(hand, start, stake, ownerName);
+  let foot;
+  if (footed && outcome) {
+    foot = (
+      <span className={`tbl-flag tbl-flag--${tone} bj-hand__foot`} data-testid="hand-outcome">
+        {word}
+      </span>
+    );
+  } else if (footed && stake) foot = <StakePill value={hand.bet} start={start} format="short" chips={1} className="tbl-hand__stake bj-hand__foot" testId="hand-bet" />;
   const lead = inPill ? <span className="tbl-pill__lead" data-testid="hand-outcome">{word}</span> : undefined;
   return (
     <HandFan
-      className="bj-hand"
+      className={`bj-hand${footed ? ' bj-hand--footed' : ''}`}
       size={mini ? 'mini' : 'big'}
       tone={tone}
       total={total ? totalText(total, hand.outcome === null && (hand.status === 'waiting' || hand.status === 'acting')) : null}
       lead={lead}
       totalTestId="hand-total"
       flag={flag}
-      float={outcome && payout && !mini ? <PayoutFloat text={payout} tone={tone} /> : undefined}
+      foot={foot}
+      float={outcome && payout && !mini && !footed ? <PayoutFloat text={payout} tone={tone} /> : undefined}
       label={`Hand ${index + 1}${total ? `: ${total.total}` : ''}${outcome ? `, ${endWord(outcome, bust)}` : ''}`}
       testId={testId}
       data={{
