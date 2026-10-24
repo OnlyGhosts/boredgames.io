@@ -468,6 +468,11 @@ describe('the components', () => {
     expect(html(createElement(PlayerTile, { ...props, tier: 'dense' }))).toContain('tbl-tile--dense');
   });
 
+  it('a full tile keeps its face beside the name and stack, not sunk to the middle when the status wraps', () => {
+    const css = readFileSync(join(import.meta.dirname, '../styles/table.css'), 'utf8');
+    expect(css).toMatch(/\n\.tbl-tile--full \.tbl-tile__face \{\s*align-self: start;/);
+  });
+
   it('a narrow full tile on a phone, dealt in: the words on the left under the name, the cards on the right half as big again, the total on the last card', () => {
     const css = readFileSync(join(import.meta.dirname, '../styles/table.css'), 'utf8');
     const phone = css.slice(css.indexOf('@container tile (max-width: 199px) and (min-height: 80px) {'));

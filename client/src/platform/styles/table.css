@@ -1283,6 +1283,11 @@
   align-content: start;
 }
 
+/* The face sits beside the name and stack, never sinking to the middle when the status wraps under them. */
+.tbl-tile--full .tbl-tile__face {
+  align-self: start;
+}
+
 /* The stack, the bet pill and the line wrap onto a new line rather than run off the edge (Poker's "BB 10" too). */
 .tbl-tile--full .tbl-tile__meta {
   flex-wrap: wrap;
