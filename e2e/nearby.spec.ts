@@ -41,8 +41,8 @@ test('phones on the same network see the room, join with one tap, watch a game o
   await guest.goto('/');
   await expect(guest.getByRole('region', { name: 'On your Wi-Fi' })).toBeVisible();
   await expect(card(guest, code)).toContainText('Hera’s room');
-  await expect(card(guest, code).getByTestId('nearby-meta')).toHaveText(/ · 1 player · just now$/);
-  // The meta stays on one line beside the avatar and the button.
+  await expect(card(guest, code).getByTestId('nearby-meta')).toHaveText(/ · 1\u00a0player$/);
+  // At this width the meta fits on one line beside the avatar and the button.
   const meta = await card(guest, code).getByTestId('nearby-meta').boundingBox();
   expect(meta?.height ?? 99).toBeLessThan(24);
 
@@ -71,7 +71,7 @@ test('phones on the same network see the room, join with one tap, watch a game o
   await expect(host.getByTestId('lobby')).toHaveCount(0);
   const later = await phone(browser, here, 'Lou');
   await later.goto('/');
-  await expect(card(later, code).getByTestId('nearby-meta')).toHaveText(/ · 3 players · playing now$/);
+  await expect(card(later, code).getByTestId('nearby-meta')).toHaveText(/ · 3\u00a0players · playing\u00a0now$/);
   await card(later, code).getByTestId('nearby-join').click();
   await expect(later).toHaveURL(new RegExp(`/${code}$`));
   await expect(later.getByTestId('home-join')).toHaveCount(0);

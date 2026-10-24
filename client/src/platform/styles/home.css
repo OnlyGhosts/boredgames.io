@@ -243,8 +243,7 @@
   min-width: 0;
 }
 
-.nearby__title,
-.nearby__meta {
+.nearby__title {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;

@@ -2,7 +2,7 @@ import { createElement } from 'react';
 import { renderToString } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { NearbyRooms } from '../components/NearbyRooms';
-import { ageText, nearbyMeta, parseNearby, roomTitle, type NearbyCard } from './nearby';
+import { nearbyMeta, parseNearby, roomTitle, type NearbyCard } from './nearby';
 
 const card = (over: Partial<NearbyCard> = {}): NearbyCard => ({ code: 'AB2K', gameId: 'scribble', host: { name: 'Jord', avatar: { color: 0, emoji: 1 } }, players: 3, ageMs: 2 * 60_000, playing: false, ...over });
 
@@ -16,13 +16,11 @@ describe('the nearby list', () => {
     expect(parseNearby({ rooms: [good] })).toEqual([]);
     expect(parseNearby({ now: 2000, rooms: [good, good, good, good] })).toHaveLength(3);
   });
-
-  it('writes the meta line short: game, players, age', () => {
-    expect(nearbyMeta(card())).toBe('Scribble · 3 players · 2 min ago');
-    expect(nearbyMeta(card({ players: 1, ageMs: 30_000 }))).toBe('Scribble · 1 player · just now');
-    expect(nearbyMeta(card({ players: 4, playing: true, ageMs: 3 * 60 * 60_000 }))).toBe('Scribble · 4 players · playing now');
-    expect(ageText(14 * 60_000 + 59_000)).toBe('14 min ago');
-    expect(ageText(125 * 60_000)).toBe('2 hr ago');
+  it('writes the meta line short: game, players, and playing now in a game; it wraps only at a dot', () => {
+    const nb = (text: string): string => text.replace(/ /g, '\u00a0');
+    expect(nearbyMeta(card())).toBe(`${nb('Scribble')} · ${nb('3 players')}`);
+    expect(nearbyMeta(card({ players: 1 }))).toBe(`${nb('Scribble')} · ${nb('1 player')}`);
+    expect(nearbyMeta(card({ players: 4, playing: true }))).toBe(`${nb('Scribble')} · ${nb('4 players')} · ${nb('playing now')}`);
     expect(roomTitle('Jord')).toBe('Jord’s room');
   });
 
@@ -33,7 +31,7 @@ describe('the nearby list', () => {
     expect(html).not.toContain('<h2');
     expect(html.match(/data-testid="nearby-room"/g)).toHaveLength(2);
     expect(html).toContain('Jord’s room');
-    expect(html).toContain('Scribble · 3 players · 2 min ago');
+    expect(html).toContain('Scribble · 3\u00a0players');
     expect(html).toContain('aria-label="Join Sam’s room"');
   });
 });

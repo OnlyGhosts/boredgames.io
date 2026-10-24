@@ -25,16 +25,14 @@ export function parseNearby(v: unknown): NearbyCard[] {
   return out.slice(0, NEARBY_MAX_ROOMS);
 }
 
-/** "just now", "12 min ago", "2 hr ago": short enough to keep the card's line whole. */
-export function ageText(ms: number): string {
-  const min = Math.floor(ms / 60_000);
-  if (min < 1) return 'just now';
-  return min < 60 ? `${min} min ago` : `${Math.floor(min / 60)} hr ago`;
-}
-
-/** "Scribble · 3 players · 2 min ago", or "· playing now" while a game is on: the card's one muted line. */
+/**
+ * "Scribble · 3 players", plus "· playing now" while a game is on. Spaces inside a part don't
+ * break, so on a narrow card the line wraps only at a dot and never cuts a word short.
+ */
 export function nearbyMeta(card: NearbyCard): string {
-  return [gameById(card.gameId).name, `${card.players} ${card.players === 1 ? 'player' : 'players'}`, card.playing ? 'playing now' : ageText(card.ageMs)].join(' · ');
+  const parts = [gameById(card.gameId).name, `${card.players} ${card.players === 1 ? 'player' : 'players'}`];
+  if (card.playing) parts.push('playing now');
+  return parts.map((part) => part.replace(/ /g, '\u00a0')).join(' · ');
 }
 
 /** "Jord’s room" (a name ending in s still takes ’s, as people say it). */
