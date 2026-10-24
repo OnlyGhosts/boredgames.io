@@ -218,7 +218,8 @@ const LOWEST: Record<TileTier, TileTier> = { full: 'compact', compact: 'compact'
  * The tier the room allows: the richest, down to the count's own or one step under it, whose
  * least height fits the room, so the cards in miniature stay wherever the table has the height
  * for them (seven seats across a desktop) and the tiles step down where it has not (four seats
- * on a phone). When nothing fits, the count's usual tier, overflowing a little as it always did.
+ * on a phone). When nothing fits, the poorest of those, overflowing a little: a full tile squashed
+ * under its least height would cut its cards off at its bottom edge; a compact one shows none.
  * Before the room is measured, and on the server render, the count's usual tier. The tier on
  * show stays while it still fits.
  */
@@ -229,7 +230,7 @@ export function tierFor(count: number, room: Room | null, { wide = false, curren
   for (const tier of TIERS.slice(0, TIERS.indexOf(LOWEST[usual]) + 1)) {
     if (leastHeight(count, room.width, { wide, tier }) + (richer(tier) ? SPARE : 0) <= room.height) return tier;
   }
-  return usual;
+  return LOWEST[usual];
 }
 
 /**

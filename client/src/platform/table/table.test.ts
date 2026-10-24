@@ -154,6 +154,8 @@ describe('the players grid', () => {
     expect(G.tierFor(4, { width: 356, height: 141 })).toBe('compact');
     // Five others on a 320x568 phone: two rows of compact tiles have no room, but a compact tile is the least a seat shows (its stack and bet): it stays, overflowing a little, never small.
     expect(G.tierFor(5, { width: 290, height: 79 })).toBe('compact');
+    // Two or three others on a short phone (360x640) where even compact tiles have no room: compact, never full tiles squashed under their cards.
+    for (const count of [1, 2, 3, 4]) expect(G.tierFor(count, { width: 336, height: 40 }), `${count} others`).toBe('compact');
     expect(G.fitsRoom(5, { width: 290, height: 79 }, { tier: 'compact' })).toBe(false);
     // A 1440x900 desktop with five, seven or eight others: one row of full tiles (the cards in play stay in the seat) up to seven across.
     expect(G.tierFor(5, { width: 898, height: 191 }, { wide: true })).toBe('full');

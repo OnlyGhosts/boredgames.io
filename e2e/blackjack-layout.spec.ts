@@ -625,6 +625,17 @@ test.describe('many hands (the harness)', () => {
           const slot = p.closest('.bj-slot')?.getBoundingClientRect();
           return !slot || !within(r, slot) || r.top < t.top - 0.5 || r.bottom > t.bottom + 0.5;
         }).length;
+        // A card is whole: inside the tile's height and the height of every box that clips it (the hands' row).
+        const clipped = Array.from(tile.querySelectorAll<HTMLElement>('.playing-card')).filter((c) => {
+          const r = c.getBoundingClientRect();
+          if (r.top < t.top - 0.5 || r.bottom > t.bottom + 0.5) return true;
+          for (let a = c.parentElement; a && a !== tile; a = a.parentElement) {
+            if (getComputedStyle(a).overflowY === 'visible') continue;
+            const b = a.getBoundingClientRect();
+            if (r.top < b.top - 0.5 || r.bottom > b.bottom + 0.5) return true;
+          }
+          return false;
+        }).length;
         return {
           name: tile.dataset.name ?? '',
           height: Math.round(t.height * 10) / 10,
@@ -632,6 +643,7 @@ test.describe('many hands (the harness)', () => {
           least: cards.length > 0 ? Math.min(...cards) : 0,
           clear: !cardsBox || cardsBox.width === 0 || (within(cardsBox, t) && words.every((w) => !meet(w, cardsBox))),
           cut,
+          clipped,
         };
       });
       const row = Array.from(document.querySelectorAll<HTMLElement>('[data-testid="seat"]')).find((t) => t.dataset.name === who)?.querySelector<HTMLElement>('[data-testid="seat-hands-row"]');
@@ -683,12 +695,32 @@ test.describe('many hands (the harness)', () => {
           for (const t of tiles) {
             const label = `${query}: ${t.name}`;
             expect(t.height, `${label}: no taller than before`).toBeLessThanOrEqual(dealt ? 96 : 68);
-            expect(t, `${label}: the cards clear of the words and every total whole`).toMatchObject({ clear: true, cut: 0 });
+            expect(t, `${label}: the cards clear of the words and every total whole`).toMatchObject({ clear: true, cut: 0, clipped: 0 });
             if (!dealt) continue;
             expect(new Set(t.cards).size, `${label}: one card size`).toBe(1);
             // Two cards take the full size (beside the widest pill, "1.2k" with a chip and a plus, a little less); a hit (the bust, three
             // cards) takes narrower ones, whole: the 22px they were but beside that pill on a 360px phone (20.3px).
             expect(t.least, `${label}: the cards`).toBeGreaterThanOrEqual(t.cards.length > 2 ? 20 : query.includes('bet=1250') ? 26 : least);
+          }
+        }
+        expect(pages.errors).toEqual([]);
+      } finally {
+        await pages.close();
+      }
+    });
+  }
+
+  // A short phone (360x640, 375x667) has no room for even compact tiles' least height under one to four others: the seats take
+  // compact tiles (no cards), never full ones squashed under their cards, which cut the cards off at the tile's bottom edge.
+  for (const size of [{ width: 360, height: 640 }, { width: 375, height: 667 }, { width: 390, height: 700 }]) {
+    test(`${size.width}x${size.height}: every seat's cards show whole inside its tile, however few seats`, async ({ browser }) => {
+      const pages = harnessPages(browser, size);
+      try {
+        for (const others of [1, 2, 3, 4]) {
+          for (const query of [`phase=mine&others=${others}&start=20000&chips=20000`, `phase=other&others=${others}&turn=0&start=20000&chips=20000`]) {
+            const page = await pages.go(query);
+            const { tiles } = await tilesShown(page);
+            for (const t of tiles) expect(t, `${query}: ${t.name}: every card whole`).toMatchObject({ clipped: 0, clear: true, cut: 0 });
           }
         }
         expect(pages.errors).toEqual([]);
