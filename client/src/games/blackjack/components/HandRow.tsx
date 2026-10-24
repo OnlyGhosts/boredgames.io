@@ -234,13 +234,12 @@ interface Props {
 }
 
 /**
- * A seat's hands side by side, every one of them always its cards with its stake and total, the
- * cards the size a hand on its own gets here: a split never shrinks them. While they fit, each hand
- * has an equal share of the row; past that the row scrolls sideways inside its box (a hand to a
- * snap, by swipe, wheel or trackpad, no scrollbar), its cut ends fading (`.scroll-fade--x`) where
- * more hands wait, and it brings the hand in play to its middle as play moves on. The stage never
- * moves or resizes and the page never scrolls. Two or more hands mark the row `bj-hands--side`: on
- * a phone their stakes pack tighter (blackjack.css), and a hand on its own keeps its stake in full.
+ * A seat's hands, every one of them always its cards with its stake and total. One hand keeps
+ * the size a hand on its own gets here. Two or more on the stage wrap into a grid (planGrid,
+ * lib/hands.ts) of the rows and columns that give the largest card in the stage's width and the
+ * height the table leaves free, every hand at one size, a short last row centred, the stake a
+ * short chip under the cards. Past eight hands, or with no grid that shows a readable card, the
+ * row scrolls sideways at the least card size, its cut ends fading (`.scroll-fade--x`).
  * A seat's tile holds the same row in miniature (`mini`), its totals by its cards, so nothing is
  * said over a hand's corner and the row has no words to measure.
  */
