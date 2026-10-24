@@ -497,12 +497,12 @@ test.describe('many hands (the harness)', () => {
   }
 
   for (const size of [{ width: 320, height: 568 }, { width: 390, height: 844 }, { width: 428, height: 753 }, { width: 1440, height: 900 }]) {
-    test(`${size.width}x${size.height}: every hand of mine is its cards at one hand's size, the row scrolling sideways past what fits`, async ({ browser }) => {
+    test(`${size.width}x${size.height}: every hand of mine shows at once, its cards at one size, shrunk to fit, scrolling only past the least card`, async ({ browser }) => {
       const pages = harnessPages(browser, size);
       const errors = pages.errors;
       try {
         let ref: { dealer: Box; mine: Box } | null = null;
-        // The card a hand on its own gets here: no number of hands changes it.
+        // The card a hand on its own gets here: split hands shrink from it, all to one size, to show at once.
         let card = 0;
         let page: Page;
         for (const hands of [1, 2, 4, 6, 8, 16]) {
@@ -514,9 +514,17 @@ test.describe('many hands (the harness)', () => {
             const shown = await rowShown(page, 'my-hands-row');
             if (!shown) throw new Error(`${label}: no row of hands`);
             if (card === 0) card = shown.sizes[0] ?? 0;
-            // Every hand as its three cards, every card the one size, the row never taller than its box.
-            expect(shown, label).toMatchObject({ hands, cards: hands * 3, sizes: [card], down: false, taller: 0 });
+            // Every hand as its three cards, every card one size (a hand alone the solo size), the row never taller than its box.
+            expect(shown, label).toMatchObject({ hands, cards: hands * 3, down: false, taller: 0 });
+            expect(shown.sizes, `${label}: one card size`).toHaveLength(1);
+            if (hands === 1) expect(shown.sizes[0], label).toBe(card);
+            else expect(shown.sizes[0], `${label}: never bigger than a hand alone`).toBeLessThanOrEqual(card);
             expect(card, label).toBeGreaterThanOrEqual(30);
+            // Up to four hands always show at once, every one inside the stage: no sideways scroll, no fade.
+            if (hands <= 4) expect(shown.sideways, `${label}: every hand shows at once`).toBe(false);
+            if (hands <= 4) await expect.poll(() => allInside(page, 'my-hands-row', '.bj-hand, .playing-card'), { message: `${label}: no hand clipped` }).toMatchObject({ outside: 0 });
+            // The row only scrolls once its cards are at the least size.
+            if (shown.sideways) expect(shown.sizes[0], `${label}: scrolls only at the least card`).toBeLessThanOrEqual(26.5);
             // Past what fits the row scrolls sideways and fades the end(s) with more hands; the page never scrolls.
             await nothingScrolls(page, label);
             await expect
@@ -525,8 +533,6 @@ test.describe('many hands (the harness)', () => {
                 return r && { fade: r.fade === r.due, masked: r.masked === (r.due !== '') };
               }, { message: `${label}: the ends with more hands past them fade` })
               .toEqual({ fade: true, masked: true });
-            if (hands <= 2) expect(shown.sideways, `${label}: two hands share the row`).toBe(false);
-            if (hands >= 8) expect(shown.sideways, `${label}: eight hands scroll`).toBe(true);
             // The rank and suit of every card in my row and the dealer's read whole, wherever my row scrolls to.
             await cornersClear(page, label, { dealer: true });
             // My row and the dealer's never move, however many hands.
@@ -569,7 +575,7 @@ test.describe('many hands (the harness)', () => {
             });
             expect(overshoot, `${label}: the row never scrolls past its last hand`).toBeLessThanOrEqual(1);
             const want = phase === 'walk' ? step : step + 1;
-            await expect.poll(async () => { const r = await rowShown(page, 'my-hands-row'); return r && { active: r.active, inView: r.inView, sizes: r.sizes }; }, { message: `${label}: the hand in play in view`, timeout: 1300 }).toEqual({ active: want, inView: true, sizes: [card] });
+            await expect.poll(async () => { const r = await rowShown(page, 'my-hands-row'); return r && { active: r.active, inView: r.inView, sizes: r.sizes.length }; }, { message: `${label}: the hand in play in view`, timeout: 1300 }).toEqual({ active: want, inView: true, sizes: 1 });
             await nothingScrolls(page, label);
           }
         }

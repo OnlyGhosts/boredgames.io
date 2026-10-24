@@ -1302,11 +1302,12 @@ describe('many hands', () => {
     expect(fadeOf({ scrollTop: 10, clientHeight: 100, scrollHeight: 300 } as HTMLElement)).toBe('top bottom');
   });
 
-  it('keeps every card the size a hand on its own gets: a split never shrinks them, and past what fits the row scrolls', () => {
+  it('sizes one hand by the whole row, shrinks split hands together to fit, and scrolls only past the least card', () => {
     const sheet = css();
-    // The cards go by the whole row and its height, never by how many hands share it.
+    // A hand on its own goes by the whole row and its height; split hands take HandRow's --bj-fit when that is smaller.
     expect(sheet).toMatch(/--fit-w: max\(14px, calc\(\(100cqw - 8px\) \/ \(1 \+ var\(--fan-step\) \* \(var\(--fan, 2\) - 1\)\)\)\);/);
-    expect(sheet).toMatch(/--tbl-w: min\(var\(--bj-card-w\), var\(--fit-w\), var\(--fit-h\)\);/);
+    expect(sheet).toMatch(/--bj-solo-w: min\(var\(--bj-card-w\), var\(--fit-w\), var\(--fit-h\)\);/);
+    expect(sheet).toMatch(/--tbl-w: min\(var\(--bj-solo-w\), var\(--bj-fit, 9999px\)\);/);
     // An equal share of the row while the hands fit, never narrower than its own hand: past that the row scrolls sideways, a hand to a snap, no scrollbar.
     expect(sheet).toMatch(/flex: 0 1 max\(var\(--bj-hand-least\), calc\(\(100cqw - \(var\(--hands, 1\) - 1\) \* 8px\) \/ var\(--hands, 1\)\)\);\s*min-width: var\(--bj-hand-least\);/);
     expect(sheet).toMatch(/\.bj-hands\.scroll-fade--x \{[^}]*overflow-x: auto;\s*overflow-y: hidden;\s*overscroll-behavior-x: contain;\s*scrollbar-width: none;/);
@@ -1682,5 +1683,25 @@ describe('a tap waiting for its answer', () => {
     expect(tagsWith(html, 'skip-turn')).toHaveLength(1);
     expect(seatLine(quiet, 'bob', [], false)).toMatchObject({ state: 'away', text: 'Away' });
     expect(seatLine(quiet, 'host', [], false).state).not.toBe('away');
+  });
+});
+
+describe('my split hands all at once (fitCardWidth)', () => {
+  const base = { width: 930, solo: 96, step: 0.32, head: 70, least: 70, gap: 8 };
+  it('keeps one hand, and hands that fit, at the solo size', () => {
+    expect(H.fitCardWidth({ ...base, fans: [2] })).toBe(96);
+    expect(H.fitCardWidth({ ...base, fans: [2, 2] })).toBe(96);
+  });
+  it('shrinks the cards so four split hands fit the row, never past it', () => {
+    const fans = [3, 2, 3, 2];
+    const w = H.fitCardWidth({ ...base, width: 360, fans });
+    expect(w).toBeLessThan(96);
+    expect(w).toBeGreaterThanOrEqual(H.LEAST_FIT_CARD);
+    const row = fans.reduce((s, n) => s + Math.max(6 + w * (1 + 0.32 * (n - 1)), 73, 70), 0) + 24;
+    expect(row).toBeLessThanOrEqual(360);
+    expect(row).toBeGreaterThan(360 - 4 * 2);
+  });
+  it('stops at the least card when nothing would fit', () => {
+    expect(H.fitCardWidth({ ...base, width: 320, fans: Array(16).fill(3) })).toBe(H.LEAST_FIT_CARD);
   });
 });

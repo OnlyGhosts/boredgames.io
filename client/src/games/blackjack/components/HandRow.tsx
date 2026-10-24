@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type 
 import type { PlayingCardSize } from '../../../platform/components/PlayingCard';
 import { prefersReducedMotion } from '../../../platform/lib/media';
 import { laidOutWidth, useScrollFade } from '../../../platform/lib/useScrollFade';
-import { scrollToHand, type HandPlace } from '../lib/hands';
+import { fitCardWidth, scrollToHand, type HandPlace } from '../lib/hands';
 import type { TableHand } from '../lib/table';
 import type { Timeline } from '../lib/timeline';
 import { Hand } from './Hand';
@@ -18,16 +18,17 @@ function headWidth(el: HTMLElement): number {
  * keeps room for those words. They never shrink while the row keeps its hands, so the slots never
  * flip back and forth.
  */
-function useRowSize<T extends HTMLElement>(count: number, words = true): [RefObject<T | null>, { width: number; head: number }] {
+function useRowSize<T extends HTMLElement>(count: number, words = true, wordsKey = ''): [RefObject<T | null>, { width: number; head: number }] {
   const ref = useRef<T | null>(null);
   const [size, setSize] = useState({ width: 0, head: 0 });
   // A new number of hands starts the words' width over.
-  const counted = useRef(count);
+  // So does a change in how the words are drawn (wordsKey: the stakes packed to their figures).
+  const counted = useRef(`${count} ${wordsKey}`);
   const measure = () => {
     const el = ref.current;
     if (!el) return;
-    const fresh = counted.current !== count;
-    counted.current = count;
+    const fresh = counted.current !== `${count} ${wordsKey}`;
+    counted.current = `${count} ${wordsKey}`;
     const width = el.clientWidth;
     const said = words ? headWidth(el) : 0;
     setSize((s) => {
@@ -105,6 +106,44 @@ function useFollowHand(ref: RefObject<HTMLElement | null>, activeIndex: number, 
   }, [ref, count]);
 }
 
+/** A length the row's stylesheet gives (a custom property's value), resolved to px where the row lays out. */
+function resolve(el: HTMLElement, width: string): number {
+  const probe = document.createElement('div');
+  probe.style.cssText = `position:absolute;visibility:hidden;height:0;width:${width}`;
+  el.appendChild(probe);
+  const px = probe.getBoundingClientRect().width;
+  probe.remove();
+  return px;
+}
+
+/**
+ * The card width (px) that shows every one of my split hands at once on the stage (null: the solo
+ * size, as the stylesheet gives it): measured where the row lays out, solved by fitCardWidth.
+ */
+function useFitAll(ref: RefObject<HTMLElement | null>, on: boolean, fans: string, width: number, head: number, gap: number): number | null {
+  const [fit, setFit] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    const counts = fans.split(',').map(Number);
+    let next: number | null = null;
+    if (el && on && counts.length > 1 && el.clientWidth > 0) {
+      const solo = resolve(el, 'var(--bj-solo-w)');
+      const step = resolve(el, 'calc(1000px * var(--fan-step))') / 1000;
+      const least = resolve(el, 'calc(var(--tbl-pill-h) * 2.2 + 6px)');
+      // Measured now, not by the last render's state: a split's new hand never shows a frame at the old size.
+      const w = fitCardWidth({ width: el.clientWidth, solo, step, fans: counts, head: Math.max(head, headWidth(el)), least, gap });
+      next = w >= solo ? null : w;
+    }
+    // Set on the row at once too, so the hand in play is followed (useFollowHand, after this) in the row as it will show.
+    if (el && on) {
+      if (next === null) el.style.removeProperty('--bj-fit');
+      else el.style.setProperty('--bj-fit', `${next}px`);
+    }
+    setFit(next);
+  }, [ref, on, fans, width, head, gap]);
+  return fit;
+}
+
 interface Props {
   playerId: string;
   hands: TableHand[];
@@ -139,16 +178,25 @@ interface Props {
  * said over a hand's corner and the row has no words to measure.
  */
 export function HandRow({ playerId, hands, start, timeline, now, leaving, activeIndex, place, size, mini = false, stakes = false, ownerName, testId }: Props) {
-  const [ref, box] = useRowSize<HTMLDivElement>(hands.length, !mini);
+  // Packed: my split hands' stakes are just their figures, so every hand's words fit the row (useFitAll).
+  const [packed, setPacked] = useState(false);
+  const [ref, box] = useRowSize<HTMLDivElement>(hands.length, !mini, packed ? 'packed' : '');
   const [fade, refade] = useScrollFade(ref, true, 'x');
   // A new hand or a new size changes what the row holds, which the fade's own observer cannot see.
   useLayoutEffect(refade);
-  useFollowHand(ref, activeIndex, hands.length, `${box.width} ${box.head}`);
-  const style = { ...fanStyle(hands), '--bj-head-w': `${box.head}px` } as CSSProperties;
+  const fit = useFitAll(ref, place !== 'seat', hands.map((h) => Math.max(2, h.cards.length)).join(','), box.width, box.head, packed ? 4 : 8);
+  // The words over the hands alone overrun the row: pack the stakes, and keep them packed while the
+  // hands stay split (packed words fitting must not unpack them, or the row would flip each frame).
+  useLayoutEffect(() => {
+    const want = place !== 'seat' && hands.length > 1 && (packed || (box.width > 0 && hands.length * (box.head + 3) + (hands.length - 1) * 8 > box.width));
+    if (want !== packed) setPacked(want);
+  }, [place, hands.length, box.width, box.head, packed]);
+  useFollowHand(ref, activeIndex, hands.length, `${box.width} ${box.head} ${fit}`);
+  const style = { ...fanStyle(hands), '--bj-head-w': `${box.head}px`, ...(fit === null ? {} : { '--bj-fit': `${fit}px` }) } as CSSProperties;
   const named = activeIndex >= 0 ? activeIndex : 0;
   const side = hands.length > 1;
   return (
-    <div ref={ref} className={`bj-hands bj-hands--${place} scroll-fade scroll-fade--x${side ? ' bj-hands--side' : ''}`} style={style} data-testid={`${testId}s-row`} data-count={hands.length} data-fade={fade}>
+    <div ref={ref} className={`bj-hands bj-hands--${place} scroll-fade scroll-fade--x${side ? ' bj-hands--side' : ''}${packed ? ' bj-hands--packed' : ''}`} style={style} data-testid={`${testId}s-row`} data-count={hands.length} data-fade={fade}>
       {hands.map((hand, i) => (
         // Each slot keeps the room its own hand's words reach left of its own fan (blackjack.css --bj-head-room).
         <div key={i} className="bj-slot" style={{ '--slot-fan': Math.max(2, hand.cards.length) } as CSSProperties}>

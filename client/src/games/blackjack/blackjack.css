@@ -107,10 +107,11 @@
 }
 
 /*
- * Every hand keeps the cards a hand on its own gets here (the round's size, fanStyle's --fan the
- * most cards in any hand): a split never shrinks them. While the hands fit side by side each slot
- * is an equal share of the row (fanStyle's --hands); a slot never narrows below its own hand (its
- * fan, the words over its corner, a pill with a word in it), and past what fits the row scrolls
+ * One hand gets the cards a hand on its own gets here (the round's size, fanStyle's --fan the
+ * most cards in any hand); split hands all shrink to one size that shows every hand at once
+ * (HandRow's --bj-fit). Each slot is an equal share of the row (fanStyle's --hands); a slot never
+ * narrows below its own hand (its fan, the words over its corner, a pill with a word in it), and
+ * only past the least card size (a long run of splits on a phone) the row scrolls
  * sideways inside its box: by swipe, wheel or trackpad, no scrollbar and no snapping, its cut
  * ends fading where more hands wait (.scroll-fade--x), the hand in play brought to the middle
  * (HandRow). The stage around it never moves or resizes. In its slot a hand starts from a fixed
@@ -120,7 +121,9 @@
 .bj-hands--stage {
   --fit-w: max(14px, calc((100cqw - 8px) / (1 + var(--fan-step) * (var(--fan, 2) - 1))));
   --fit-h: calc((100cqh - var(--tbl-pill-h) - 4px) / var(--hand-k));
-  --tbl-w: min(var(--bj-card-w), var(--fit-w), var(--fit-h));
+  --bj-solo-w: min(var(--bj-card-w), var(--fit-w), var(--fit-h));
+  /* Split hands shrink together so every one shows at once (HandRow's --bj-fit, fitCardWidth). */
+  --tbl-w: min(var(--bj-solo-w), var(--bj-fit, 9999px));
   --bj-anchor: calc((var(--tbl-w) * (1 + var(--fan-step)) + 6px) / 2);
   justify-content: flex-start;
 }
@@ -179,6 +182,19 @@
 .bj-hands--mine > .bj-slot:only-child .bj-hand,
 .bj-hands--stage > .bj-slot:only-child .bj-hand {
   opacity: 1;
+}
+
+/* Split hands whose words alone would overrun the row (HandRow packs them): each stake just its figure, the hands closer. */
+.bj-hands--packed {
+  gap: 4px;
+}
+
+.bj-hands--packed .tbl-hand__stake :is(.tbl-stake__chips, .tbl-stake__more) {
+  display: none;
+}
+
+.bj-hands--packed .tbl-hand__stake {
+  padding: 0 0.45em;
 }
 
 /* My stake once it is down, left of the two empty places, level with them: never over a card or a place. */
