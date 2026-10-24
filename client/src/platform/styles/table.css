@@ -1502,21 +1502,35 @@
 @container tile (min-width: 200px) and (max-width: 269px) {
   .tbl-tile--full {
     grid-template-columns: auto minmax(0, 1fr) fit-content(50%);
+    grid-template-rows: auto auto minmax(0, 1fr);
     grid-template-areas: 'face name tag' 'face money money' 'cards cards line';
+    align-content: stretch;
   }
 
   .tbl-tile--full .tbl-tile__meta {
     display: contents;
   }
 
-  /* The bet pill wraps under the stack only when the two cannot share the line (a seven-figure stack). */
+  /*
+   * The stack and the bet pill keep to one line: a stack too long beside the pill ("1,250,000
+   * chips") reads short (StackCount measures it, fit.tsx), so the words never take a line more
+   * than the tile has room for.
+   */
   .tbl-tile--full .tbl-tile__money {
     grid-area: money;
     display: flex;
-    flex-wrap: wrap;
     align-items: center;
     gap: var(--space-1);
     min-width: 0;
+  }
+
+  .tbl-tile--full .tbl-tile__chips {
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .tbl-tile--full .tbl-tile__bet {
+    flex: none;
   }
 
   .tbl-tile--full .tbl-tile__line {
@@ -1525,8 +1539,19 @@
     justify-self: end;
   }
 
-  .tbl-grid--arc .tbl-tile--full .tbl-tile__cards {
-    --tbl-w: min(var(--tbl-mini-w, 24px), calc((100cqh - 68px) / 1.5));
+  /*
+   * The cards take the height the words leave them, however many lines those take (a stake that
+   * wraps under the stack, a larger font): their row is their own box, and the cards in it are
+   * never taller than it (a fan is 1.62 card widths tall).
+   */
+  .tbl-tile--full .tbl-tile__cards {
+    container-type: size;
+    align-self: stretch;
+    margin-top: 0;
+  }
+
+  .tbl-tile--full .tbl-tile__cards > * {
+    --tbl-w: min(var(--tbl-mini-w, 24px), calc(100cqh / 1.62));
   }
 }
 

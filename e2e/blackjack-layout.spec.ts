@@ -737,6 +737,8 @@ test.describe('many hands (the harness)', () => {
           clear: !cardsBox || cardsBox.width === 0 || (within(cardsBox, t) && words.every((w) => !meet(w, cardsBox))),
           cut,
           clipped,
+          // The name, the stack, the pill and the status: each wholly inside the tile, none run off its top or its bottom.
+          spill: words.filter((w) => !within(w, t)).length,
         };
       });
       const row = Array.from(document.querySelectorAll<HTMLElement>('[data-testid="seat"]')).find((t) => t.dataset.name === who)?.querySelector<HTMLElement>('[data-testid="seat-hands-row"]');
@@ -822,6 +824,31 @@ test.describe('many hands (the harness)', () => {
       }
     });
   }
+
+  // A desktop's three full tiles at every common height: the name, the stack, the pill, the status and the cards with their total all
+  // inside the tile, a big stack and stake too, and so with a reader's larger text (18px), which wrapped the pill under the stack
+  // and pushed the cards and total off the tile's bottom edge.
+  test('desktops: a full tile keeps its name, words, cards and total inside it at every height and text size', async ({ browser }) => {
+    test.setTimeout(120_000);
+    for (const size of [{ width: 1024, height: 700 }, { width: 1100, height: 720 }, { width: 1280, height: 720 }, { width: 1366, height: 768 }, { width: 1440, height: 800 }, { width: 1920, height: 950 }]) {
+      const pages = harnessPages(browser, size);
+      try {
+        for (const font of ['', '18px']) {
+          for (const query of ['phase=mine&others=3&start=150000&chips=150000&bet=41000&stake=41000', 'phase=mine&others=3&start=100000&chips=1250000&bet=49999&stake=49999', 'phase=betting&others=3&start=150000&chips=150000&bet=41000&stake=41000']) {
+            const page = await pages.go(query);
+            if (font) await page.addStyleTag({ content: `html { font-size: ${font}; }` });
+            await expect(page.getByTestId('seats')).toHaveAttribute('data-tier', 'full');
+            await page.waitForTimeout(300);
+            const { tiles } = await tilesShown(page);
+            for (const t of tiles) expect(t, `${size.width}x${size.height} ${font || 'default text'} ${query}: ${t.name}`).toMatchObject({ clipped: 0, cut: 0, spill: 0, clear: true });
+          }
+        }
+        expect(pages.errors).toEqual([]);
+      } finally {
+        await pages.close();
+      }
+    }
+  });
 
   // Another player's split hands in their tile take the rule my hands have on the stage: every hand its cards at one size with its total,
   // a row that slides to the hand in play (in view, clear of the fades) and fades its ends where more hands wait, no total ever cut, on a

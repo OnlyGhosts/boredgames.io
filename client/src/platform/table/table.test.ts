@@ -480,6 +480,9 @@ describe('the components', () => {
     const block = css.slice(css.indexOf('@container tile (min-width: 200px) and (max-width: 269px) {'));
     expect(block).toMatch(/^@container[^@]*grid-template-areas: 'face name tag' 'face money money' 'cards cards line';/);
     expect(block).toMatch(/^@container[^@]*\.tbl-tile--full \.tbl-tile__meta \{\s*display: contents;/);
+    expect(block).toMatch(/^@container[^@]*\.tbl-tile--full \.tbl-tile__cards \{\s*container-type: size;/);
+    expect(block).toMatch(/^@container[^@]*\.tbl-tile--full \.tbl-tile__cards > \* \{\s*--tbl-w: min\(var\(--tbl-mini-w, 24px\), calc\(100cqh \/ 1\.62\)\);/);
+    expect(block).not.toMatch(/^@container[^@]*flex-wrap: wrap/);
   });
 
   it('a narrow full tile on a phone, dealt in: the words on the left under the name, the cards on the right half as big again, the total on the last card', () => {
