@@ -72,8 +72,12 @@ async function phoneLayoutHolds(p: Player, size: { width: number; height: number
   expect(panel.y, `${p.name}: the panel starts on screen`).toBeGreaterThanOrEqual(0);
   expect(panel.y + panel.height, `${p.name}: the panel ends on screen`).toBeLessThanOrEqual(size.height + 0.5);
   expect(panel.x + panel.width).toBeLessThanOrEqual(size.width + 0.5);
-  const call = (await p.page.getByTestId('action-call').count()) > 0 ? 'action-call' : 'action-check';
-  for (const id of ['raise-input', 'raise-half', 'raise-pot', 'raise-max', 'action-fold', call, 'action-raise', 'action-allin', 'players-toggle', 'game-menu']) {
+  // Off my turn while I am in the hand, the moves are picks for my turn in the same places.
+  const picking = (await p.page.getByTestId('premove-checkFold').count()) > 0;
+  const has = async (id: string) => (await p.page.getByTestId(id).count()) > 0;
+  const call = picking ? ((await has('premove-call')) ? 'premove-call' : 'premove-check') : (await has('action-call')) ? 'action-call' : 'action-check';
+  const moves = picking ? ['premove-checkFold', 'premove-callAny'] : ['action-fold', 'action-allin'];
+  for (const id of ['raise-input', 'raise-half', 'raise-pot', 'raise-max', ...moves, call, 'action-raise', 'players-toggle', 'game-menu']) {
     const box = await boxOf(p.page.getByTestId(id));
     expect(box.height, `${p.name}: ${id} is a 44px target`).toBeGreaterThanOrEqual(MIN_TARGET);
     expect(box.y + box.height, `${p.name}: ${id} is on screen`).toBeLessThanOrEqual(size.height + 0.5);
@@ -171,7 +175,7 @@ async function actor(): Promise<Player | null> {
         for (const p of players) {
           const area = p.page.getByTestId('my-area');
           // The actor's own page must have caught up with the same step: a stale page still shows the move just made.
-          if ((await area.getAttribute('data-player-id')) === turn && (await stepOn(p)) === step && (await area.getAttribute('data-my-turn')) === 'true' && (await p.page.getByTestId('action-fold').isEnabled())) {
+          if ((await area.getAttribute('data-player-id')) === turn && (await stepOn(p)) === step && (await area.getAttribute('data-my-turn')) === 'true' && (await p.page.locator('[data-testid="action-fold"]:enabled').count()) > 0) {
             found = p;
             return p.name;
           }
@@ -200,7 +204,8 @@ async function onlyActorCanMove(acting: Player): Promise<void> {
       continue;
     }
     await expect(p.page.getByTestId('table-turn').locator('.tbl-turn__text')).toHaveText(`${acting.name}’s turn`);
-    await expect(p.page.locator('[data-testid="pk-panel"] button:not([disabled])')).toHaveCount(0);
+    // A page still in the hand may pick a move for its turn (aria-pressed); nothing plays now.
+    await expect(p.page.locator('[data-testid="pk-panel"] button:not([disabled]):not([aria-pressed])')).toHaveCount(0);
     await expect(p.page.locator(`[data-testid="seat"][data-name="${acting.name}"]`)).toHaveAttribute('data-turn', 'true');
   }
   await expect(acting.page.getByTestId('action-fold')).toBeEnabled();
@@ -804,6 +809,59 @@ test('a 100,000 table: a raise to 12,000 reads on the raiser’s seat and by the
         await expect.poll(() => scrolls(raiser), { message: `${label}: nothing scrolls` }).toEqual([]);
       }
     }
+    expect(errors).toEqual([]);
+  } finally {
+    for (const c of contexts) await c.close();
+  }
+});
+
+test('a move picked before my turn: Pia ticks Call any while Hana raises, and the call goes the moment her turn starts', async ({ browser }) => {
+  const phone = { viewport: PORTRAIT, isMobile: true, hasTouch: true, deviceScaleFactor: 2 };
+  const contexts = [await browser.newContext(phone), await browser.newContext(phone)];
+  const [a, b] = await Promise.all(contexts.map((c) => c.newPage()));
+  const errors: string[] = [];
+  for (const p of [a, b]) p.on('pageerror', (err) => errors.push(err.message));
+  try {
+    const code = await createParty(a, 'Hana', 'poker');
+    await joinByCode(b, 'Pia', code);
+    await readyAll([b]);
+    await expectReadyCount(a, 2);
+    await a.getByTestId('start-game').click();
+    for (const p of [a, b]) await expect(p.getByTestId('poker-screen')).toHaveAttribute('data-phase', 'acting');
+    const myTurn = (p: Page) => p.locator('[data-testid="my-area"][data-my-turn="true"]').count();
+    await expect.poll(async () => (await myTurn(a)) + (await myTurn(b)), { message: 'someone to act' }).toBe(1);
+    // Heads up the button acts first before the flop; the big blind waits with checking free.
+    const acting = (await myTurn(a)) > 0 ? a : b;
+    const waiting = acting === a ? b : a;
+    const panel = waiting.getByTestId('pk-panel');
+    await expect(panel).toHaveAttribute('data-premove', 'none');
+    await expect(waiting.getByTestId('premove-check')).toHaveAttribute('aria-label', 'Check when it’s my turn');
+    for (const id of ['premove-checkFold', 'premove-check', 'premove-callAny']) await expect(waiting.getByTestId(id)).toHaveAttribute('aria-pressed', 'false');
+    // One pick at a time: a tap ticks it, a tap on another moves the tick, a second tap unticks it.
+    await waiting.getByTestId('premove-check').click();
+    await expect(waiting.getByTestId('premove-check')).toHaveAttribute('aria-pressed', 'true');
+    await waiting.getByTestId('premove-callAny').click();
+    await expect(waiting.getByTestId('premove-check')).toHaveAttribute('aria-pressed', 'false');
+    await waiting.getByTestId('premove-callAny').click();
+    await expect(panel).toHaveAttribute('data-premove', 'none');
+    // Ticked, Check/Fold still reads whole on a phone.
+    await waiting.getByTestId('premove-checkFold').click();
+    await expect(waiting.locator('[data-testid="premove-checkFold"] .tbl-move__label')).toHaveJSProperty('scrollWidth', await waiting.locator('[data-testid="premove-checkFold"] .tbl-move__label').evaluate((el) => el.clientWidth));
+    await waiting.getByTestId('premove-callAny').click();
+    await expect(waiting.getByTestId('premove-callAny')).toHaveAttribute('aria-pressed', 'true');
+    await expect(waiting.getByTestId('premove-callAny')).toHaveAttribute('data-queued', 'true');
+    await waiting.screenshot({ path: test.info().outputPath('poker-premove-390x844.png') });
+    await waiting.setViewportSize({ width: 1040, height: 1060 });
+    await expect(waiting.getByTestId('premove-callAny')).toHaveAttribute('aria-pressed', 'true');
+    await waiting.screenshot({ path: test.info().outputPath('poker-premove-1040x1060.png') });
+    await waiting.setViewportSize(PORTRAIT);
+
+    // The button raises to 60: Call any survives the bet and calls it, with no tap from the big blind.
+    await acting.getByTestId('raise-input').fill('60');
+    await acting.getByTestId('raise-input').press('Enter');
+    await expect(acting.getByTestId('board')).toHaveAttribute('data-street', 'flop', { timeout: 15_000 });
+    await expect(waiting.getByTestId('pot')).toHaveText(/^Pot\s+120$/, { useInnerText: true });
+    await expect(panel).not.toHaveAttribute('data-premove', 'callAny');
     expect(errors).toEqual([]);
   } finally {
     for (const c of contexts) await c.close();

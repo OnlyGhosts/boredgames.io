@@ -1,6 +1,7 @@
 import type { CSSProperties, FormEvent, ReactNode } from 'react';
 import { EyeIcon } from '../components/Icons';
 import { WATCHING_TEXT } from '../lib/watching';
+import { TickIcon } from './Icons';
 import { StackCount } from './Stakes';
 
 type DataAttrs = Record<`data-${string}`, string | number | boolean | undefined>;
@@ -115,15 +116,24 @@ interface MoveProps {
   icon?: ReactNode;
   /** Just tapped and on its way: it stays pressed (and every move waits) until the table answers. */
   sent?: boolean;
+  /**
+   * A move that can be picked before my turn: true when it is picked (a lime outline and a tick,
+   * aria-pressed), false when it can be. Undefined: an ordinary move.
+   */
+  queued?: boolean;
+  /** More classes (the one big button's size, when a pick takes its place). */
+  className?: string;
   data?: DataAttrs;
 }
 
 /** One move: lit when it is on offer, dimmed (not gone) otherwise, so the layout never shifts. */
-export function MoveButton({ label, ariaLabel, testId, enabled, onClick, primary = false, hotkey, icon, sent = false, data }: MoveProps) {
+export function MoveButton({ label, ariaLabel, testId, enabled, onClick, primary = false, hotkey, icon, sent = false, queued, className, data }: MoveProps) {
   return (
     <button
       type="button"
-      className={`btn ${primary ? 'btn--primary' : 'btn--secondary'} tbl-move`}
+      className={`btn ${primary ? 'btn--primary' : 'btn--secondary'} tbl-move${queued ? ' tbl-move--queued' : ''}${className ? ` ${className}` : ''}`}
+      aria-pressed={queued}
+      data-queued={queued || undefined}
       onClick={onClick}
       disabled={!enabled}
       aria-label={ariaLabel}
@@ -138,6 +148,11 @@ export function MoveButton({ label, ariaLabel, testId, enabled, onClick, primary
       {icon && (
         <span className="tbl-move__icon" aria-hidden="true">
           {icon}
+        </span>
+      )}
+      {queued && (
+        <span className="tbl-move__tick" aria-hidden="true">
+          <TickIcon size={14} />
         </span>
       )}
     </button>

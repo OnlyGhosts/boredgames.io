@@ -43,6 +43,14 @@ let pia: Player;
 let quinn: Player;
 let roomCode = '';
 
+/** A move on offer now: lit, and not a pick for a later turn (those carry aria-pressed). */
+const PLAYABLE = '[data-testid^="action-"]:not([aria-pressed]):enabled';
+
+/** Whether it is this page's turn: Stand is lit as a move to play now. */
+async function canPlay(page: Page): Promise<boolean> {
+  return (await page.locator('[data-testid="action-stand"]:not([aria-pressed]):enabled').count()) > 0;
+}
+
 async function newPlayer(browser: Browser, name: string, options: Parameters<Browser['newContext']>[0] = {}): Promise<Player> {
   const context = await browser.newContext(options);
   const page = await context.newPage();
@@ -164,7 +172,7 @@ async function playOutRound(round: number, hostDoubles: boolean, onFirstTurn?: (
         async () => {
           if (await settled()) return 'settled';
           for (const p of players) {
-            if (await p.page.getByTestId('action-stand').isEnabled()) {
+            if (await canPlay(p.page)) {
               actor = p;
               return p.name;
             }
@@ -189,7 +197,9 @@ async function playOutRound(round: number, hostDoubles: boolean, onFirstTurn?: (
         continue;
       }
       await expect(p.page.getByTestId('table-turn').locator('.tbl-turn__text')).toHaveText(new RegExp(`^${acting.name}’s turn`));
-      for (const id of ['action-hit', 'action-stand', 'action-double', 'action-split', 'place-bet']) await expect(p.page.getByTestId(id)).toBeDisabled();
+      // A waiting player's moves are picks for their turn (aria-pressed), never moves to play now.
+      await expect(p.page.locator(PLAYABLE)).toHaveCount(0);
+      await expect(p.page.getByTestId('place-bet')).toBeDisabled();
     }
     expect(turnPlayer).not.toBeNull();
     await expect(acting.page.getByTestId('action-hit')).toBeEnabled();
@@ -714,7 +724,7 @@ async function bigTable(browser: Browser, base: string, size: number): Promise<v
     for (let step = 0; step < 4; step++) {
       const turn = (await screenOf(desk).getAttribute('data-turn-player')) ?? '';
       if (botIds.has(turn)) break;
-      const acting = (await desk.getByTestId('action-stand').isEnabled()) ? desk : (await phone.getByTestId('action-stand').isEnabled()) ? phone : null;
+      const acting = (await canPlay(desk)) ? desk : (await canPlay(phone)) ? phone : null;
       if (acting) {
         await turnMarked(
           [desk, phone].map((page) => ({ page, acting: page === acting })),
@@ -805,7 +815,7 @@ async function standOut(pages: Page[], round: number): Promise<void> {
         async () => {
           if ((await roundOn(pages[0])) > round) return 'settled';
           for (const p of pages) {
-            if (await p.getByTestId('action-stand').isEnabled()) {
+            if (await canPlay(p)) {
               actor = p;
               return 'turn';
             }
@@ -878,7 +888,7 @@ test('no clocks: a player sits a hand out, the host deals now to whoever has bet
         await p.getByTestId('place-bet').click();
       }
       for (let moves = 0; moves < 12 && !skipped; moves++) {
-        const state = async () => ((await roundOn(desk)) > round ? 'settled' : (await phone.getByTestId('action-stand').isEnabled()) ? 'pia' : (await desk.getByTestId('action-stand').isEnabled()) ? 'hana' : null);
+        const state = async () => ((await roundOn(desk)) > round ? 'settled' : (await canPlay(phone)) ? 'pia' : (await canPlay(desk)) ? 'hana' : null);
         await expect.poll(state, { timeout: 20_000 }).not.toBeNull();
         const now = await state();
         if (now === 'settled') break;
@@ -909,6 +919,72 @@ test('no clocks: a player sits a hand out, the host deals now to whoever has bet
   } finally {
     await deskCtx.close();
     await phoneCtx.close();
+  }
+});
+
+test('a move picked before my turn: Pia taps Stand while Hana plays, and it stands the moment her turn starts', async ({ browser }) => {
+  test.setTimeout(120_000);
+  const phone = { viewport: PORTRAIT, isMobile: true, hasTouch: true, deviceScaleFactor: 2 };
+  const contexts = [await browser.newContext(phone), await browser.newContext(phone)];
+  const [a, b] = await Promise.all(contexts.map((c) => c.newPage()));
+  const errors: string[] = [];
+  for (const p of [a, b]) p.on('pageerror', (err) => errors.push(err.message));
+  try {
+    const code = await createParty(a, 'Hana', 'blackjack');
+    await joinByCode(b, 'Pia', code);
+    await readyAll([b]);
+    await expectReadyCount(a, 2);
+    await a.getByTestId('start-game').click();
+    // A natural or a dealer's blackjack can end a round before the second hand waits: deal again until one does.
+    let picked: Page | null = null;
+    for (let round = 1; round <= 6 && !picked; round++) {
+      await expect.poll(() => roundOn(a), { timeout: 20_000 }).toBe(round);
+      for (const p of [a, b]) {
+        await expect(p.getByTestId('place-bet')).toBeEnabled({ timeout: 20_000 });
+        await p.getByTestId('place-bet').click();
+      }
+      const state = async () => {
+        if ((await roundOn(a)) > round) return 'settled';
+        for (const p of [a, b]) if ((await p.locator('[data-testid="action-stand"][aria-pressed="false"]').count()) > 0) return p === a ? 'a' : 'b';
+        return null;
+      };
+      await expect.poll(state, { timeout: 20_000 }).not.toBeNull();
+      const now = await state();
+      if (now === 'settled') continue;
+      const waiting = now === 'a' ? a : b;
+      const acting = waiting === a ? b : a;
+      const stand = waiting.getByTestId('action-stand');
+      await expect(stand).toHaveAttribute('aria-label', 'Stand when it’s my turn');
+      // A tap picks it, a tap on another move moves the pick, a second tap cancels it.
+      await waiting.getByTestId('action-hit').click();
+      await expect(waiting.getByTestId('action-hit')).toHaveAttribute('aria-pressed', 'true');
+      await stand.click();
+      await expect(waiting.getByTestId('action-hit')).toHaveAttribute('aria-pressed', 'false');
+      await stand.click();
+      await expect(stand).toHaveAttribute('aria-pressed', 'false');
+      await stand.click();
+      await expect(stand).toHaveAttribute('aria-pressed', 'true');
+      await expect(stand).toHaveAttribute('data-queued', 'true');
+      await waiting.screenshot({ path: test.info().outputPath('blackjack-premove-390x844.png') });
+      await waiting.setViewportSize({ width: 1040, height: 1060 });
+      await expect(stand).toHaveAttribute('aria-pressed', 'true');
+      await waiting.screenshot({ path: test.info().outputPath('blackjack-premove-1040x1060.png') });
+      await waiting.setViewportSize(PORTRAIT);
+      // Read my cards once the deal has landed (a card still sliding in is not counted yet).
+      await expect(waiting.getByTestId('blackjack-screen')).toHaveAttribute('data-busy', 'false', { timeout: 15_000 });
+      const cards = Number(await waiting.locator('[data-testid="my-hand"][data-index="0"]').getAttribute('data-cards'));
+      // The other hand stands; the picked Stand plays on its own, so the round settles with no tap from the waiting page.
+      await expect(acting.locator('[data-testid="action-stand"]:not([aria-pressed]):enabled')).toHaveCount(1);
+      await acting.getByTestId('action-stand').click();
+      const mine = waiting.locator('[data-testid="my-hand"][data-index="0"]');
+      await expect.poll(async () => `${await mine.getAttribute('data-status')} ${await mine.getAttribute('data-cards')}`, { timeout: 20_000, message: 'the picked Stand stands the hand' }).toMatch(new RegExp(`^(stood|won|lost|push) ${cards}$`));
+      await expect(stand).not.toHaveAttribute('aria-pressed', 'true');
+      picked = waiting;
+    }
+    expect(picked, 'a round where one hand waited on the other').not.toBeNull();
+    expect(errors).toEqual([]);
+  } finally {
+    for (const c of contexts) await c.close();
   }
 });
 

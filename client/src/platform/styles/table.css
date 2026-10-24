@@ -2320,6 +2320,28 @@
   color: var(--color-primary-text);
 }
 
+/* A move picked to play when my turn starts: a lime outline and a tick, never the lime fill of the
+   move on offer or the soft fill of a move on its way. */
+.tbl-panel .btn.tbl-move--queued:not(:disabled) {
+  border-color: var(--color-primary-edge);
+  box-shadow: inset 0 0 0 1px var(--color-primary-edge);
+  color: var(--color-text);
+}
+
+/* The tick sits in the top corner, so the words keep their whole width. */
+.tbl-move--queued {
+  position: relative;
+}
+
+.tbl-panel .tbl-move--queued .tbl-move__tick {
+  display: flex;
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  color: var(--color-primary-edge);
+  opacity: 1;
+}
+
 /* The one big button under the moves (Blackjack's Bet). */
 .tbl-panel__primary {
   min-height: 56px;

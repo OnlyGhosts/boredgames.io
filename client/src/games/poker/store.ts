@@ -3,6 +3,7 @@ import { create } from 'zustand';
 import type { PokerView } from '@shared/games/poker/protocol';
 import type { TableSheet } from '../../platform/table/TableShell';
 import { tableOf, type PokerTable } from './lib/table';
+import type { Premove } from './lib/premove';
 import { EMPTY_TIMELINE, planTimeline, snapTimeline, type Timeline } from './lib/timeline';
 
 /** The phone sheets the screen can show; one at a time. */
@@ -40,6 +41,8 @@ interface PokerState {
   soundTimeline: Timeline;
   /** A move sent and not answered yet (answerKey as it was): the moves wait for it, so a second tap never plays twice. */
   pending: { move: string; key: string } | null;
+  /** A move picked before my turn (lib/premove): it plays the moment my turn starts. */
+  premove: Premove | null;
 }
 
 interface PokerActions {
@@ -48,6 +51,8 @@ interface PokerActions {
   setRaiseText(text: string | null): void;
   markPending(move: string, view: PokerView): void;
   clearPending(): void;
+  /** Ticks a pick before my turn, or unticks it (null). */
+  setPremove(pick: Premove | null): void;
   /** The turn moved on: the amount belongs to the move that just passed. */
   newTurn(): void;
   /** Plans the animation from the previous hand on the table to this snapshot's; `fresh` snaps (a welcome). */
@@ -57,7 +62,7 @@ interface PokerActions {
 
 export type PokerStore = PokerState & PokerActions;
 
-const INITIAL: PokerState = { sheet: null, seat: null, raiseText: null, table: null, timeline: EMPTY_TIMELINE, soundTimeline: EMPTY_TIMELINE, pending: null };
+const INITIAL: PokerState = { sheet: null, seat: null, raiseText: null, table: null, timeline: EMPTY_TIMELINE, soundTimeline: EMPTY_TIMELINE, pending: null, premove: null };
 
 export const usePokerStore = create<PokerStore>()((set, get) => ({
   ...INITIAL,
@@ -76,6 +81,7 @@ export const usePokerStore = create<PokerStore>()((set, get) => ({
     stopPendingTimer();
     if (get().pending !== null) set({ pending: null });
   },
+  setPremove: (premove) => set({ premove }),
   newTurn: () => set({ raiseText: null }),
   applyView: (view, meId, now, fresh, motion) => {
     const { table: prevTable, timeline: prev, soundTimeline: prevSound } = get();

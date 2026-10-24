@@ -20,3 +20,5 @@ export const FoldIcon = (p: IconProps) => <Icon {...p} paths={['M7 4h8a2 2 0 0 1
 export const RaiseIcon = (p: IconProps) => <Icon {...p} paths={['M12 19V5', 'm6 11 6-6 6 6']} />;
 /** A tall stack of chips: everything in (Poker's All in). */
 export const AllInIcon = (p: IconProps) => <Icon {...p} paths={['M12 7c4.4 0 8-1 8-2.5S16.4 2 12 2 4 3 4 4.5 7.6 7 12 7Z', 'M4 4.5v5C4 11 7.6 12 12 12s8-1 8-2.5v-5', 'M4 9.5v5c0 1.5 3.6 2.5 8 2.5s8-1 8-2.5v-5', 'M4 14.5v5c0 1.5 3.6 2.5 8 2.5s8-1 8-2.5v-5']} />;
+/** A tick: a move picked to play when my turn starts. */
+export const TickIcon = (p: IconProps) => <Icon {...p} paths="m5 12.5 4.5 4.5L19 7.5" />;

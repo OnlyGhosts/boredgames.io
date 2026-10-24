@@ -2,6 +2,7 @@ import { useSyncExternalStore } from 'react';
 import { create } from 'zustand';
 import type { BlackjackView } from '@shared/games/blackjack/protocol';
 import type { TableSheet } from '../../platform/table/TableShell';
+import type { Premove } from './lib/premove';
 import { answerKey, type Pending, type PendingKind } from './lib/pending';
 import { cardsOnTable, tableOf, type TableModel } from './lib/table';
 import { EMPTY_TIMELINE, planTimeline, snapTimeline, type Timeline } from './lib/timeline';
@@ -37,6 +38,8 @@ interface BlackjackState {
   pending: Pending | null;
   /** A bet tapped while the last round's outcomes are up, before the bets open: sent the moment they do. */
   queuedBet: { round: number; amount: number } | null;
+  /** A move picked before my turn (lib/premove): it plays the moment my first hand's turn starts. */
+  premove: Premove | null;
 }
 
 interface BlackjackActions {
@@ -50,6 +53,8 @@ interface BlackjackActions {
   clearPending(): void;
   queueBet(round: number, amount: number): void;
   clearQueuedBet(): void;
+  /** Picks a move for my turn, or unpicks it (null). */
+  setPremove(pick: Premove | null): void;
   /** Plans the animation from the previous table to this snapshot's; `fresh` snaps (a welcome). */
   applyView(view: BlackjackView | null, now: number, fresh: boolean, motion: boolean): Timeline;
   /** Shows the truth at once, whatever is still animating. */
@@ -70,6 +75,7 @@ const INITIAL: BlackjackState = {
   soundTimeline: EMPTY_TIMELINE,
   pending: null,
   queuedBet: null,
+  premove: null,
 };
 
 function stopPendingTimer(): void {
@@ -97,6 +103,7 @@ export const useBlackjackStore = create<BlackjackStore>()((set, get) => ({
   },
   queueBet: (round, amount) => set({ queuedBet: { round, amount }, lastBet: amount, betText: String(amount) }),
   clearQueuedBet: () => set({ queuedBet: null }),
+  setPremove: (premove) => set({ premove }),
   applyView: (view, now, fresh, motion) => {
     const { table: prevTable, timeline: prev, soundTimeline: prevSound, swept, pending } = get();
     const table = tableOf(view);

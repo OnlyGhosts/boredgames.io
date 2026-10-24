@@ -1,5 +1,7 @@
 import type { PokerActions, PokerMoveTarget, PokerView } from '@shared/games/poker/protocol';
 import { socket } from '../../platform/net/socket';
+import { isMyTurn } from './hooks';
+import { keepPremove, premoveMove } from './lib/premove';
 import { usePokerStore } from './store';
 
 /** What a move answers, as my screen has it: the hand and the latest move on the table. A tap that lands after the turn moved on does nothing. */
@@ -32,3 +34,20 @@ export function wager(view: PokerView, actions: PokerActions, amount: number): b
   return false;
 }
 
+/**
+ * A new snapshot: the pick made before my turn clears once it no longer fits, and plays the moment
+ * my turn starts (while no move of mine is waiting). A send that fails (the socket is down) keeps it
+ * for the next snapshot of my turn, so a turn that came while the app was away still plays it.
+ */
+export function playPremove(view: PokerView, meId: string | null): void {
+  const store = usePokerStore.getState();
+  const pick = keepPremove(store.premove, view, meId);
+  if (pick !== store.premove) store.setPremove(pick);
+  if (!pick || !isMyTurn(view, meId) || store.pending !== null) return;
+  const move = premoveMove(pick, view);
+  if (move === null) {
+    store.setPremove(null);
+    return;
+  }
+  if (send(view, { t: move })) usePokerStore.getState().setPremove(null);
+}

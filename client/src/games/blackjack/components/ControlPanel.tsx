@@ -7,6 +7,7 @@ import { DoubleIcon, HitIcon, SplitIcon, StandIcon } from '../../../platform/tab
 import { dealNow, placeBet, playMove, queueBet, sitOut, skipTurn, type MoveKind } from '../actions';
 import { suggestedMove, type MoveId } from '../lib/advice';
 import type { Pending } from '../lib/pending';
+import { canPremove } from '../lib/premove';
 import { betAmount, betWindow, defaultBet, doubleBet, halfBet, suggestedBet } from '../lib/bet';
 import { useBlackjack, useBlackjackStore } from '../store';
 
@@ -126,6 +127,7 @@ export function ControlPanel({ room, view, meId, balance, watching, canSend, mov
   const seat = view.players[meId];
   const betText = useBlackjack((s) => s.betText);
   const lastBet = useBlackjack((s) => s.lastBet);
+  const premove = useBlackjack((s) => s.premove);
   const [editing, setEditing] = useState(false);
   const [skipped, setSkipped] = useState<string | null>(null);
   const turn = turnKey(view);
@@ -164,18 +166,32 @@ export function ControlPanel({ room, view, meId, balance, watching, canSend, mov
   // My turn: the usual play for the hand in play takes the lime; Bet goes quiet until the next round.
   const myHand = myTurn && view.turn ? seat?.hands[view.turn.handIndex] : undefined;
   const lit = myHand && movesReady ? suggestedMove(myHand.cards, view.dealer.cards[0], view.actions) : null;
-  const moveButton = (move: Move) => (
-    <MoveButton
-      label={move.label}
-      icon={move.icon}
-      testId={`action-${move.id}`}
-      enabled={moveOn(move)}
-      onClick={() => play(move)}
-      primary={lit === move.id && moveOn(move)}
-      sent={pending?.kind === move.id}
-      hotkey={hotkeys ? move.hotkey : undefined}
-    />
-  );
+  // Others still play and my hand waits: a move can be picked now, to play when my turn starts.
+  const picking = !watching && canPremove(view, meId);
+  const pickMove = (move: Move) => useBlackjackStore.getState().setPremove(premove?.kind === move.id ? null : { kind: move.id, round: view.round });
+  const moveButton = (move: Move) =>
+    picking ? (
+      <MoveButton
+        label={move.label}
+        ariaLabel={`${move.label} when it’s my turn`}
+        icon={move.icon}
+        testId={`action-${move.id}`}
+        enabled
+        onClick={() => pickMove(move)}
+        queued={premove?.kind === move.id}
+      />
+    ) : (
+      <MoveButton
+        label={move.label}
+        icon={move.icon}
+        testId={`action-${move.id}`}
+        enabled={moveOn(move)}
+        onClick={() => play(move)}
+        primary={lit === move.id && moveOn(move)}
+        sent={pending?.kind === move.id}
+        hotkey={hotkeys ? move.hotkey : undefined}
+      />
+    );
 
   const live = canSend && !held && !dealerPlaying;
   const placed = (view.phase === 'betting' && seat !== undefined && seat.bet > 0) || queued || pending?.kind === 'bet';

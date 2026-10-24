@@ -13,7 +13,7 @@ import { usePlatformStore } from '../../platform/store/usePlatformStore';
 import { CardsIcon, OutIcon, StarIcon } from './components/Icons';
 import { createEntryFlag } from '../../platform/table/entry';
 import { isActing, prefersReducedMotion, seatOf } from './hooks';
-import { sendQueuedBet } from './actions';
+import { playPremove, sendQueuedBet } from './actions';
 import { answered } from './lib/pending';
 import { formatChips } from './lib/text';
 import { BlackjackArt } from './art';
@@ -125,6 +125,7 @@ export const blackjackClient = defineGameClient<BlackjackView, BlackjackSettings
     if (me !== null) {
       if (store.pending && answered(store.pending, view, me)) store.clearPending();
       sendQueuedBet(view, me);
+      playPremove(view, me);
     }
     if (fresh || !prev?.game) {
       clearBlackjackSounds();

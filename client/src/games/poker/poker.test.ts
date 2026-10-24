@@ -33,6 +33,7 @@ const { blindsIncreaseLabel, handsLabel } = await import('./SettingsFields');
 const { longestReadout } = await import('../../platform/components/SettingControls');
 const { player, registryOf, resetStore, room, welcome } = await import('../../test/fixtures');
 const PA = await import('./actions');
+const P = await import('./lib/premove');
 const { socket } = await import('../../platform/net/socket');
 
 const NOW = Date.now();
@@ -998,5 +999,90 @@ describe('a move waiting for its answer', () => {
     expect(usePokerStore.getState().pending).toBeNull();
     vi.restoreAllMocks();
     vi.useRealTimers();
+  });
+});
+
+describe('a move picked before my turn', () => {
+  // Bob is next after the host: the host acts, bob waits facing 5 more to call.
+  const hostActs = (overrides: Partial<PokerView> = {}) => view(overrides);
+  const bobTurn = (actions: Partial<PokerActions>, overrides: Partial<PokerView> = {}) =>
+    view({ turn: 'bob', lastMove: { kind: 'call', amount: 10, seq: 3, playerId: 'host', street: 'preflop' }, actions: { ...NO_ACTIONS, canFold: true, ...actions }, ...overrides });
+  const sentMoves = () => {
+    const sent: unknown[] = [];
+    vi.spyOn(socket, 'send').mockImplementation((msg: unknown) => {
+      sent.push(msg);
+      return true;
+    });
+    return sent;
+  };
+
+  it('offers a pick only while I am in the hand and someone else acts', () => {
+    expect(P.premoveWindow(hostActs(), 'bob')).toEqual({ toCall: 5, canCheck: false });
+    expect(P.premoveWindow(hostActs(), 'host')).toBeNull();
+    expect(P.premoveWindow(hostActs(), 'dave')).toBeNull();
+    const folded = hostActs({ players: { ...hostActs().players, bob: seat({ status: 'folded' }) } });
+    expect(P.premoveWindow(folded, 'bob')).toBeNull();
+  });
+
+  it('clears Call 5 once the amount to call changes, and keeps Call any', () => {
+    const raised = hostActs({ players: { ...hostActs().players, host: seat({ chips: 970, bet: 30, status: 'acting' }) } });
+    expect(P.keepPremove({ kind: 'call', amount: 5, hand: 2 }, hostActs(), 'bob')).not.toBeNull();
+    expect(P.keepPremove({ kind: 'call', amount: 5, hand: 2 }, raised, 'bob')).toBeNull();
+    expect(P.keepPremove({ kind: 'callAny', hand: 2 }, raised, 'bob')).not.toBeNull();
+  });
+
+  it('clears Check once a bet arrives, keeps Check/Fold, and clears every pick on a new hand', () => {
+    const free = hostActs({ players: { ...hostActs().players, bob: seat({ chips: 990, bet: 10 }) } });
+    expect(P.keepPremove({ kind: 'check', hand: 2 }, free, 'bob')).not.toBeNull();
+    expect(P.keepPremove({ kind: 'check', hand: 2 }, hostActs(), 'bob')).toBeNull();
+    expect(P.keepPremove({ kind: 'checkFold', hand: 2 }, hostActs(), 'bob')).not.toBeNull();
+    expect(P.keepPremove({ kind: 'callAny', hand: 2 }, hostActs({ hand: 3 }), 'bob')).toBeNull();
+  });
+
+  it('plays the pick the moment my turn starts: Check/Fold folds when facing a bet', () => {
+    const sent = sentMoves();
+    usePlatformStore.setState({ playerId: 'bob' });
+    usePokerStore.getState().setPremove({ kind: 'checkFold', hand: 2 });
+    pokerClient.onRoom?.(pkRoom(bobTurn({ canCall: true, callAmount: 5 })), pkRoom(hostActs()));
+    expect(sent).toEqual([{ t: 'fold', hand: 2, move: 3 }]);
+    expect(usePokerStore.getState().premove).toBeNull();
+    vi.restoreAllMocks();
+  });
+
+  it('Check/Fold checks when checking is free, and Call any calls', () => {
+    const sent = sentMoves();
+    usePlatformStore.setState({ playerId: 'bob' });
+    usePokerStore.getState().setPremove({ kind: 'checkFold', hand: 2 });
+    pokerClient.onRoom?.(pkRoom(bobTurn({ canCheck: true })), pkRoom(hostActs()));
+    usePokerStore.getState().clearPending();
+    usePokerStore.getState().setPremove({ kind: 'callAny', hand: 2 });
+    pokerClient.onRoom?.(pkRoom(bobTurn({ canCall: true, callAmount: 25 }, { lastMove: { kind: 'raise', amount: 30, seq: 4, playerId: 'host', street: 'preflop' } })), pkRoom(hostActs()));
+    expect(sent).toEqual([{ t: 'check', hand: 2, move: 3 }, { t: 'call', hand: 2, move: 4 }]);
+    vi.restoreAllMocks();
+  });
+
+  it('a pick sent while the socket is down waits for the next snapshot of my turn', () => {
+    const send = vi.spyOn(socket, 'send').mockReturnValue(false);
+    usePlatformStore.setState({ playerId: 'bob' });
+    usePokerStore.getState().setPremove({ kind: 'callAny', hand: 2 });
+    pokerClient.onRoom?.(pkRoom(bobTurn({ canCall: true, callAmount: 5 })), pkRoom(hostActs()));
+    expect(usePokerStore.getState().premove).not.toBeNull();
+    send.mockReturnValue(true);
+    pokerClient.onWelcome?.(undefined);
+    pokerClient.onRoom?.(pkRoom(bobTurn({ canCall: true, callAmount: 5 })), null);
+    expect(send).toHaveBeenLastCalledWith({ t: 'call', hand: 2, move: 3 });
+    expect(usePokerStore.getState().premove).toBeNull();
+    vi.restoreAllMocks();
+  });
+
+  it('the panel offers the picks off my turn, ticked with aria-pressed and a label for my turn', () => {
+    usePokerStore.getState().setPremove({ kind: 'callAny', hand: 2 });
+    const html = render(pkRoom(hostActs()), 'bob');
+    expect(disabled(html, 'premove-checkFold')).toBe(false);
+    expect(disabled(html, 'premove-call')).toBe(false);
+    expect(attr(tagWith(html, 'premove-callAny'), 'aria-pressed')).toBe('true');
+    expect(attr(tagWith(html, 'premove-call'), 'aria-pressed')).toBe('false');
+    expect(attr(tagWith(html, 'premove-call'), 'aria-label')).toBe('Call 5 when it’s my turn');
+    expect(attr(tagWith(html, 'premove-callAny'), 'data-queued')).toBe('true');
   });
 });

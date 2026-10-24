@@ -17,6 +17,7 @@ import { BLACKJACK_DEAL, BLACKJACK_FINAL_HOLD_MS, BLACKJACK_REVEAL, revealAllowa
 import {
   DEFAULT_BLACKJACK_SETTINGS,
   type BlackjackRoomState,
+  type BlackjackActions,
   type BlackjackView,
   type Card,
   type HandView,
@@ -41,6 +42,7 @@ const { player, registryOf, resetStore, room, welcome } = await import('../../te
 const { tileFigures } = await import('../../platform/table/PlayersGrid');
 const P = await import('./lib/pending');
 const A = await import('./actions');
+const PM = await import('./lib/premove');
 const { socket } = await import('../../platform/net/socket');
 const { seatLine } = await import('./components/Seats');
 
@@ -676,10 +678,11 @@ describe('the screen', () => {
     expect(html).toMatch(/data-testid="action-hit"[^>]*><span class="tbl-move__label">Hit<\/span><span class="tbl-move__icon" aria-hidden="true"><svg/);
   });
 
-  it("acting, someone else’s turn: my moves are dimmed and their seat is lit", () => {
+  it("acting, someone else’s turn: my moves wait as picks for my turn, Bet is dimmed and their seat is lit", () => {
     const v = acting({ actions: NO_ACTIONS });
     const html = render(bjRoom(v), 'bob');
-    for (const id of ['action-hit', 'action-stand', 'action-split', 'action-double', 'place-bet']) expect(disabled(html, id)).toBe(true);
+    for (const id of ['action-hit', 'action-stand', 'action-split', 'action-double']) expect(attr(tagWith(html, id), 'aria-pressed'), id).toBe('false');
+    expect(disabled(html, 'place-bet')).toBe(true);
     const seat = tagWith(html, 'seat');
     expect(attr(seat, 'data-name')).toBe('Hana');
     expect(attr(seat, 'data-turn')).toBe('true');
@@ -1721,5 +1724,65 @@ describe('my split hands in a grid (planGrid)', () => {
     const p = H.planGrid(fit);
     expect(p.card).toBeGreaterThanOrEqual(24);
     fits(fit, p);
+  });
+});
+
+describe('a move picked before my turn', () => {
+  const bobTurn = (actions: Partial<BlackjackActions>, overrides: Partial<BlackjackView> = {}) =>
+    acting({
+      turn: { playerId: 'bob', handIndex: 0 },
+      players: { ...acting().players, host: { ...acting().players.host, hands: [hand([c('8'), c('8', 'D')], { total: 16, status: 'stood' })] }, bob: { ...acting().players.bob, hands: [hand([c('9'), c('10', 'C')], { total: 19, bet: 20, status: 'acting' })] } },
+      actions: { ...NO_ACTIONS, ...actions },
+      ...overrides,
+    });
+  function recordSends(): unknown[] {
+    const sent: unknown[] = [];
+    vi.spyOn(socket, 'send').mockImplementation((msg: unknown) => {
+      sent.push(msg);
+      return true;
+    });
+    return sent;
+  }
+
+  it('can be picked only while I am dealt in and someone else plays', () => {
+    expect(PM.canPremove(acting(), 'bob')).toBe(true);
+    expect(PM.canPremove(acting(), 'host')).toBe(false);
+    expect(PM.canPremove(view(), 'bob')).toBe(false);
+  });
+
+  it('plays the moment my turn starts', () => {
+    const sent = recordSends();
+    usePlatformStore.setState({ playerId: 'bob' });
+    useBlackjackStore.getState().setPremove({ kind: 'stand', round: 2 });
+    blackjackClient.onRoom?.(bjRoom(bobTurn({ canHit: true, canStand: true, canDouble: true })), bjRoom(acting()));
+    expect(sent).toEqual([{ t: 'stand', round: 2, handIndex: 0, cards: 2 }]);
+    expect(useBlackjackStore.getState().premove).toBeNull();
+    vi.restoreAllMocks();
+  });
+
+  it('drops an illegal pick without a word: Split with no pair', () => {
+    const sent = recordSends();
+    usePlatformStore.setState({ playerId: 'bob' });
+    useBlackjackStore.getState().setPremove({ kind: 'split', round: 2 });
+    blackjackClient.onRoom?.(bjRoom(bobTurn({ canHit: true, canStand: true, canDouble: true })), bjRoom(acting()));
+    expect(sent).toEqual([]);
+    expect(useBlackjackStore.getState().premove).toBeNull();
+    vi.restoreAllMocks();
+  });
+
+  it('is for my first hand only, and a new round clears it', () => {
+    expect(PM.premoveStep({ kind: 'hit', round: 2 }, bobTurn({ canHit: true }, { turn: { playerId: 'bob', handIndex: 1 } }), 'bob')).toBe('drop');
+    expect(PM.premoveStep({ kind: 'hit', round: 2 }, acting(), 'bob')).toBe('keep');
+    expect(PM.premoveStep({ kind: 'hit', round: 2 }, view({ round: 3 }), 'bob')).toBe('drop');
+  });
+
+  it('the moves light for a pick off my turn, the pick ticked with aria-pressed and a label for my turn', () => {
+    useBlackjackStore.getState().setPremove({ kind: 'stand', round: 2 });
+    const html = render(bjRoom(acting()), 'bob');
+    for (const id of ['action-hit', 'action-stand', 'action-split', 'action-double']) expect(disabled(html, id), id).toBe(false);
+    expect(attr(tagWith(html, 'action-stand'), 'aria-pressed')).toBe('true');
+    expect(attr(tagWith(html, 'action-stand'), 'data-queued')).toBe('true');
+    expect(attr(tagWith(html, 'action-hit'), 'aria-pressed')).toBe('false');
+    expect(attr(tagWith(html, 'action-stand'), 'aria-label')).toBe('Stand when it’s my turn');
   });
 });

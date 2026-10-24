@@ -1,6 +1,7 @@
 import type { BlackjackView } from '@shared/games/blackjack/protocol';
 import { socket } from '../../platform/net/socket';
 import { moveTarget, type PendingKind } from './lib/pending';
+import { premoveStep } from './lib/premove';
 import { useBlackjackStore } from './store';
 
 export type MoveKind = Extract<PendingKind, 'hit' | 'stand' | 'double' | 'split'>;
@@ -57,3 +58,20 @@ export function sendQueuedBet(view: BlackjackView, meId: string): void {
   if (view.phase !== 'results' || view.round >= queued.round) store.clearQueuedBet();
 }
 
+/**
+ * A new snapshot: the move picked before my turn plays the moment my first hand's turn starts if it
+ * is still legal, and is dropped otherwise (or once the round moves past it). A send that fails (the
+ * socket is down) keeps it for the next snapshot, so a turn that came while the app was away plays it.
+ */
+export function playPremove(view: BlackjackView, meId: string | null): void {
+  const store = useBlackjackStore.getState();
+  if (!store.premove) return;
+  const step = premoveStep(store.premove, view, meId);
+  if (step === 'keep' || meId === null) return;
+  if (step === 'drop') {
+    store.setPremove(null);
+    return;
+  }
+  if (store.pending !== null) return;
+  if (playMove(store.premove.kind, view, meId)) useBlackjackStore.getState().setPremove(null);
+}

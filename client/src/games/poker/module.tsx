@@ -14,6 +14,7 @@ import { playCue } from '../../platform/lib/sound';
 import { usePlatformStore } from '../../platform/store/usePlatformStore';
 import { cancelCue, cueAt } from '../../platform/table/cues';
 import { createEntryFlag } from '../../platform/table/entry';
+import { playPremove } from './actions';
 import { CardsIcon, OutIcon } from './components/Icons';
 import { isMyTurn, seatOf, stepOf } from './hooks';
 import { PokerArt } from './art';
@@ -124,6 +125,8 @@ export const pokerClient = defineGameClient<PokerView, PokerSettings>({
     if (stepOf(prev) !== stepOf(room)) store.newTurn();
     if (store.pending && answerKey(view) !== store.pending.key) store.clearPending();
     const me = usePlatformStore.getState().playerId;
+    // A move picked before my turn: dropped once it no longer fits, played the moment my turn starts.
+    playPremove(view, me);
     const before = store.soundTimeline;
     const timeline = store.applyView(view, me, Date.now(), fresh, !prefersReducedMotion());
     const soundTimeline = usePokerStore.getState().soundTimeline;

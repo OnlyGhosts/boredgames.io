@@ -1,14 +1,18 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import type { PokerView } from '@shared/games/poker/protocol';
 import { useHotkeys } from '../../../platform/lib/hotkeys';
 import { AmountField } from '../../../platform/table/AmountField';
 import { MoveButton, PanelLabelRow, PanelMoves, PanelShell, WatchingPanel } from '../../../platform/table/ControlPanel';
 import { AllInIcon, FoldIcon, RaiseIcon } from '../../../platform/table/Icons';
 import { allIn, call, check, fold, wager } from '../actions';
+import { premoveWindow, type PremoveKind } from '../lib/premove';
 import { amountFrom, idleAmount, potSized, raiseRange, wagerKind } from '../lib/raise';
 import { formatChips } from '../lib/text';
 import { seatAnchor } from '../lib/timeline';
 import { usePoker, usePokerStore } from '../store';
+
+/** The one big button's size, for the pick in its place. */
+const PRIMARY = 'btn--lg btn--block tbl-panel__primary';
 
 interface Props {
   view: PokerView;
@@ -36,6 +40,7 @@ export function ControlPanel({ view, meId, balance, watching, canSend, busy, hot
   const seat = view.players[meId];
   const raiseText = usePoker((s) => s.raiseText);
   const pending = usePoker((s) => s.pending);
+  const premove = usePoker((s) => s.premove);
   const [editing, setEditing] = useState(false);
   const { actions } = view;
   // A move of mine still waiting for the table's answer holds them all: a second tap never plays twice.
@@ -76,12 +81,23 @@ export function ControlPanel({ view, meId, balance, watching, canSend, busy, hot
   // A spectator of the whole game has no moves at all: one line in place of the controls.
   if (watching) return <WatchingPanel testId="pk-panel" />;
 
+  // Someone else acts and I am in the hand: the moves become picks for my turn (lib/premove).
+  // No icons: the words need the room on a phone, and a pick's tick takes the icon's place.
+  // Check/Fold takes Fold's place, Call any takes All in's, and Check or Call <amount> the big button's.
+  const pick = premoveWindow(view, meId);
+  const picker = (kind: PremoveKind, label: string, icon: ReactNode, className?: string) => {
+    const amount = kind === 'call' ? pick?.toCall : undefined;
+    const on = premove !== null && premove.kind === kind && (kind !== 'call' || premove.amount === amount);
+    const toggle = () => usePokerStore.getState().setPremove(on ? null : { kind, hand: view.hand, amount });
+    return <MoveButton label={label} ariaLabel={`${label} when it’s my turn`} icon={icon} testId={`premove-${kind}`} enabled onClick={toggle} queued={on} className={className} />;
+  };
+
   return (
     <PanelShell
       label="Your moves"
       onSubmit={send}
       testId="pk-panel"
-      data={{ 'data-kind': range?.kind, 'data-min': range?.min, 'data-max': range?.max, 'data-amount': amount ?? undefined, 'data-my-turn': myTurn }}
+      data={{ 'data-kind': range?.kind, 'data-min': range?.min, 'data-max': range?.max, 'data-amount': amount ?? undefined, 'data-my-turn': myTurn, 'data-premove': pick ? (premove?.kind ?? 'none') : undefined }}
     >
       <PanelLabelRow label={kind === 'bet' ? 'Bet amount' : 'Raise to'} htmlFor="pk-raise-amount" balance={balance} truth={seat?.chips ?? 0} anchor={seatAnchor(meId)} />
       <AmountField
@@ -104,22 +120,38 @@ export function ControlPanel({ view, meId, balance, watching, canSend, busy, hot
         {range ? `Between ${range.min} and ${range.max} chips` : 'No raise possible'}
       </span>
       <PanelMoves count={3}>
-        <MoveButton label="Fold" icon={<FoldIcon size={16} />} testId="action-fold" enabled={can.fold} onClick={() => void fold(view)} sent={sent('fold')} hotkey={hotkeys ? 'F' : undefined} />
+        {pick ? (
+          picker('checkFold', 'Check/Fold', null)
+        ) : (
+          <MoveButton label="Fold" icon={<FoldIcon size={16} />} testId="action-fold" enabled={can.fold} onClick={() => void fold(view)} sent={sent('fold')} hotkey={hotkeys ? 'F' : undefined} />
+        )}
         <MoveButton label={wagerWord} ariaLabel={wagerAria} icon={<RaiseIcon size={16} />} testId="action-raise" enabled={canWager} onClick={send} sent={sent('bet') || sent('raise')} hotkey={hotkeys ? 'R' : undefined} data={{ 'data-kind': kind, 'data-amount': amount ?? undefined }} />
-        <MoveButton label="All in" icon={<AllInIcon size={16} />} testId="action-allin" enabled={can.allIn} onClick={() => void allIn(view)} sent={sent('allIn')} hotkey={hotkeys ? 'A' : undefined} />
+        {pick ? (
+          picker('callAny', 'Call any', null)
+        ) : (
+          <MoveButton label="All in" icon={<AllInIcon size={16} />} testId="action-allin" enabled={can.allIn} onClick={() => void allIn(view)} sent={sent('allIn')} hotkey={hotkeys ? 'A' : undefined} />
+        )}
       </PanelMoves>
-      <button
-        type="button"
-        className="btn btn--primary btn--lg btn--block tbl-panel__primary"
-        disabled={!can.checkCall}
-        onClick={() => void checkOrCall()}
-        aria-keyshortcuts={hotkeys ? 'C' : undefined}
-        data-testid={actions.canCall ? 'action-call' : 'action-check'}
-        data-amount={actions.canCall ? actions.callAmount : undefined}
-        data-sent={sent('call') || sent('check') || undefined}
-      >
-        {callLabel}
-      </button>
+      {pick ? (
+        pick.canCheck ? (
+          picker('check', 'Check', null, PRIMARY)
+        ) : (
+          picker('call', `Call ${formatChips(pick.toCall)}`, null, PRIMARY)
+        )
+      ) : (
+        <button
+          type="button"
+          className="btn btn--primary btn--lg btn--block tbl-panel__primary"
+          disabled={!can.checkCall}
+          onClick={() => void checkOrCall()}
+          aria-keyshortcuts={hotkeys ? 'C' : undefined}
+          data-testid={actions.canCall ? 'action-call' : 'action-check'}
+          data-amount={actions.canCall ? actions.callAmount : undefined}
+          data-sent={sent('call') || sent('check') || undefined}
+        >
+          {callLabel}
+        </button>
+      )}
     </PanelShell>
   );
 }
