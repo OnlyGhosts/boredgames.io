@@ -409,6 +409,13 @@ describe('front door', () => {
     expect(html.match(/class="wordmark__icon"/g)?.length).toBe(1);
   });
 
+  it('lights a nearby room card up under a pointer, the whole card tapping Join', () => {
+    const css = stylesheet('home.css');
+    expect(ruleOf(css, '.nearby__card:has(.nearby__join:not(:disabled)):hover')).toContain('background: var(--color-surface-2)');
+    expect(ruleOf(css, '.nearby__card')).toContain('position: relative');
+    expect(ruleOf(css, '.nearby__join::after')).toContain('inset: 0');
+  });
+
   it('lights a typed box of the room code up lime, as the lobby shows the code', () => {
     const filled = ruleOf(stylesheet('home.css'), '.home .code-input__box:not(:placeholder-shown)');
     expect(filled).toContain('background: var(--color-primary)');

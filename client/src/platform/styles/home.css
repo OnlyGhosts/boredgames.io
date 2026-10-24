@@ -234,6 +234,21 @@
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
+  position: relative;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+/* The whole card is the Join button's tap target, and lights up under a pointer. */
+.nearby__join::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+.nearby__card:has(.nearby__join:not(:disabled)):hover {
+  background: var(--color-surface-2);
+  border-color: var(--color-text-muted);
 }
 
 .nearby__text {
