@@ -1,7 +1,7 @@
 import type { IncomingMessage } from 'node:http';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { WebSocket } from 'ws';
-import { NEARBY_MAX_ROOMS, NEARBY_WINDOW_MS, type NearbyResponse } from '../../../shared/platform/nearby.js';
+import { NEARBY_MAX_ROOMS, type NearbyResponse } from '../../../shared/platform/nearby.js';
 import { createApp, type App } from '../app.js';
 import { MemoryDriver } from '../drivers/memory.js';
 import type { GameDriver } from '../drivers/types.js';
@@ -48,7 +48,7 @@ function room(code: string, over: Partial<PlatformRoomData> = {}): PlatformRoomD
     hostId: 'h',
     phase: 'lobby',
     results: null,
-    players: [{ id: 'h', name: 'Jord', avatar: { emoji: 0, color: 0 } }],
+    players: [{ id: 'h', name: 'Jord', avatar: { emoji: 0, color: 0 }, connected: true }],
     ...over,
   } as unknown as PlatformRoomData;
 }
@@ -58,36 +58,39 @@ function driverWith(rooms: Map<string, PlatformRoomData>): GameDriver {
 }
 
 describe('listing rooms by network', () => {
-  it('lists only rooms younger than 15 minutes, newest first, at most three', async () => {
+  it('lists occupied rooms however old, newest first, at most three, to their own network only', async () => {
     const store = new MemoryNearbyStore('s');
-    const rooms = new Map(['AAAA', 'BBBB', 'CCCC', 'DDDD', 'EEEE'].map((c) => [c, room(c)]));
+    const rooms = new Map(['AAAA', 'BBBB', 'CCCC', 'DDDD'].map((c) => [c, room(c)]));
     const t = 1_000_000_000;
-    await store.add('net', 'AAAA', t - NEARBY_WINDOW_MS);
-    await store.add('net', 'BBBB', t - 4000);
-    await store.add('net', 'CCCC', t - 3000);
-    await store.add('net', 'DDDD', t - 2000);
-    await store.add('net', 'EEEE', t - 1000);
-    const listed = await listNearby(driverWith(rooms), store, 'net', t);
-    expect(listed.map((r) => r.code)).toEqual(['EEEE', 'DDDD', 'CCCC']);
+    await store.add('net', 'AAAA', t - 5 * 60 * 60 * 1000);
+    await store.add('net', 'BBBB', t - 3000);
+    await store.add('net', 'CCCC', t - 2000);
+    await store.add('net', 'DDDD', t - 1000);
+    const listed = await listNearby(driverWith(rooms), store, 'net');
+    expect(listed.map((r) => r.code)).toEqual(['DDDD', 'CCCC', 'BBBB']);
     expect(listed).toHaveLength(NEARBY_MAX_ROOMS);
-    expect(listed[0]).toEqual({ code: 'EEEE', gameId: 'scribble', host: { name: 'Jord', avatar: { emoji: 0, color: 0 } }, players: 1, createdAt: t - 1000 });
-    expect(await listNearby(driverWith(rooms), store, 'elsewhere', t)).toEqual([]);
-    // The expired entry is gone from the store, not only from the answer.
-    expect((await store.list('net', t)).map((e) => e.code)).not.toContain('AAAA');
+    expect(listed[0]).toEqual({ code: 'DDDD', gameId: 'scribble', host: { name: 'Jord', avatar: { emoji: 0, color: 0 } }, players: 1, createdAt: t - 1000, playing: false });
+    rooms.delete('DDDD');
+    expect((await listNearby(driverWith(rooms), store, 'net')).map((r) => r.code)).toEqual(['CCCC', 'BBBB', 'AAAA']);
+    expect(await listNearby(driverWith(rooms), store, 'elsewhere')).toEqual([]);
   });
 
-  it('drops a room once its game starts, after a game, or when it is gone', async () => {
+  it('keeps a room in a game, marked playing, and drops one the moment nobody is connected', async () => {
     const store = new MemoryNearbyStore('s');
+    const away = [{ id: 'h', name: 'Jord', avatar: { emoji: 0, color: 0 }, connected: false }];
     const rooms = new Map([
       ['PLAY', room('PLAY', { phase: 'playing' })],
-      ['DONE', room('DONE', { results: {} as PlatformRoomData['results'] })],
+      ['LEFT', room('LEFT', { players: away } as unknown as Partial<PlatformRoomData>)],
       ['WAIT', room('WAIT')],
     ]);
-    for (const code of ['PLAY', 'DONE', 'GONE', 'WAIT']) await store.add('net', code, 10);
-    expect((await listNearby(driverWith(rooms), store, 'net', 20)).map((r) => r.code)).toEqual(['WAIT']);
-    expect((await store.list('net', 20)).map((e) => e.code)).toEqual(['WAIT']);
-    rooms.set('PLAY', room('PLAY'));
-    expect((await listNearby(driverWith(rooms), store, 'net', 20)).map((r) => r.code)).toEqual(['WAIT']);
+    for (const code of ['PLAY', 'LEFT', 'GONE', 'WAIT']) await store.add('net', code, 10);
+    const listed = await listNearby(driverWith(rooms), store, 'net');
+    expect(listed.map((r) => [r.code, r.playing])).toEqual([
+      ['PLAY', true],
+      ['WAIT', false],
+    ]);
+    // Off the list for good, not just left out of this answer.
+    expect((await store.list('net')).map((e) => e.code).sort()).toEqual(['PLAY', 'WAIT']);
   });
 });
 

@@ -88,7 +88,7 @@ export function createApp(options: AppOptions): App {
   app.get(NEARBY_PATH, async (req: Request, res: Response) => {
     const now = Date.now();
     const network = await networkOf(req);
-    const body: NearbyResponse = { rooms: network ? await listNearby(driver, driver.nearby, network, now) : [], now };
+    const body: NearbyResponse = { rooms: network ? await listNearby(driver, driver.nearby, network) : [], now };
     res.setHeader('Cache-Control', 'no-store');
     res.json(body);
   });

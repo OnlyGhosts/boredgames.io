@@ -1,6 +1,6 @@
 import { expect, test, type Browser, type Page } from '@playwright/test';
 import { proxyAs } from './netProxy';
-import { createParty, enterNameIfAsked, readRoomCode, readyAll } from './party';
+import { createParty, enterNameIfAsked, leaveLobby, readRoomCode, readyAll } from './party';
 
 /**
  * "On your Wi-Fi": a room shows on the front door of phones on the network it was made on. The
@@ -32,7 +32,7 @@ async function phone(browser: Browser, origin: string, name?: string): Promise<P
 
 const card = (page: Page, code: string) => page.locator(`[data-testid="nearby-room"][data-code="${code}"]`);
 
-test('phones on the same network see the room, join with one tap, and it goes once the game starts', async ({ browser, baseURL }) => {
+test('phones on the same network see the room, join with one tap, watch a game on, and it goes once everyone leaves', async ({ browser, baseURL }) => {
   const here = await network(baseURL ?? '');
   const host = await phone(browser, here);
   const code = await createParty(host, 'Hera');
@@ -65,15 +65,36 @@ test('phones on the same network see the room, join with one tap, and it goes on
   await expect(elsewhere.getByTestId('home-join')).toBeVisible();
   await expect(elsewhere.getByTestId('nearby')).toHaveCount(0);
 
+  // A game on: still listed, playing now, and Join lets a latecomer watch.
   await readyAll([guest, newcomer]);
   await host.getByTestId('start-game').click();
   await expect(host.getByTestId('lobby')).toHaveCount(0);
-  const later = await phone(browser, here);
+  const later = await phone(browser, here, 'Lou');
   await later.goto('/');
-  await expect(later.getByTestId('home-join')).toBeVisible();
-  // The first answer has come and gone with nothing in it.
-  await later.waitForResponse((r) => r.url().endsWith('/api/nearby'));
-  await expect(later.getByTestId('nearby')).toHaveCount(0);
+  await expect(card(later, code).getByTestId('nearby-meta')).toHaveText(/ · 3 players · playing now$/);
+  await card(later, code).getByTestId('nearby-join').click();
+  await expect(later).toHaveURL(new RegExp(`/${code}$`));
+  await expect(later.getByTestId('home-join')).toHaveCount(0);
+
+  // Everyone goes: the room is off the list straight away.
+  for (const p of [host, guest, newcomer, later]) await p.context().close();
+  const last = await phone(browser, here);
+  await last.goto('/');
+  await last.waitForResponse((r) => r.url().endsWith('/api/nearby'));
+  await expect(last.getByTestId('nearby')).toHaveCount(0);
+});
+
+test('a host who makes a new room alone takes the old one off the list', async ({ browser, baseURL }) => {
+  const here = await network(baseURL ?? '');
+  const host = await phone(browser, here);
+  const first = await createParty(host, 'Hera');
+  const viewer = await phone(browser, here);
+  await viewer.goto('/');
+  await expect(card(viewer, first)).toBeVisible();
+  await leaveLobby(host);
+  const second = await createParty(host, 'Hera');
+  await expect(card(viewer, second)).toBeVisible();
+  await expect(card(viewer, first)).toHaveCount(0);
 });
 
 test('a room made on one server instance is listed by the other (two processes sharing Redis)', async ({ browser }) => {

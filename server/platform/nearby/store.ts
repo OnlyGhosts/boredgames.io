@@ -1,5 +1,5 @@
 import type { Redis } from 'ioredis';
-import { NEARBY_WINDOW_MS } from '../../../shared/platform/nearby.js';
+import { NEARBY_KEEP_MS } from '../../../shared/platform/nearby.js';
 import { newSalt } from './network.js';
 
 /** A room listed to a network: its code and when it was created. */
@@ -9,16 +9,16 @@ export interface NearbyEntry {
 }
 
 /**
- * Which rooms were created on which network (a salted hash, never an address). An entry lives
- * NEARBY_WINDOW_MS at most and goes as soon as its room starts or ends.
+ * Which rooms were created on which network (a salted hash, never an address). An entry goes as
+ * soon as a listing finds its room empty or gone (nearby/list.ts).
  */
 export interface NearbyStore {
   /** The salt every instance hashes addresses with. */
   salt(): Promise<string>;
   add(network: string, code: string, createdAt: number): Promise<void>;
   remove(network: string, code: string): Promise<void>;
-  /** Entries younger than the window, newest first. */
-  list(network: string, now: number): Promise<NearbyEntry[]>;
+  /** The network's entries, newest first. */
+  list(network: string): Promise<NearbyEntry[]>;
 }
 
 export class MemoryNearbyStore implements NearbyStore {
@@ -34,6 +34,11 @@ export class MemoryNearbyStore implements NearbyStore {
   }
 
   async add(network: string, code: string, createdAt: number): Promise<void> {
+    // Entries nobody has asked about for a room's lifetime go (their rooms are long gone).
+    for (const [net, rooms] of this.byNetwork) {
+      for (const [c, at] of rooms) if (createdAt - at >= NEARBY_KEEP_MS) rooms.delete(c);
+      if (rooms.size === 0) this.byNetwork.delete(net);
+    }
     const rooms = this.byNetwork.get(network) ?? new Map<string, number>();
     rooms.set(code, createdAt);
     this.byNetwork.set(network, rooms);
@@ -45,12 +50,9 @@ export class MemoryNearbyStore implements NearbyStore {
     if (rooms?.size === 0) this.byNetwork.delete(network);
   }
 
-  async list(network: string, now: number): Promise<NearbyEntry[]> {
+  async list(network: string): Promise<NearbyEntry[]> {
     const rooms = this.byNetwork.get(network);
     if (!rooms) return [];
-    // Expired entries go here, so a network's hash is held no longer than its rooms are listed.
-    for (const [code, at] of rooms) if (now - at >= NEARBY_WINDOW_MS) rooms.delete(code);
-    if (rooms.size === 0) this.byNetwork.delete(network);
     return [...rooms].map(([code, createdAt]) => ({ code, createdAt })).sort((a, b) => b.createdAt - a.createdAt);
   }
 }
@@ -58,7 +60,7 @@ export class MemoryNearbyStore implements NearbyStore {
 export const NEARBY_SALT_KEY = 'nearby:salt';
 export const nearbyKey = (network: string): string => `nearby:${network}`;
 
-/** Shared by every instance through Redis: one sorted set per network, expiring with its newest room. */
+/** Shared by every instance through Redis: one sorted set per network, kept NEARBY_KEEP_MS past its last use. */
 export class RedisNearbyStore implements NearbyStore {
   private saltValue: Promise<string> | null = null;
 
@@ -77,16 +79,16 @@ export class RedisNearbyStore implements NearbyStore {
   }
 
   async add(network: string, code: string, createdAt: number): Promise<void> {
-    await this.redis.multi().zadd(nearbyKey(network), createdAt, code).pexpire(nearbyKey(network), NEARBY_WINDOW_MS).exec();
+    await this.redis.multi().zadd(nearbyKey(network), createdAt, code).pexpire(nearbyKey(network), NEARBY_KEEP_MS).exec();
   }
 
   async remove(network: string, code: string): Promise<void> {
     await this.redis.zrem(nearbyKey(network), code);
   }
 
-  async list(network: string, now: number): Promise<NearbyEntry[]> {
+  async list(network: string): Promise<NearbyEntry[]> {
     const key = nearbyKey(network);
-    const [, raw] = await Promise.all([this.redis.zremrangebyscore(key, '-inf', `(${now - NEARBY_WINDOW_MS + 1}`), this.redis.zrevrangebyscore(key, '+inf', now - NEARBY_WINDOW_MS + 1, 'WITHSCORES')]);
+    const [raw] = await Promise.all([this.redis.zrevrange(key, 0, -1, 'WITHSCORES'), this.redis.pexpire(key, NEARBY_KEEP_MS)]);
     const out: NearbyEntry[] = [];
     for (let i = 0; i + 1 < raw.length; i += 2) out.push({ code: raw[i]!, createdAt: Number(raw[i + 1]) });
     return out;

@@ -20,20 +20,21 @@ export function parseNearby(v: unknown): NearbyCard[] {
     const avatar = avatarSchema.safeParse(host?.avatar);
     if (typeof r.code !== 'string' || !isValidRoomCode(r.code) || !gameId || typeof host?.name !== 'string' || !avatar.success) continue;
     if (typeof r.players !== 'number' || typeof r.createdAt !== 'number') continue;
-    out.push({ code: r.code, gameId, host: { name: host.name, avatar: avatar.data }, players: r.players, ageMs: Math.max(0, now - r.createdAt) });
+    out.push({ code: r.code, gameId, host: { name: host.name, avatar: avatar.data }, players: r.players, ageMs: Math.max(0, now - r.createdAt), playing: r.playing === true });
   }
   return out.slice(0, NEARBY_MAX_ROOMS);
 }
 
-/** "just now", "1 min ago", "12 min ago": short enough to keep the card's line whole. */
+/** "just now", "12 min ago", "2 hr ago": short enough to keep the card's line whole. */
 export function ageText(ms: number): string {
   const min = Math.floor(ms / 60_000);
-  return min < 1 ? 'just now' : `${min} min ago`;
+  if (min < 1) return 'just now';
+  return min < 60 ? `${min} min ago` : `${Math.floor(min / 60)} hr ago`;
 }
 
-/** "Scribble · 3 players · 2 min ago": the card's one muted line. */
+/** "Scribble · 3 players · 2 min ago", or "· playing now" while a game is on: the card's one muted line. */
 export function nearbyMeta(card: NearbyCard): string {
-  return [gameById(card.gameId).name, `${card.players} ${card.players === 1 ? 'player' : 'players'}`, ageText(card.ageMs)].join(' · ');
+  return [gameById(card.gameId).name, `${card.players} ${card.players === 1 ? 'player' : 'players'}`, card.playing ? 'playing now' : ageText(card.ageMs)].join(' · ');
 }
 
 /** "Jord’s room" (a name ending in s still takes ’s, as people say it). */

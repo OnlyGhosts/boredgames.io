@@ -12,7 +12,6 @@ import type { ScribbleData } from '../../games/scribble/state.js';
 import { handleConnection } from '../connection.js';
 import type { PlatformRoomData } from '../engine/state.js';
 import { productionCtx, systemClock } from '../transport.js';
-import { NEARBY_WINDOW_MS } from '../../../shared/platform/nearby.js';
 import { listNearby } from '../nearby/list.js';
 import { RedisDriver, TICK_RETRY_MS, type RedisDriverOptions } from './redis.js';
 import { roomChannel, roomKey, sideHashKey, sideListKey, sideSeqKey, type RoomChannelMessage } from './redisKeys.js';
@@ -117,10 +116,12 @@ describe.skipIf(!hasRedisServer)('RedisDriver across two instances', () => {
     const host = await create(a, 'Jord');
     const now = Date.now();
     await a.nearby.add('net', host.seat.code, now);
-    const listed = await listNearby(b, b.nearby, 'net', now);
+    const listed = await listNearby(b, b.nearby, 'net');
     expect(listed.map((r) => [r.code, r.host.name, r.players])).toEqual([[host.seat.code, 'Jord', 1]]);
-    expect(await listNearby(b, b.nearby, 'other', now)).toEqual([]);
-    expect(await listNearby(b, b.nearby, 'net', now + NEARBY_WINDOW_MS)).toEqual([]);
+    expect(await listNearby(b, b.nearby, 'other')).toEqual([]);
+    // The host leaves: the room is empty and off the list at once, on either instance.
+    await a.leave(host.seat);
+    expect(await listNearby(b, b.nearby, 'net')).toEqual([]);
     expect(await admin.exists('nearby:net')).toBe(0);
   });
 
