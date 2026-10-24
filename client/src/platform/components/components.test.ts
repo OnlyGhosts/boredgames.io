@@ -872,6 +872,8 @@ describe('player rows', () => {
     const css = stylesheet('components.css');
     // One line, the name shortening, so the crown after a long name stays beside it.
     expect(ruleOf(css, '.player__name')).toContain('flex-wrap: nowrap');
+    // A solid crown, not an outline.
+    expect(ruleOf(css, '.player__crown svg')).toContain('fill: currentColor');
     expect(ruleOf(css, '.player__name-text')).toContain('text-overflow: ellipsis');
     expect(ruleOf(css, '.player__crown')).toContain('flex: none');
   });

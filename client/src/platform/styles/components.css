@@ -1221,6 +1221,11 @@
   flex: none;
 }
 
+/* The crown is solid, not an outline. */
+.player__crown svg {
+  fill: currentColor;
+}
+
 /* "you" after your own name: a plain word, not another badge. */
 .player__you {
   flex: none;
