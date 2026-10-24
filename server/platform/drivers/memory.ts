@@ -2,6 +2,8 @@ import type { Avatar } from '../../../shared/platform/avatar.js';
 import type { GameId } from '../../../shared/platform/games.js';
 import type { RoomPreview } from '../../../shared/platform/protocol.js';
 import { isValidRoomCode, normalizeRoomCode, roomCodeHint } from '../../../shared/platform/roomCode.js';
+import type { PlatformRoomData } from '../engine/state.js';
+import { MemoryNearbyStore } from '../nearby/store.js';
 import { Restorer } from '../checkpoint/restorer.js';
 import { previewOf } from '../engine/view.js';
 import { systemClock } from '../transport.js';
@@ -28,6 +30,7 @@ export class MemoryDriver implements GameDriver {
   readonly name = 'memory';
   readonly hub: SocketHub;
   readonly rooms: RoomManager;
+  readonly nearby = new MemoryNearbyStore();
   private readonly restorer: Restorer;
 
   constructor({ snapshotIntervalMs = 0, restoreWindowMs, restoreWindowMaxMs, ...options }: MemoryDriverOptions = {}) {
@@ -126,6 +129,10 @@ export class MemoryDriver implements GameDriver {
     const found = this.rooms.lookup(code);
     if (!found.ok) return { exists: false, code: normalizeRoomCode(code), reason: found.code };
     return previewOf(found.room.state);
+  }
+
+  roomData(code: string): PlatformRoomData | null {
+    return this.rooms.get(code)?.state ?? null;
   }
 
   health(): DriverHealth {

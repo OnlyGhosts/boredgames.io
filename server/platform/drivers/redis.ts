@@ -16,6 +16,7 @@ import { productionCtx, systemClock, type Clock, type Rng } from '../transport.j
 import { PRESENCE_TTL_MS, parseChannelMessage, roomChannel, type RoomChannelMessage } from './redisKeys.js';
 import { RedisRooms, type Dispatched } from './redisRooms.js';
 import { RedisStorage } from './redisStorage.js';
+import { RedisNearbyStore } from '../nearby/store.js';
 import { Outbound } from './outbound.js';
 import { AsyncLock } from './serial.js';
 import { SOCKET_OPEN, type DriverHealth, type GameDriver, type LookupResult, type OutboundMessage, type RoomInbound, type Seat, type SeatResult, type SocketLike } from './types.js';
@@ -82,6 +83,7 @@ export class RedisDriver implements GameDriver {
   private readonly sub: Redis;
   private readonly rooms: RedisRooms;
   private readonly storage: RedisStorage;
+  readonly nearby: RedisNearbyStore;
   private readonly sideStores = new Map<GameId, AnyGameSideStore | null>();
   private readonly sockets = new Map<string, SocketEntry>();
   private readonly locals = new Map<string, LocalRoom>();
@@ -103,6 +105,7 @@ export class RedisDriver implements GameDriver {
     this.sub.on('message', (channel: string, raw: string) => this.onChannelMessage(channel, raw));
     this.rooms = new RedisRooms(this.redis, new AsyncLock(), () => productionCtx(this.clock, this.rng), options.presenceTtlMs ?? PRESENCE_TTL_MS);
     this.storage = new RedisStorage(this.redis);
+    this.nearby = new RedisNearbyStore(this.redis);
   }
 
   // ---------------------------------------------------------------------------
@@ -216,6 +219,13 @@ export class RedisDriver implements GameDriver {
     if (!stored) return { exists: false, code, reason: 'ROOM_NOT_FOUND' };
     // Nobody ticks a room without sockets, so apply the overdue deadlines to what is shown (without storing).
     return previewOf(applyAction(stored, { type: 'tick' }, productionCtx(this.clock, this.rng)).data);
+  }
+
+  async roomData(input: string): Promise<PlatformRoomData | null> {
+    const code = normalizeRoomCode(input);
+    if (!isValidRoomCode(code)) return null;
+    const stored = await this.rooms.read(code);
+    return stored ? applyAction(stored, { type: 'tick' }, productionCtx(this.clock, this.rng)).data : null;
   }
 
   async health(): Promise<DriverHealth> {

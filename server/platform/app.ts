@@ -1,12 +1,15 @@
 import { existsSync } from 'node:fs';
-import { createServer, type Server } from 'node:http';
+import { createServer, type IncomingMessage, type Server } from 'node:http';
 import path from 'node:path';
 import express, { type Express, type NextFunction, type Request, type Response } from 'express';
 import { WebSocketServer } from 'ws';
 import { MAX_WS_MESSAGE_BYTES } from '../../shared/platform/constants.js';
 import { CLOSE_RESTARTING, ROOM_PREVIEW_PATH, WS_PATH } from '../../shared/platform/protocol.js';
 import { isGameSlugPath, isRoomPath } from '../../shared/platform/roomCode.js';
+import { NEARBY_PATH, type NearbyResponse } from '../../shared/platform/nearby.js';
 import { asSocketLike, handleConnection } from './connection.js';
+import { listNearby } from './nearby/list.js';
+import { clientAddress, networkKey } from './nearby/network.js';
 import { after, type GameDriver } from './drivers/types.js';
 
 export interface AppOptions {
@@ -74,6 +77,21 @@ export function createApp(options: AppOptions): App {
       res.json(preview);
     }),
   );
+
+  /** The salted hash of the network a request came from; the address itself goes no further. */
+  const networkOf = async (req: IncomingMessage): Promise<string | null> => {
+    const address = clientAddress(req);
+    return address ? networkKey(address, await driver.nearby.salt()) : null;
+  };
+
+  // The rooms created on the asker's network. Never cached: the list changes as rooms start.
+  app.get(NEARBY_PATH, async (req: Request, res: Response) => {
+    const now = Date.now();
+    const network = await networkOf(req);
+    const body: NearbyResponse = { rooms: network ? await listNearby(driver, driver.nearby, network, now) : [], now };
+    res.setHeader('Cache-Control', 'no-store');
+    res.json(body);
+  });
 
   app.use('/api', (_req: Request, res: Response) => {
     res.status(404).json({ error: 'not found' });
@@ -153,7 +171,8 @@ export function createApp(options: AppOptions): App {
       return;
     }
     wss.handleUpgrade(req, socket, head, (ws) => {
-      handleConnection(asSocketLike(ws), { driver, log });
+      // Hashed only if the socket creates a room.
+      handleConnection(asSocketLike(ws), { driver, log, network: () => networkOf(req) });
     });
   });
 

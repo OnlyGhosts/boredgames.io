@@ -1,3 +1,4 @@
+import { MemoryNearbyStore } from './nearby/store.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CHAT_RATE_LIMIT_COUNT, CHAT_RATE_LIMIT_WINDOW_MS, IDLE_AFTER_MS } from '../../shared/platform/constants.js';
 import {
@@ -431,6 +432,10 @@ class SlowDriver implements GameDriver {
   idle(seat: Seat, _connectionId: string, idle: boolean): Promise<void> {
     this.calls.push(`idle ${seat.playerId} ${idle}`);
     return Promise.resolve();
+  }
+  readonly nearby = new MemoryNearbyStore('test');
+  roomData(): null {
+    return null;
   }
   preview(): never {
     throw new Error('not used');

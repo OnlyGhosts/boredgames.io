@@ -50,6 +50,11 @@ export interface ConnectionDeps {
   /** Overridable for tests; defaults to IDLE_AFTER_MS. */
   idleAfterMs?: number;
   log?: (msg: string) => void;
+  /**
+   * The salted hash of the network this socket came from (see nearby/network.ts), or null: a room
+   * it creates is listed to phones on that network.
+   */
+  network?: () => Promise<string | null>;
 }
 
 type SessionMessage = Extract<PlatformClientMessage, { t: 'create' | 'join' | 'rejoin' | 'restore' | 'leave' | 'ping' }>;
@@ -140,6 +145,15 @@ export function handleConnection(ws: SocketLike, deps: ConnectionDeps): string {
     idle = false;
   };
 
+  /** Lists a new room to its network; a failure only costs the listing, never the room. */
+  const listNearby = (code: string): void => {
+    const created = clock.now();
+    deps
+      .network?.()
+      .then((network) => (network ? driver.nearby.add(network, code, created) : undefined))
+      .catch((err: unknown) => deps.log?.(`nearby listing for ${code}: ${err instanceof Error ? err.message : String(err)}`));
+  };
+
   const handleSessionMessage = (msg: SessionMessage): MaybePromise<void> => {
     switch (msg.t) {
       case 'ping': {
@@ -152,7 +166,12 @@ export function handleConnection(ws: SocketLike, deps: ConnectionDeps): string {
         return leaveCurrentRoom();
       case 'create': {
         if (!roomLimiter.tryAcquire(clock.now())) return fail('RATE_LIMITED', 'You are creating or joining rooms too quickly.');
-        return after(leaveCurrentRoom(), () => after(driver.create(msg.gameId, msg.name, msg.avatar, connectionId), takeSeat));
+        return after(leaveCurrentRoom(), () =>
+          after(driver.create(msg.gameId, msg.name, msg.avatar, connectionId), (result) => {
+            takeSeat(result);
+            if (result.ok) listNearby(result.seat.code);
+          }),
+        );
       }
       case 'join': {
         if (!roomLimiter.tryAcquire(clock.now())) return fail('RATE_LIMITED', 'You are creating or joining rooms too quickly.');

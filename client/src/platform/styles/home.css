@@ -209,3 +209,65 @@
   }
 }
 
+
+/* ---------- On your Wi-Fi: rooms made on this network, above the code boxes ---------- */
+.nearby {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.nearby__heading {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.nearby__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nearby__card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.nearby__text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.nearby__title,
+.nearby__meta {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.nearby__title {
+  font-weight: 700;
+}
+
+.nearby__meta {
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+}
+
+.nearby__join {
+  flex: none;
+}

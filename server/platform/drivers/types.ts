@@ -1,5 +1,7 @@
 import type { Avatar } from '../../../shared/platform/avatar.js';
 import type { GameId } from '../../../shared/platform/games.js';
+import type { PlatformRoomData } from '../engine/state.js';
+import type { NearbyStore } from '../nearby/store.js';
 import type { ErrorCode, PlatformClientMessage, PlatformServerMessage, RoomPreview, WireMessage } from '../../../shared/platform/protocol.js';
 
 /**
@@ -118,6 +120,10 @@ export interface GameDriver {
   /** The seat's connection went silent for IDLE_AFTER_MS (`idle` true) or spoke again; ignored when it no longer holds the seat. */
   idle(seat: Seat, connectionId: string, idle: boolean): MaybePromise<void>;
   preview(code: string): MaybePromise<RoomPreview>;
+  /** The room as it stands (overdue deadlines applied), or null; read-only, for the nearby list. */
+  roomData(code: string): MaybePromise<PlatformRoomData | null>;
+  /** Which rooms were created on which network, shared by every instance this driver's rooms are. */
+  readonly nearby: NearbyStore;
   health(): MaybePromise<DriverHealth>;
   /** Releases timers and connections; sockets are closed by the caller. */
   shutdown(): Promise<void>;

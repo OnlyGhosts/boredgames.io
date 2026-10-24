@@ -12,6 +12,8 @@ import type { ScribbleData } from '../../games/scribble/state.js';
 import { handleConnection } from '../connection.js';
 import type { PlatformRoomData } from '../engine/state.js';
 import { productionCtx, systemClock } from '../transport.js';
+import { NEARBY_WINDOW_MS } from '../../../shared/platform/nearby.js';
+import { listNearby } from '../nearby/list.js';
 import { RedisDriver, TICK_RETRY_MS, type RedisDriverOptions } from './redis.js';
 import { roomChannel, roomKey, sideHashKey, sideListKey, sideSeqKey, type RoomChannelMessage } from './redisKeys.js';
 import { RedisRooms } from './redisRooms.js';
@@ -108,6 +110,20 @@ describe.skipIf(!hasRedisServer)('RedisDriver across two instances', () => {
     driver.register(connectionId, ws);
     return seated(driver, ws, connectionId, await driver.create(gameId, name, AVATAR, connectionId));
   }
+  it('lists a room created on one instance to the same network on the other, with one shared salt', async () => {
+    const a = instance();
+    const b = instance();
+    expect(await a.nearby.salt()).toBe(await b.nearby.salt());
+    const host = await create(a, 'Jord');
+    const now = Date.now();
+    await a.nearby.add('net', host.seat.code, now);
+    const listed = await listNearby(b, b.nearby, 'net', now);
+    expect(listed.map((r) => [r.code, r.host.name, r.players])).toEqual([[host.seat.code, 'Jord', 1]]);
+    expect(await listNearby(b, b.nearby, 'other', now)).toEqual([]);
+    expect(await listNearby(b, b.nearby, 'net', now + NEARBY_WINDOW_MS)).toEqual([]);
+    expect(await admin.exists('nearby:net')).toBe(0);
+  });
+
 
   async function join(driver: RedisDriver, code: string, name: string): Promise<Client> {
     const ws = new FakeSocket();

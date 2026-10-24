@@ -7,9 +7,11 @@ import { BRAND_NAME } from '@shared/platform/site';
 import { AvatarPicker } from '../components/AvatarPicker';
 import { CodeInput, type CodeInputHandle } from '../components/CodeInput';
 import { AlertIcon, LinkIcon } from '../components/Icons';
+import { NearbyRooms } from '../components/NearbyRooms';
 import { SiteHeader } from '../components/SiteHeader';
 import { enteredLength, padCode } from '../lib/codeInput';
 import type { JoinErrorCode } from '../lib/format';
+import { useNearbyRooms } from '../lib/nearby';
 import { loadAvatar, loadName, saveAvatar, saveName } from '../lib/storage';
 import { useRoomPreview, type RoomPreview } from '../lib/useRoomPreview';
 import { createRoom, joinRoom } from '../net/actions';
@@ -159,13 +161,13 @@ export function Home({ code: linkedCode, game: linkedGame }: Props) {
     if (step === 'name') nameRef.current?.focus();
   }, [step]);
 
-  const submit = (which: Intent, clean: string) => {
+  const submit = (which: Intent, clean: string, joinCode = code) => {
     const chosen = avatar ?? randomAvatar();
     saveName(clean);
     saveAvatar(chosen);
     setIntent(which);
     if (which === 'create') createRoom(initialGame(linkedGame).id, clean, chosen);
-    else joinRoom(code, clean, chosen);
+    else joinRoom(joinCode, clean, chosen);
   };
 
   /** Join: the code must be complete and well-formed before anything is sent; then the name, then the request. */
@@ -185,6 +187,21 @@ export function Home({ code: linkedCode, game: linkedGame }: Props) {
       return;
     }
     submit('join', clean);
+  };
+
+  /** A room on the list: exactly as if its code had been typed and Join pressed. */
+  const onJoinNearby = (roomCode: string) => {
+    if (joinPending) return;
+    setCode(roomCode);
+    setCodeHint(null);
+    if (joinError) clearJoinError();
+    const clean = cleanName(name);
+    if (!clean) {
+      setIntent('join');
+      setStep('name');
+      return;
+    }
+    submit('join', clean, roomCode);
   };
 
   const onCreate = () => {
@@ -223,6 +240,8 @@ export function Home({ code: linkedCode, game: linkedGame }: Props) {
   const joinErrorText = codeHint ?? errorFor('join');
   const busy = (which: Intent) => joinPending && intent === which;
 
+  const nearby = useNearbyRooms(formShown && step === 'home');
+
   if (view === 'quiet') return <QuietHome />;
 
   return (
@@ -245,6 +264,7 @@ export function Home({ code: linkedCode, game: linkedGame }: Props) {
 
         {formShown && step === 'home' && (
           <div className="home__start">
+            <NearbyRooms rooms={nearby} disabled={joinPending} onJoin={onJoinNearby} />
             <section className="home__join" aria-labelledby="join-heading" data-testid="join-panel">
               {/* Named for screen readers only: the boxes and Join say it on screen. */}
               <h2 className="sr-only" id="join-heading">
