@@ -231,6 +231,8 @@
   padding: 0 18px;
   background: var(--color-surface-2);
   border-block: 1px solid var(--color-border);
+  /* The line under it clear of the folded tails, which hang 5px below the band. On the band, not the line: where the band is hidden (a phone mid-round) the line takes no extra room. */
+  margin-bottom: 6px;
 }
 
 /* The folded ends: a darker tail behind each end, notched like a ribbon. */
@@ -268,8 +270,6 @@
 
 /* The round or hand and a rule or the street, small under the banner: "Round 1 · Dealer stands on 17". */
 .tbl-ribbon__sub {
-  /* Clear of the banner's folded tails, which hang below its band. */
-  margin-top: 6px;
   font-size: 0.8rem;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -644,7 +644,7 @@
 /* ---------- The stack and the stake (Stakes): "1,000 chips" and a gold pill of chips ("Bet 10"), never confused ---------- */
 .tbl-stackcount {
   display: inline-flex;
-  align-items: center;
+  align-items: baseline;
   gap: 0.25em;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
@@ -1524,6 +1524,7 @@
   margin-right: 0.3em;
   /* A chip a size up on its figure, overhanging the line rather than making it taller (the tiles' and the panel's heights are worked out from their lines). */
   height: 1em;
+  /* Centred on the figure, but out of the baseline group: the line keeps the figure's baseline, so the mark never shifts it in its line box (the panel's and the tiles' heights are worked out from those lines). */
   align-self: center;
 }
 
@@ -1534,7 +1535,7 @@
 .tbl-tile__foot .tbl-tile__chips,
 .tbl-tile__foot .tbl-tile__bet {
   display: inline-flex;
-  align-items: center;
+  align-items: baseline;
 }
 
 /* The footer: the stack small and quiet, the bet in lime on the right. */
