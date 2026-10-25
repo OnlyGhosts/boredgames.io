@@ -215,7 +215,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   min-width: 0;
   text-align: center;
   line-height: 1.2;
@@ -268,7 +268,8 @@
 
 /* The round or hand and a rule or the street, small under the banner: "Round 1 · Dealer stands on 17". */
 .tbl-ribbon__sub {
-  margin-top: 2px;
+  /* Clear of the banner's folded tails, which hang below its band. */
+  margin-top: 6px;
   font-size: 0.8rem;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
