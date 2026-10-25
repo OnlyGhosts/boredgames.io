@@ -287,23 +287,18 @@ test('the host sets the stacks, the blinds and two hands, two phones join and th
     await expect(p.page.getByTestId('phase-kicker')).toHaveText('Pre-flop');
     await expect(p.page.getByTestId('poker-header')).not.toContainText('Hand');
     await expect(p.page.getByTestId('poker-header')).not.toContainText('Blinds');
-    // Every stack reads in words, every bet as its own pill of chips labelled "Bet N": never two bare numbers side by side.
-    for (const chips of await p.page.getByTestId('seat-chips').allTextContents()) expect(chips).toMatch(/^[\d,.k]+ chips?$/);
-    // A seat's pill shows once its blind's chips have landed (they fly in after the deal): wait for one on every seat that posted a blind ("SB 10", "BB 20") before reading them.
+    // Every stack reads as its figure on the tile's footer, every bet as "bet N" beside it: never two bare numbers side by side.
+    for (const chips of await p.page.getByTestId('seat-chips').allTextContents()) expect(chips).toMatch(/^[\d,.kM]+$/);
+    // A seat's bet shows once its blind's chips have landed (they fly in after the deal): wait for one on every seat that posted a blind ("SB 10", "BB 20") before reading them.
     const blindSeats = p.page.getByTestId('seat').filter({ has: p.page.getByTestId('seat-line').filter({ hasText: /^(SB|BB) / }) });
+    const bets = p.page.getByTestId('seat-bet').filter({ hasText: /^bet / });
     await expect
       .poll(async () => {
         const blinds = await blindSeats.count();
-        return blinds > 0 && (await p.page.locator('[data-testid="seat-bet"] .tbl-stake').count()) === blinds && (await blindSeats.locator('[data-testid="seat-bet"] .tbl-stake').count()) === blinds;
-      }, { message: `${p.name}: a bet pill on every seat that posted a blind, and on no other` })
+        return blinds > 0 && (await bets.count()) === blinds && (await blindSeats.getByTestId('seat-bet').filter({ hasText: /^bet / }).count()) === blinds;
+      }, { message: `${p.name}: a bet on every seat that posted a blind, and on no other` })
       .toBe(true);
-    const pills = await p.page.locator('[data-testid="seat-bet"] .tbl-stake').evaluateAll((els) => els.map((el) => ({ label: el.getAttribute('aria-label'), chips: el.querySelectorAll('.tbl-chip').length, text: el.textContent })));
-    expect(pills.length).toBeGreaterThan(0);
-    for (const pill of pills) {
-      expect(pill.label).toMatch(/^Bet [\d,]+$/);
-      expect(pill.chips).toBeGreaterThanOrEqual(1);
-      expect(pill.text).toMatch(/^\+?[\d,.k]+$/);
-    }
+    for (const text of await bets.allTextContents()) expect(text).toMatch(/^bet [\d,.kM]+$/);
     await expect(p.page.getByTestId('overlay-results')).toHaveCount(0);
   }
   // The dealer button sits on exactly one seat on every page.
@@ -371,16 +366,12 @@ test('hand one: a raise through the panel, a call and a fold, the board street b
   const watcher = raiser === host ? pia : host;
   await expect(watcher.page.locator(`[data-testid="seat"][data-name="${raiser.name}"]`)).toHaveAttribute('data-bet', String(to));
   await expect(watcher.page.locator(`[data-testid="seat"][data-name="${raiser.name}"] [data-testid="seat-line"]`)).toHaveText(`Raise to ${to}`);
-  // The raise is said under the ribbon too, and its pill on the raiser's seat reads as a bet, apart from the stack.
+  // The raise is said under the ribbon too, and on the raiser's seat as a bet, apart from the stack.
   await expect(watcher.page.getByTestId('turn-sub')).toHaveText(`${raiser.name} raises to ${to}`);
   await expect(raiser.page.getByTestId('turn-sub')).toHaveText(`You raise to ${to}`);
-  const raiserPill = watcher.page.locator(`[data-testid="seat"][data-name="${raiser.name}"] [data-testid="seat-bet"] .tbl-stake`);
-  await expect(raiserPill).toHaveAttribute('aria-label', `Bet ${to}`);
-  await expect(raiserPill).toHaveAttribute('data-bet', String(to));
-  // 70 at a 500 start: a lilac chip (125) is too big, so two lime (25) chips and four off-white (5) ones, six owed; a full tile draws three (two on a compact one) and a plus for the rest.
-  await expect(raiserPill).toHaveAttribute('data-chips', '6');
-  await expect(raiserPill).toHaveAttribute('data-bands', /^lime lime( white)?$/);
-  await expect(raiserPill.locator('.tbl-stake__more')).toHaveText('+');
+  const raiserBet = watcher.page.locator(`[data-testid="seat"][data-name="${raiser.name}"] [data-testid="seat-bet"]`);
+  await expect(raiserBet).toHaveAttribute('data-bet', String(to));
+  await expect(raiserBet).toHaveText(`bet ${to.toLocaleString('en-US')}`);
   await chipsConserved();
 
   // The next player calls, the one after folds: a two-way pot goes to the flop.
@@ -592,11 +583,11 @@ async function bigTable(browser: Browser, base: string, size: number): Promise<v
       if (own) await page.setViewportSize(own);
     };
     if (size === 12) {
-      // Twelve players on a 390x844 phone: the seats need all their room, so they keep the tiles they had (compact, with every
-      // stack and bet) and my cards the board's size.
-      await expect(phone.getByTestId('seats')).toHaveAttribute('data-tier', 'compact');
+      // Twelve players on a 390x844 phone: four rows of total-only tiles have no room, so the crowd's tiles (small), which leave
+      // my cards at least the board's size.
+      await expect(phone.getByTestId('seats')).toHaveAttribute('data-tier', 'small');
       const w = await cardWidths(phone);
-      expect(Math.abs(w.mine - w.board), '12 players: my cards as wide as the board’s').toBeLessThanOrEqual(0.5);
+      expect(w.mine, '12 players: my cards at least as wide as the board’s').toBeGreaterThanOrEqual(w.board - 0.5);
     }
     await fits(phone, PHONES);
     await fits(desk, DESKTOPS);
@@ -745,10 +736,7 @@ test('a 100,000 table: a raise to 12,000 reads on the raiser’s seat and by the
 
     const seat = watcher.locator(`[data-testid="seat"][data-name="${raiser === a ? 'Hana' : 'Pia'}"]`);
     await expect(seat).toHaveAttribute('data-bet', '12000');
-    const pill = seat.locator('[data-testid="seat-bet"] .tbl-stake');
-    await expect(pill).toHaveAttribute('aria-label', 'Bet 12,000');
-    await expect(pill).toHaveAttribute('data-bands', 'lime lime white');
-    await expect(pill.locator('.tbl-stake__more')).toHaveText('+');
+    await expect(seat.getByTestId('seat-bet')).toHaveText('bet 12k');
     await expect(seat.getByTestId('seat-dealer')).toBeVisible();
     await expect(seat.getByTestId('seat-chips')).toHaveAttribute('data-chips', '88000');
     const scrolls = (p: Page) =>
@@ -758,7 +746,7 @@ test('a 100,000 table: a raise to 12,000 reads on the raiser’s seat and by the
           return el !== null && (el.scrollWidth > el.clientWidth || el.scrollHeight > el.clientHeight);
         }),
       );
-    // The raiser's tile says what happened in whole words at every width ("Raise to 12,000", "Raise 12k" or "Raise" beside the 12k pill,
+    // The raiser's tile says what happened in whole words at every width ("Raise to 12,000", "Raise 12k" or "Raise" in its pill,
     // never "Raise t…"), and the pot reads in full ("Pot 12,010": the raise and the big blind's 10) wherever it fits, a desktop's too.
     for (const size of [SMALL, { width: 360, height: 740 }, PORTRAIT, { width: 414, height: 896 }, { width: 430, height: 932 }, ...DESKTOPS]) {
       const label = `the raiser’s seat at ${size.width}x${size.height}`;

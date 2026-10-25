@@ -331,6 +331,8 @@
   gap: 4px;
   height: auto;
   max-width: 100%;
+  /* The last hand's fraction of a pixel stays in reach of the scroll (scrollWidth rounds it off). */
+  padding-right: 1px;
   align-items: center;
   justify-content: flex-start;
 }

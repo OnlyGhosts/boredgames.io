@@ -530,10 +530,6 @@ describe('copy', () => {
     expect(float).toMatch(/right:\s*6px/);
     expect(float).toMatch(/animation-name:\s*pk-seat-rise/);
     expect(css.match(/@keyframes pk-seat-rise \{[\s\S]*?\n\}/)?.[0]).not.toContain('-50%');
-    // On a narrow tile it rises at the top instead, so it never covers the "1,100 chips" line at the bottom.
-    const narrow = css.match(/@container tile \(max-width: 160px\) \{\s*\.pk \.tbl-tile \.tbl-payout \{([^}]*)\}/)?.[1] ?? '';
-    expect(narrow).toMatch(/top:\s*3px/);
-    expect(narrow).toMatch(/bottom:\s*auto/);
     // Where I stand, said on the line under the ribbon when it is the news (the panel has no line of its own).
     const base = { seated: true, waitingForSeat: false, busted: false, inHand: true, phase: 'acting' as const };
     expect(standingOf(base)).toBe('playing');
@@ -616,9 +612,9 @@ describe('the screen', () => {
     expect(attr(tagWith(html, 'hand-stage'), 'data-player-id')).toBe('host');
     expect(attr(tagWith(html, 'my-bet'), 'data-bet')).toBe('0');
     expect(html).toMatch(/data-testid="my-cards"[^>]*><div class="tbl-hand__head"><span class="pk-dealer"[^>]*data-testid="my-dealer"/);
-    // A blind of 10 at a 1,000 start: one off-white chip and the figure, read as "Bet 10".
-    expect(html).toMatch(/data-testid="seat-bet" data-bet="10"><span class="tbl-stake tbl-stake--bet" role="img" aria-label="Bet 10" data-bet="10" data-chips="1" data-bands="white"><span class="tbl-stake__chips"[^>]*>[\s\S]*?<\/span><span class="tbl-stake__value">10<\/span>/);
-    expect(html).toMatch(/data-testid="seat-chips" data-chips="990"><span class="tbl-stackcount__value">990<\/span> <span class="tbl-stackcount__word">chips<\/span>/);
+    // A blind of 10 on the tile's footer, "bet 10", where the chips fly to; the stack beside it.
+    expect(html).toMatch(/data-testid="seat-bet" data-bet="10" data-table-anchor="[^"]+">bet 10<\/span>/);
+    expect(html).toMatch(/data-testid="seat-chips" data-chips="990">990<\/span>/);
     expect(html).toMatch(/class="tbl-stake tbl-stake--pot pk-pot__pill" data-testid="pot" data-bet="15" data-chips="15" data-shown="15" data-table-anchor="pot"><span class="tbl-stake__word">Pot<\/span> <span class="tbl-stake__value">15</);
   });
 
@@ -771,19 +767,15 @@ describe('the stage and the line under the ribbon', () => {
     expect(html).not.toContain('tbl-panel__status');
   });
 
-  it('gives a narrow tile its stack, its bet pill and its cards a row each, and a short one the stack as its badge', () => {
-    const css = readFileSync(join(import.meta.dirname, '../../platform/styles/table.css'), 'utf8');
-    const narrow = css.match(/@container tile \(max-width: 199px\) \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(narrow).toMatch(/grid-template-areas: 'face name name' 'face chips chips' 'bet bet line' 'cards cards cards';/);
-    expect(narrow).toMatch(/\.tbl-tile--full \.tbl-tile__tag \{\s*display: none;/);
-    // Poker's badge is its stack: hidden while the words fit, shown where the tile is too short for them.
-    expect(css).toMatch(/\.tbl-tile--full\.tbl-tile--short-badge \.tbl-tile__total,\s*\.tbl-tile--compact\.tbl-tile--short-badge \.tbl-tile__total \{\s*display: none;/);
-    expect(css).toMatch(/@container tile \(max-height: 46px\) \{\s*\.tbl-tile--full\.tbl-tile--short-badge \.tbl-tile__total,\s*\.tbl-tile--compact\.tbl-tile--short-badge \.tbl-tile__total \{\s*display: flex;/);
+  it('a seat tile shows the hole cards fanned, the stack and the bet on its footer, and no total standing in for the stack', () => {
     const html = render(pkRoom(hostTurn()), 'host');
-    for (const tile of tagsWith(html, 'seat')) expect(attr(tile, 'class')).toContain('tbl-tile--short-badge');
+    for (const tile of tagsWith(html, 'seat')) expect(attr(tile, 'class')).toMatch(/tbl-tile--(full|compact)/);
+    expect(tagsWith(html, 'seat-total')).toHaveLength(0);
     const own = readFileSync(join(import.meta.dirname, 'poker.css'), 'utf8');
+    expect(own).toMatch(/\.pk \.tbl-tile__cards > \.tbl-card \+ \.tbl-card \{\s*margin-left: calc\(var\(--tbl-w\) \* \(var\(--fan-step\) - 1\)\);/);
     expect(own).toMatch(/@container tile \(max-width: 159px\) \{\s*\.tbl-tile \.pk-dealer \{\s*width: 14px;/);
   });
+
 });
 
 describe('the table keeps its places', () => {

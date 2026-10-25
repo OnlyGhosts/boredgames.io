@@ -1,6 +1,6 @@
 import type { PokerRoomState, PokerView } from '@shared/games/poker/protocol';
 import { PayoutFloat } from '../../../platform/table/Outcome';
-import { PlayerTile, PlayersGrid, SeatSheet, tileChips, tileFigures, type SeatLine, type SeatMark } from '../../../platform/table/PlayersGrid';
+import { PlayerTile, PlayersGrid, SeatSheet, type SeatLine, type SeatMark } from '../../../platform/table/PlayersGrid';
 import { StackCount, StakePill } from '../../../platform/table/Stakes';
 import { TableCard } from '../../../platform/table/TableCard';
 import { playerOf } from '../hooks';
@@ -142,11 +142,9 @@ export function Seats({ room, view, ids, meId, staged, table, timeline, live, no
                 mark={seatMark(line)}
                 outcome={won > 0 ? 'win' : null}
                 chips={stack}
-                bet={
-                  <span className="pk-bet" data-table-anchor={betAnchor(id)} data-testid="seat-bet" data-bet={bet}>
-                    {bet > 0 && <StakePill value={bet} start={room.settings.startingChips} chips={tileChips(tier)} format={tileFigures(tier)} />}
-                  </span>
-                }
+                bet={bet}
+                start={room.settings.startingChips}
+                betData={{ 'data-table-anchor': betAnchor(id) }}
                 total={{ text: shortChips(stack), tone: won > 0 ? 'win' : 'neutral' }}
                 shortBadge
                 dimmed={seat.busted || seat.status === 'folded' || !view.order.includes(id)}

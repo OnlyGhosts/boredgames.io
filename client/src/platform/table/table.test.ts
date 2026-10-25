@@ -139,145 +139,66 @@ describe('a dealt card', () => {
 });
 
 describe('the players grid', () => {
-  it('steps the tiles down in tiers as the table grows: full to 4 others, compact to 9, small to 23, dense beyond', () => {
-    const tiers = [1, 4, 5, 9, 10, 23, 24, 49].map((n) => G.tileTier(n));
+  it('has two tile tiers for a table of a few, cards-first then total-only, and crowd chips beyond', () => {
+    const tiers = [1, 7, 8, 9, 10, 23, 24, 49].map((n) => G.tileTier(n));
     expect(tiers).toEqual(['full', 'full', 'compact', 'compact', 'small', 'small', 'dense', 'dense']);
   });
 
-  it('picks the tier from the room the seats have: the richest whose fewest rows keep the tiles’ least height', () => {
-    // Three others on a phone: full at 390x844 (a 141px room) and 360x740 (111px), compact on a 320x568 (79px), where the full tile (94px) has no room.
-    expect(G.tierFor(3, { width: 356, height: 141 })).toBe('full');
-    expect(G.tierFor(3, { width: 326, height: 111 })).toBe('full');
-    expect(G.tierFor(3, { width: 290, height: 79 })).toBe('compact');
-    expect(G.fitsRoom(3, { width: 290, height: 79 }, { tier: 'compact' })).toBe(true);
-    // Four others at 390: two rows of full tiles never fit, one row of compact ones does.
-    expect(G.tierFor(4, { width: 356, height: 141 })).toBe('compact');
-    // Five others on a 320x568 phone: two rows of compact tiles have no room, but a compact tile is the least a seat shows (its stack and bet): it stays, overflowing a little, never small.
-    expect(G.tierFor(5, { width: 290, height: 79 })).toBe('compact');
-    // Two or three others on a short phone (360x640) where even compact tiles have no room: compact, never full tiles squashed under their cards.
-    for (const count of [1, 2, 3, 4]) expect(G.tierFor(count, { width: 336, height: 40 }), `${count} others`).toBe('compact');
-    expect(G.fitsRoom(5, { width: 290, height: 79 }, { tier: 'compact' })).toBe(false);
-    // A 1440x900 desktop with five, seven or eight others: one row of full tiles (the cards in play stay in the seat) up to seven across.
-    expect(G.tierFor(5, { width: 898, height: 191 }, { wide: true })).toBe('full');
-    expect(G.tierFor(7, { width: 898, height: 191 }, { wide: true })).toBe('full');
-    expect(G.tierFor(8, { width: 898, height: 191 }, { wide: true })).toBe('compact');
-    expect(G.tierFor(11, { width: 898, height: 191 }, { wide: true })).toBe('compact');
-    expect(G.tierFor(23, { width: 898, height: 191 }, { wide: true })).toBe('small');
-    // A 1280x800 desktop with eleven others: compact tiles would be narrower than their words, so small, as the count says.
-    expect(G.tierFor(11, { width: 742, height: 140 }, { wide: true })).toBe('small');
-    // Eleven or twenty-three others on a phone: small (a count's tier never falls below small for them, even where it overflows).
-    expect(G.tierFor(11, { width: 356, height: 141 })).toBe('small');
-    expect(G.tierFor(23, { width: 356, height: 141 })).toBe('small');
-    expect(G.tierFor(49, { width: 290, height: 10 })).toBe('dense');
-    // Unmeasured (the server render): the count's usual tier.
-    expect(G.tierFor(6, null)).toBe('compact');
-    expect(G.leastHeight(3, 356, { tier: 'full' })).toBe(94);
-    expect(G.leastHeight(7, 898, { wide: true, tier: 'full' })).toBe(90 + 18);
+  it('lays a phone out two across: a full tile is never narrower than 140px, so its pill and cards keep their floors', () => {
+    expect(G.TIER_SHAPES.full.minWidth).toBe(140);
+    for (const width of [290, 326, 356, 396]) expect(G.fitGrid(4, { width, height: 400 }, { tier: 'full' }).cols, `${width}px`).toBe(2);
+    expect(G.fitGrid(1, { width: 356, height: 200 }, { tier: 'full' }).cols).toBe(1);
+    // Four or more on a phone: two columns of total-only tiles while they have the height, three only where two rows do not fit.
+    expect(G.fitGrid(6, { width: 356, height: 400 }, { tier: 'compact' }).cols).toBe(2);
+    expect(G.fitGrid(3, { width: 326, height: 70 }, { tier: 'compact' }).cols).toBe(3);
   });
 
-  it('never makes a phone’s full tile narrower than its stack in words: three across a 360px phone, two across a 320px one', () => {
-    // A full tile writes the stack beside the face: "12,500 chips" needs 103px in the ring of the seat on turn.
-    expect(G.TIER_SHAPES.full.minWidth).toBe(104);
-    // A 360px phone's seats (326px across): three full tiles of 105px in a row.
-    expect(G.fitGrid(3, { width: 326, height: 120 }, { tier: 'full' })).toEqual({ cols: 3, rows: 1 });
-    expect(G.leastHeight(3, 326, { tier: 'full' })).toBe(94);
-    // A 320px phone's (290px): three across were 93px and cut "1,250 chips" to "1,250 chip". Full tiles take two rows there,
-    // which a phone that short never has room for: one row of compact tiles (their stack and bet), whatever the room left.
-    expect(G.leastHeight(3, 290, { tier: 'full' })).toBe(2 * 94 + 6);
-    expect(G.fitGrid(3, { width: 290, height: 200 }, { tier: 'full' })).toEqual({ cols: 2, rows: 2 });
-    for (const height of [79, 120, 150, 190]) expect(G.tierFor(3, { width: 290, height }), `${height}px`).toBe('compact');
-    for (const count of [1, 2]) expect(G.tierFor(count, { width: 290, height: 120 }), `${count} others`).toBe('full');
-    // A 430px phone's (396px): never four across (95px), three.
-    expect(G.fitGrid(4, { width: 396, height: 300 }, { tier: 'full' }).cols).toBeLessThanOrEqual(3);
-    expect(G.fitGrid(11, { width: 396, height: 400 }, { tier: 'full' })).toEqual({ cols: 3, rows: 4 });
-    // The cards' share goes by the same tiers: three others on a 320px phone keep a row of compact tiles (68px) and the 8px over it.
-    expect(G.seatsNeed(3, { width: 290, height: 150 }, { growth: G.TURN_WRAP })).toBe(68 + G.SPARE);
+  it('runs a desktop row up to five tiles, then wraps', () => {
+    expect(G.fitGrid(5, { width: 1100, height: 400 }, { wide: true, tier: 'full' })).toEqual({ cols: 5, rows: 1 });
+    expect(G.fitGrid(7, { width: 1100, height: 400 }, { wide: true, tier: 'full' }).cols).toBeLessThanOrEqual(5);
+    expect(G.WIDE_TIER_SHAPES.full.minWidth).toBe(150);
   });
 
-  it('keeps the tier on show while it still fits: a richer one needs a few pixels to spare, so a room that wobbles never flips the tiles', () => {
-    const room = (height: number) => ({ width: 356, height });
-    // Compact on show, the full tier fits by a hair: it stays compact until the room is clearly enough.
-    expect(G.tierFor(3, room(96), { current: 'compact' })).toBe('compact');
-    expect(G.tierFor(3, room(104), { current: 'compact' })).toBe('full');
-    // Full on show keeps the room it has, down to its least height.
-    expect(G.tierFor(3, room(96), { current: 'full' })).toBe('full');
-    expect(G.tierFor(3, room(90), { current: 'full' })).toBe('compact');
+  it('picks the richest tier whose least height fits the room, falling to crowd chips rather than overflow', () => {
+    expect(G.tierFor(3, { width: 356, height: 171 })).toBe('full');
+    expect(G.tierFor(3, { width: 326, height: 120 })).toBe('compact');
+    expect(G.tierFor(3, { width: 1000, height: 140 }, { wide: true })).toBe('full');
+    expect(G.tierFor(8, { width: 326, height: 90 })).toBe('small');
+    expect(G.tierFor(6, null)).toBe('full');
   });
 
-  it('spreads a row rather than squeeze the tiles under their least height: seven full tiles across a desktop, never two short rows', () => {
-    expect(G.fitGrid(7, { width: 898, height: 173 }, { wide: true, tier: 'full' })).toEqual({ cols: 7, rows: 1 });
-    expect(G.fitGrid(5, { width: 898, height: 173 }, { wide: true, tier: 'full' })).toEqual({ cols: 5, rows: 1 });
-    // Room for two rows at the natural height: the usual shape.
-    expect(G.fitGrid(5, { width: 898, height: 300 }, { wide: true, tier: 'full' })).toEqual({ cols: 4, rows: 2 });
+  it('keeps the tier on show while it still fits: a richer one needs a few pixels to spare', () => {
+    const least = G.leastHeight(3, 356, { tier: 'full' });
+    expect(G.tierFor(3, { width: 356, height: least }, { current: 'compact' })).toBe('compact');
+    expect(G.tierFor(3, { width: 356, height: least + G.SPARE }, { current: 'compact' })).toBe('full');
+    expect(G.tierFor(3, { width: 356, height: least }, { current: 'full' })).toBe('full');
   });
 
-  it('starts from the tier’s usual columns before the grid is measured (and on the server render)', () => {
-    expect([1, 2, 3, 4].map((n) => G.fitGrid(n, null).cols)).toEqual([1, 2, 3, 4]);
-    // Compact: two rows. Small: 4 to 6 columns. Dense: 6 to 8.
-    expect([5, 6, 7, 9].map((n) => G.fitGrid(n, null).cols)).toEqual([3, 3, 4, 5]);
-    expect([10, 12, 13, 18, 23].map((n) => G.fitGrid(n, null).cols)).toEqual([4, 4, 5, 6, 6]);
-    expect([24, 36, 42, 49].map((n) => G.fitGrid(n, null).cols)).toEqual([6, 6, 7, 8]);
-    expect(G.fitGrid(49, null)).toEqual({ cols: 8, rows: 7 });
+  it('shows a seat’s cards only where the fan keeps its floor: 24px on a phone, 32px on a desktop, else the total alone', () => {
+    expect(G.CARD_FLOOR).toEqual({ phone: 24, wide: 32 });
+    expect(G.cardsFit(150, 2, false)).toBe(true);
+    expect(G.cardsFit(150, 5, false)).toBe(true);
+    expect(G.cardsFit(100, 7, false)).toBe(false);
+    expect(G.cardsFit(200, 3, true)).toBe(true);
+    expect(G.cardsFit(150, 9, true)).toBe(false);
+    // Unmeasured (the server render): the cards show.
+    expect(G.cardsFit(null, 5, true)).toBe(true);
   });
 
-  it('fits the columns to the space: tiles at their natural size keep the usual shape, a short grid spreads wider', () => {
-    // Room to spare: the usual shape.
-    expect(G.fitGrid(6, { width: 374, height: 200 })).toEqual({ cols: 3, rows: 2 });
-    expect(G.fitGrid(12, { width: 374, height: 170 }, { gap: 4 })).toEqual({ cols: 4, rows: 3 });
-    // Two others share one row however tall the grid is.
-    expect(G.fitGrid(2, { width: 374, height: 400 }).cols).toBe(2);
-    // A short grid: 49 small chips spread to more columns rather than shrink to nothing.
-    const short = G.fitGrid(49, { width: 304, height: 90 }, { gap: 4 });
-    expect(short.cols).toBeGreaterThan(8);
-    expect(short.cols * short.rows).toBeGreaterThanOrEqual(49);
-    expect(G.tileScale(49, short.cols, { width: 304, height: 90 }, G.TIER_SHAPES.dense, 4)).toBeGreaterThan(G.tileScale(49, 8, { width: 304, height: 90 }, G.TIER_SHAPES.dense, 4));
-    // Every fit holds every tile.
-    for (const n of [1, 3, 5, 8, 11, 17, 23, 24, 31, 49]) {
-      const fit = G.fitGrid(n, { width: 340, height: 140 }, { gap: 4 });
-      expect(fit.cols * fit.rows, `${n} tiles`).toBeGreaterThanOrEqual(n);
-      expect((fit.cols - 1) * fit.rows, `${n} tiles, no empty row`).toBeLessThan(n + fit.rows);
-    }
-  });
-
-  it('never spreads tiles narrower than they read: names, totals and the Playing tag stay whole', () => {
-    // Six players on a 360x740 phone, a short grid: five 60px columns read "Har", "Pl"; now never under 64px.
-    const fit = G.fitGrid(5, { width: 326, height: 57 });
-    expect((326 - (fit.cols - 1) * 6) / fit.cols).toBeGreaterThanOrEqual(G.TIER_SHAPES.compact.minWidth);
-    expect(fit.cols).toBeLessThanOrEqual(4);
-    // Every tier, every box: the columns keep the tier's minimum width (one column at the least).
-    for (const wide of [false, true]) {
-      const shapes = wide ? G.WIDE_TIER_SHAPES : G.TIER_SHAPES;
-      for (const n of [3, 5, 8, 12, 23, 30, 49])
-        for (const box of [{ width: 290, height: 40 }, { width: 326, height: 57 }, { width: 356, height: 300 }, { width: 582, height: 90 }, { width: 742, height: 418 }]) {
-          const { cols } = G.fitGrid(n, box, { wide, gap: 4 });
-          const min = shapes[G.tileTier(n)].minWidth;
-          if (cols > 1) expect((box.width - (cols - 1) * 4) / cols, `${n} tiles in ${box.width}x${box.height}${wide ? ' (desktop)' : ''}`).toBeGreaterThanOrEqual(min);
+  it('every fit holds every tile, never narrower than the tier reads', () => {
+    for (const wide of [false, true])
+      for (const n of [1, 3, 5, 8, 12, 23, 30, 49])
+        for (const box of [{ width: 290, height: 40 }, { width: 356, height: 300 }, { width: 742, height: 418 }]) {
+          const { cols, rows } = G.fitGrid(n, box, { wide, gap: 4 });
+          expect(cols * rows).toBeGreaterThanOrEqual(n);
+          if (cols > 1) expect((box.width - (cols - 1) * 4) / cols).toBeGreaterThanOrEqual(G.shapeOf(G.tileTier(n), wide).minWidth);
         }
-    }
-    // A 1280x800 desktop with 49 others: 13 columns of 41px used to leave the tiles 14px tall.
-    expect(G.fitGrid(49, { width: 582, height: 318 }, { wide: true, gap: 8 }).cols).toBeLessThanOrEqual(G.WIDE_TIER_SHAPES.dense.maxCols);
-    expect(G.WIDE_TIER_SHAPES.dense.maxCols).toBeLessThanOrEqual(12);
   });
 
-  it('keeps a small tile’s total inside it on the narrowest phones: a badge on its corner, never cut to one digit', () => {
-    const css = readFileSync(join(import.meta.dirname, '../styles/table.css'), 'utf8');
-    const narrow = css.slice(css.indexOf('@container tile (max-width: 56px)'));
-    const block = narrow.slice(0, narrow.indexOf('\n}\n'));
-    expect(block).toMatch(/\.tbl-tile--small \.tbl-tile__total \{\s*position: absolute;\s*top: 1px;\s*right: 1px;/);
-    // The avatar shrinks with a short tile rather than overflow it.
-    expect(css).toMatch(/\.tbl-tile--small \{\s*\/\*[^*]*\*\/\s*--face: min\(24px, max\(16px, calc\(100cqh - 19px\)\)\);/);
-  });
-
-  it('lifts the ends of a desktop row less as the tiles get smaller (the arc costs height)', () => {
-    const grid = (n: number) => html(createElement(PlayersGrid, { count: n, label: 'Players', wide: true, children: () => [] }));
-    expect(grid(3)).toContain('--arc:16px');
-    expect(grid(12)).toContain('--arc:8px');
-    expect(grid(30)).toContain('--arc:4px');
-  });
-
-  it('bows the desktop rows into a gentle arc: the middle lowest, the ends lifted', () => {
-    expect([0, 1, 2, 3, 4].map((c) => G.arcLift(c, 5))).toEqual([1, 0.25, 0, 0.25, 1]);
-    expect(G.arcLift(0, 1)).toBe(0);
+  it('sets a desktop row flat: no tile sits lower than its neighbours', () => {
+    const grid = html(createElement(PlayersGrid, { count: 3, label: 'Players', wide: true, children: () => ['a', 'b', 'c'] }));
+    expect(grid).not.toContain('--lift');
+    expect(readFileSync(join(import.meta.dirname, '../styles/table.css'), 'utf8')).not.toMatch(/--lift|var\(--arc/);
   });
 });
 
@@ -286,32 +207,32 @@ describe('the room a phone’s cards take', () => {
   const phone = (height: number) => ({ width: 356, height });
 
   it('leaves the seats their natural height in the tier their room gives them, and the cards the rest', () => {
-    // One to three others: a row of full tiles (96px and 8px over it), and never under their least height (94px) with a
-    // wrapped turn line (21px) over it, so a long name under the ribbon never steps them down to compact mid-round.
-    expect(G.seatsNeed(3, phone(171), { growth: G.TURN_WRAP })).toBe(94 + 21);
-    expect(G.seatsSpare(3, phone(171), { growth: G.TURN_WRAP })).toBe(56);
-    expect(G.seatsSpare(1, phone(171), { growth: G.TURN_WRAP })).toBe(56);
-    // Poker's turn line also has its clock to come back: 7px more.
-    expect(G.seatsSpare(3, phone(218), { growth: G.TURN_WRAP + G.TURN_CLOCK })).toBe(218 - 94 - 28);
-    // Five others: two rows of compact tiles at their natural 68px, the grid's 8px over them.
-    expect(G.seatsNeed(5, phone(171), { growth: G.TURN_WRAP })).toBe(2 * 68 + 6 + G.SPARE);
-    expect(G.seatsSpare(5, phone(171), { growth: G.TURN_WRAP })).toBe(171 - 150);
+    // One other: a full tile (104px and 8px over it), the rest the cards'.
+    expect(G.seatsNeed(1, phone(171), { growth: G.TURN_WRAP })).toBe(104 + G.SPARE);
+    expect(G.seatsSpare(1, phone(171), { growth: G.TURN_WRAP })).toBe(171 - 112);
+    // Three others: two rows of full tiles take what the room has, the cards keep their least size.
+    expect(G.tierFor(3, phone(171))).toBe('full');
+    expect(G.seatsSpare(3, phone(171), { growth: G.TURN_WRAP })).toBe(0);
     // Nobody else: the ribbon's own row keeps room for a wrapped line, the rest is the cards'.
     expect(G.seatsNeed(0, phone(180), { growth: G.TURN_WRAP })).toBe(21);
     expect(G.seatsSpare(0, phone(180), { growth: G.TURN_WRAP })).toBe(159);
   });
 
-  it('gives a crowd only what is left over its tiles at their natural size: most big tables keep the least card', () => {
-    for (const count of [11, 23, 24, 49]) expect(G.seatsSpare(count, phone(171), { growth: G.TURN_WRAP }), `${count} others`).toBe(0);
+  it('plans the seats in a tier that keeps its least height when the line under the ribbon grows, as the grid will show it', () => {
+    // Two rows of full tiles (70px least, 5px apart) need 145px and the 21px a wrapped turn line may take: 166px.
+    expect(G.leastHeight(3, 356, { tier: 'full' })).toBe(145);
+    expect(G.seatsSpare(3, phone(171), { growth: G.TURN_WRAP })).toBe(0);
+    // 10px less: full tiles would lose their tier mid-round, so the seats plan one row of total-only tiles and the cards take the rest.
+    expect(G.seatsSpare(3, phone(156), { growth: G.TURN_WRAP })).toBe(156 - (68 + G.SPARE));
+  });
+
+  it('gives a crowd only what is left over its tiles at their natural size', () => {
+    for (const count of [23, 24, 49]) expect(G.seatsSpare(count, phone(171), { growth: G.TURN_WRAP }), `${count} others`).toBe(0);
     // Sixteen others: three rows of small tiles (50px, 4px apart) and the grid's 8px leave 5px.
     expect(G.seatsSpare(16, phone(171), { growth: G.TURN_WRAP })).toBe(171 - (3 * 50 + 2 * 4 + G.SPARE));
-    // Never more than the room, and never a negative share.
     expect(G.seatsNeed(49, phone(171))).toBe(171);
     expect(G.seatsSpare(3, phone(70), { growth: G.TURN_WRAP })).toBe(0);
-    // Three others in 90px: a row of compact tiles (full ones have no room), their 68px and the 8px over them.
-    expect(G.seatsSpare(3, phone(90), { growth: G.TURN_WRAP })).toBe(90 - 76);
-    // Whole pixels, rounded down: a room read a fraction apart never moves the cards.
-    expect(G.seatsSpare(3, phone(171.7), { growth: G.TURN_WRAP })).toBe(56);
+    expect(G.seatsSpare(3, phone(171.7), { growth: G.TURN_WRAP })).toBe(0);
   });
 
   it('reads the table’s rows once each: the pieces side by side in a row (the line beside the dealer on the shortest phones) count as that row', () => {
@@ -430,7 +351,7 @@ describe('the components', () => {
     expect(off).toMatch(/disabled=""[^>]*data-testid="max"/);
   });
 
-  it('the players grid: tiles in seat order with the tier and columns on the grid, the turn ringed and tagged, a dimmed seat, a badge and data for the tests', () => {
+  it('the players grid: tiles in seat order with the tier and columns on the grid, the turn ringed, a dimmed seat, a badge and data for the tests', () => {
     const avatar = { color: 1, emoji: 2 };
     const tile = (id: string, name: string, extra: Record<string, unknown>) =>
       createElement(PlayerTile, { key: id, playerId: id, name, avatar, connected: true, tier: 'full', turn: false, line: { state: 'waiting', text: 'Waiting', tone: 'quiet' }, mark: 'waiting', ...extra });
@@ -439,7 +360,7 @@ describe('the components', () => {
         count: 2,
         label: 'Other players',
         children: (tier) => [
-          tile('p1', 'Pia', { tier, chips: 980, turn: true, line: { state: 'turn', text: 'Thinking', tone: 'turn' }, mark: 'turn', badge: createElement('b', { key: 'd' }, 'D'), data: { 'data-bet': 20 }, onOpen: noop }),
+          tile('p1', 'Pia', { tier, chips: 980, turn: true, line: { state: 'turn', text: 'Playing', tone: 'turn' }, mark: 'turn', badge: createElement('b', { key: 'd' }, 'D'), data: { 'data-bet': 20 }, onOpen: noop }),
           tile('p2', 'Quinn', { tier, connected: false, chips: 0, line: { state: 'out', text: 'Out', tone: 'bad' }, mark: 'out', dimmed: true }),
         ],
       }),
@@ -447,95 +368,46 @@ describe('the components', () => {
     expect(out).toMatch(/<ul class="tbl-grid tbl-grid--full"[^>]*aria-label="Other players" data-testid="seats" data-tier="full" data-cols="2" data-count="2">/);
     expect(out.match(/class="tbl-grid__cell"/g)).toHaveLength(2);
     expect(out).toMatch(/class="tbl-tile tbl-tile--full tbl-tile--turn"[^>]*data-player-id="p1"[^>]*data-turn="true" aria-current="true" data-bet="20"/);
-    expect(out).toContain('data-testid="seat-playing">Playing<');
-    expect(out).toContain('tbl-tile__line--turn');
+    // The pill says it: no separate Playing tag.
+    expect(out).not.toContain('seat-playing');
+    expect(out).toContain('tbl-tile__pill tbl-tile__pill--turn');
     expect(out).toMatch(/class="tbl-tile tbl-tile--full tbl-tile--dim"[^>]*data-player-id="p2"/);
     expect(out).toContain('data-table-anchor="seat:p1"');
     expect(out).toContain('avatar--dimmed');
-    // Only a tile with a sheet to open is a button.
     expect(out.match(/data-testid="seat-open"/g)).toHaveLength(1);
-    expect(out).toContain('aria-label="Pia: Thinking. Show details"');
+    expect(out).toContain('aria-label="Pia: Playing. Show details"');
   });
 
-  it('a tile shows its cards only in the full tier, and an outcome outlines it once settled', () => {
-    const avatar = { color: 1, emoji: 2 };
-    const props = { playerId: 'p1', name: 'Pia', avatar, connected: true, turn: false, line: { state: 'settled', text: 'Win +40', tone: 'strong' as const }, mark: 'win' as const, outcome: 'win' as const, total: { text: '20', tone: 'win' as const }, cards: createElement('i', null, 'cards') };
-    expect(html(createElement(PlayerTile, { ...props, tier: 'full' }))).toContain('<i>cards</i>');
-    const many = html(createElement(PlayerTile, { ...props, tier: 'small' }));
-    expect(many).not.toContain('<i>cards</i>');
+  it('a full tile, cards first: the header with the name and the status pill, the fan and the big total, the stack and the bet under them', () => {
+    const props = { playerId: 'p1', name: 'Pia', avatar: { color: 1, emoji: 2 }, connected: true, tier: 'full' as const, turn: false, line: { state: 'done', text: 'Stands', tone: 'quiet' as const }, mark: 'done' as const, chips: 1_250_000, bet: 50_000, total: { text: '18', tone: 'neutral' as const }, cards: createElement('i', null, 'cards'), fan: { cards: 3, hands: 1 } };
+    const out = html(createElement(PlayerTile, props));
+    expect(out).toMatch(/<span class="tbl-tile__head">.*<span class="tbl-tile__name">.*<span class="tbl-tile__pill tbl-tile__pill--quiet tbl-tile__pill--done" data-testid="seat-pill">.*Stands<\/span><\/span><\/span>/);
+    expect(out).toContain('<span class="tbl-tile__hero"><span class="tbl-tile__cards" style="--tile-fan:3;--tile-hands:1"><i>cards</i></span><span class="tbl-tile__total" data-testid="seat-total" data-tone="neutral">18</span></span>');
+    expect(out).toContain('<span class="tbl-tile__foot"><span class="tbl-tile__chips" data-testid="seat-chips" data-chips="1250000">1.3M</span><span class="tbl-tile__bet" data-testid="seat-bet" data-bet="50000">bet 50k</span></span>');
+    // No chip icons, no plus, no mark in the avatar's corner.
+    expect(out).not.toContain('tbl-chip');
+    expect(out).not.toContain('tbl-tile__mark');
+    // A compact tile: the total alone, never the cards.
+    const compact = html(createElement(PlayerTile, { ...props, tier: 'compact' }));
+    expect(compact).not.toContain('<i>cards</i>');
+    expect(compact).toContain('data-testid="seat-total"');
+    // The crowd tiers keep their chips.
+    const many = html(createElement(PlayerTile, { ...props, tier: 'small', outcome: 'win' }));
     expect(many).toContain('tbl-tile--small tbl-tile--win');
-    expect(many).toContain('data-testid="seat-total"');
     expect(html(createElement(PlayerTile, { ...props, tier: 'dense' }))).toContain('tbl-tile--dense');
   });
 
-  it('a full tile keeps its face beside the name and stack, not sunk to the middle when the status wraps', () => {
+  it('keeps the floors in the stylesheet: cards 24px to 30px on a phone and 32px to 40px on a desktop, the total over 22px', () => {
     const css = readFileSync(join(import.meta.dirname, '../styles/table.css'), 'utf8');
-    expect(css).toMatch(/\n\.tbl-tile--full \.tbl-tile__face \{\s*align-self: start;/);
-  });
-
-  it('a full tile keeps a token padding and steps, and 200px to 269px wide puts the status beside the cards', () => {
-    const css = readFileSync(join(import.meta.dirname, '../styles/table.css'), 'utf8');
-    expect(css).toMatch(/\n\.tbl-tile--full \{[^}]*row-gap: var\(--space-1\);\s*padding: var\(--space-2\);/);
-    expect(css).toMatch(/\n\.tbl-tile--full\.tbl-tile--turn \{\s*padding: calc\(var\(--space-2\) - 1\.5px\);/);
-    const block = css.slice(css.indexOf('@container tile (min-width: 200px) and (max-width: 269px) {'));
-    expect(block).toMatch(/^@container[^@]*grid-template-areas: 'face name tag' 'face money money' 'cards cards line';/);
-    expect(block).toMatch(/^@container[^@]*\.tbl-tile--full \.tbl-tile__meta \{\s*display: contents;/);
-    expect(block).toMatch(/^@container[^@]*\.tbl-tile--full \.tbl-tile__cards \{\s*container-type: size;/);
-    expect(block).toMatch(/^@container[^@]*\.tbl-tile--full \.tbl-tile__cards > \* \{\s*--tbl-w: min\(var\(--tbl-mini-w, 24px\), calc\(100cqh \/ 1\.62\)\);/);
-    expect(block).not.toMatch(/^@container[^@]*flex-wrap: wrap/);
-  });
-
-  it('a narrow full tile on a phone, dealt in: the words on the left under the name, the cards on the right half as big again, the total on the last card', () => {
-    const css = readFileSync(join(import.meta.dirname, '../styles/table.css'), 'utf8');
-    const phone = css.slice(css.indexOf('@container tile (max-width: 199px) and (min-height: 80px) {'));
-    const block = phone.slice(0, phone.indexOf('\n}\n'));
-    expect(block).toMatch(/\.tbl-grid:not\(\.tbl-grid--arc\) \.tbl-tile--full \{[^}]*grid-template-columns: var\(--face\) fit-content\(30px\) minmax\(0, 1fr\);[^}]*grid-template-areas: 'face name name' 'face chips chips' '\. \. cards' 'bet bet cards' 'line line cards' '\. \. cards';/);
-    // As tall as the room under the stack (34.6px on a 96px tile, 22px before), as wide as the room the words leave (the cards' own box), a split row keeping its peek.
-    expect(block).toMatch(/--tbl-w: min\(calc\(\(100cqh - 40px\) \/ 1\.62\), calc\(100cqw \/ var\(--tile-k\)\), max\(22px, calc\(\(100cqw - 2 \* var\(--tile-peek\)\) \/ var\(--tile-k\)\)\)\);\s*container-type: inline-size;/);
-    expect((96 - 40) / 1.62 / 22).toBeGreaterThan(1.5);
-    expect(block).toMatch(/\.tbl-hand--mini \.tbl-hand__head \{\s*position: absolute;\s*top: auto;\s*right: 0;\s*bottom: 0;/);
-    // A wide tile's words keep their room beside a row of split hands.
-    expect(css).toMatch(/\.tbl-tile\.tbl-tile--full \.tbl-tile__cards \{[^}]*max-width: calc\(100cqw - 160px\);/);
-    const props = { playerId: 'p1', name: 'Pia', avatar: { color: 1, emoji: 2 }, connected: true, tier: 'full' as const, turn: false, line: { state: 'waiting', text: 'Waiting', tone: 'quiet' as const }, mark: 'waiting' as const, cards: createElement('i', null, 'cards') };
-    expect(html(createElement(PlayerTile, { ...props, fan: { cards: 4, hands: 3 } }))).toContain('<span class="tbl-tile__cards" style="--tile-fan:4;--tile-hands:3"><i>cards</i></span>');
-    expect(html(createElement(PlayerTile, props))).toContain('<span class="tbl-tile__cards"><i>cards</i></span>');
-  });
-
-  it('a narrow full tile before the deal, and on a desktop (three on a phone, six across a desktop), gives the name, the stack, the bet with the status and the cards a row each, so nothing is drawn over anything', () => {
-    const css = readFileSync(join(import.meta.dirname, '../styles/table.css'), 'utf8');
-    const narrow = css.slice(css.indexOf('@container tile (max-width: 199px)'));
-    const block = narrow.slice(0, narrow.indexOf('\n}\n'));
-    expect(block).toMatch(/\.tbl-tile--full \{[^}]*grid-template-areas: 'face name name' 'face chips chips' 'bet bet line' 'cards cards cards';/);
-    // The stack, the bet and the status leave their flex row for the grid's own rows; the Playing tag goes (the ring says it).
-    expect(block).toMatch(/\.tbl-tile--full \.tbl-tile__meta \{\s*display: contents;/);
-    expect(block).toMatch(/\.tbl-tile--full \.tbl-tile__tag \{\s*display: none;/);
-    for (const part of ['chips', 'bet', 'line']) expect(block).toMatch(new RegExp(`\\.tbl-tile--full \\.tbl-tile__${part} \\{\\s*grid-area: ${part};`));
-    // The full tier is never squeezed short enough to need a layout without the cards: those rules are gone.
-    expect(css).not.toMatch(/@container tile \(max-height: 91px\)/);
-    // A stack too long for its row reads short, measured as it lays out (StackCount, fit.tsx): an ellipsis never showed on it, its
-    // box being a flex one, and "100,000 chips" was simply cut on a full tile three across a 360px phone.
-    expect(block).toMatch(/\.tbl-tile--full \.tbl-tile__chips \{\s*grid-area: chips;\s*min-width: 0;\s*overflow: hidden;\s*\}/);
-  });
-
-  it('a wide full tile (one other player on a phone, up to three on a desktop) has its words on the left and its cards on the right, a size up', async () => {
-    const css = readFileSync(join(import.meta.dirname, '../styles/table.css'), 'utf8');
-    const side = css.slice(css.indexOf('@container tile (min-width: 270px) {'));
-    const block = side.slice(0, side.indexOf('\n}\n'));
-    // The avatar and the name on top, the stack, the bet pill and the status on one line under both, the cards beside them all.
-    expect(block).toMatch(/\.tbl-tile--full \{[^}]*grid-template-areas: 'face name tag cards' 'meta meta meta cards';/);
-    // The cards 6px wider than the miniature (a phone's 22px, 28px) and never taller than the tile.
-    expect(block).toMatch(/\.tbl-tile\.tbl-tile--full \.tbl-tile__cards \{\s*--tbl-w: min\(calc\(var\(--tbl-mini-w, 24px\) \+ 6px\), calc\(\(100cqh - 16px\) \/ 1\.62\)\);/);
-    // A full tile may grow to 300px where the row has the room, so a lone one on a phone (and a desktop's row of three) takes it.
-    expect(css).toMatch(/\.tbl-grid--full \{\s*grid-template-columns: repeat\(var\(--cols, 4\), minmax\(0, max\(calc\(var\(--tile-w, 120px\) \* 1\.3\), 300px\)\)\);/);
-    expect(css).toMatch(/\.tbl-grid--arc\.tbl-grid--full \{\s*grid-template-columns: repeat\(calc\(var\(--cols, 4\) \* 2\), minmax\(0, max\(calc\(var\(--tile-w, 120px\) \* 0\.65\), 150px\)\)\);/);
-    // The stack under the avatar starts 2px below the badge on its corner (3px under the avatar).
-    expect(block).toMatch(/\.tbl-tile--full \{[^}]*row-gap: 5px;/);
-    // Before the deal the tile keeps its words: the avatar's row, the 5px under it and the pill's line (54.3px) and its padding
-    // and border (13px).
-    const { BARE_FULL_HEIGHT, tileHeight } = await import('./grid');
-    expect(BARE_FULL_HEIGHT).toBe(68);
-    expect(tileHeight('full', false, true)).toBe(68);
-    expect(tileHeight('full', false, false)).toBe(96);
+    expect(css).toMatch(/\.tbl-grid \{\s*--card-min: 24px;\s*--card-max: 30px;/);
+    expect(css).toMatch(/\.tbl-grid--arc \{\s*--card-min: 32px;\s*--card-max: 40px;/);
+    // Worked out once on the cards' box and inherited as pixels: a registered length, never re-read against a box deeper in.
+    expect(css).toMatch(/--tile-card-w: clamp\(var\(--card-min\), /);
+    expect(css).toMatch(/@property --tile-card-w \{\s*syntax: '<length>';\s*inherits: true;/);
+    expect(css).toMatch(/\.tbl-tile--compact \.tbl-tile__total \{[^}]*font-size: 1\.4em;[^}]*font-weight: 900;/);
+    expect(css).toMatch(/\.tbl-grid--arc \.tbl-tile--full \.tbl-tile__total \{\s*font-size: 1\.75em;/);
+    // A full tile's column never runs past 320px.
+    expect(css).toMatch(/\.tbl-grid--full \{\s*grid-template-columns: repeat\(var\(--cols, 4\), minmax\(0, 320px\)\);/);
   });
 
   it('the line under the ribbon: whose turn it is in its tone, the quieter second part, the clock before it', () => {
@@ -709,23 +581,17 @@ describe('the words on a table read whole', () => {
     const raised = html(createElement(PlayerTile, { ...props, line: { state: 'acted', text: 'Raise to 12,000', tone: 'quiet', short: ['Raise 12k', 'Raise'] } }));
     expect(raised).toContain('<span class="tbl-tile__line tbl-tile__line--quiet" data-testid="seat-line" data-fit="0">Raise to 12,000</span>');
     // The stack writes both figures; the stylesheet picks one by the tile's width, and the measured fit the short one where that is still cut.
-    expect(raised).toContain('data-testid="seat-chips" data-chips="100000" data-long=""><span class="tbl-stackcount__value tbl-figure"><span class="tbl-figure__full">100,000</span><span class="tbl-figure__short">100k</span></span>');
+    expect(raised).toContain('<span class="tbl-tile__chips" data-testid="seat-chips" data-chips="100000">100k</span>');
     // The open button's label (what a screen reader gets) says the line in full, whatever form the tile shows.
     expect(raised).toContain('aria-label="Ravi: Raise to 12,000. Show details" data-testid="seat-open"');
     const plain = html(createElement(PlayerTile, { ...props, line: { state: 'waiting', text: 'Waiting', tone: 'quiet' } }));
-    expect(plain).toContain('<span class="tbl-tile__line tbl-tile__line--quiet" data-testid="seat-line">Waiting</span>');
+    // A word with no shorter form still has one: none, the pill keeping its mark alone where it has no room for the word.
+    expect(plain).toContain('<span class="tbl-tile__line tbl-tile__line--quiet" data-testid="seat-line" data-fit="0">Waiting</span>');
     // A stake by my hand on the stage, and a tile's stack, render as any: in full where it fits, measured as they lay out.
     const F = await import('./fit');
     expect(html(createElement(StakePill, { value: 12_000, start: 100_000, format: 'fit', fit: F.STAGE_FIT }))).toBe(html(createElement(StakePill, { value: 12_000, start: 100_000, format: 'fit' })));
     expect(html(createElement(StackCount, { value: 1_250_000, format: 'fit', fit: F.TILE_FIT }))).toBe(html(createElement(StackCount, { value: 1_250_000, format: 'fit' })));
     expect(F.TILE_FIT.box).toBe(F.tileOf);
-  });
-
-  it('keeps a crushed compact tile’s total inside it', () => {
-    const css = readFileSync(join(import.meta.dirname, '../styles/table.css'), 'utf8');
-    // Ten players on a 375x667 phone leave compact tiles 16px tall: the total's 18px pill shrinks to keep inside the tile.
-    const short = css.slice(css.indexOf('@container tile (max-height: 46px) {\n  .tbl-tile--compact,'));
-    expect(short).toMatch(/^@container tile \(max-height: 46px\) \{[^@]*\.tbl-tile--compact \.tbl-tile__total \.tbl-pill \{\s*height: min\(18px, calc\(100cqh - 2px\)\);/);
   });
 
   it('keeps every card’s corner clear: a hand’s words come down over its cards only as far as their corners begin', () => {
@@ -739,14 +605,6 @@ describe('the words on a table read whole', () => {
     // A hand is its pill's height and 1.67 card widths tall (the fan's 1.77 less that overlap): the games size their rows by it.
     expect(css).toMatch(/:root \{\s*--fan-step: 0\.44;\s*\/\*[^*]*\*\/\s*--hand-k: calc\(1\.77 - var\(--card-index-top\)\);/);
     expect(css).not.toMatch(/--pill-h\) \* 0\.7/);
-    // The badge on a tile's avatar reaches 2px past it, inside the 4px a full tile keeps between the face and the words (6px on a
-    // wide one), so a tick never runs into the stack's first figure (e2e tilesReadable measures it on every tier).
-    expect(css).toMatch(/\.tbl-tile__mark \{\s*position: absolute;\s*right: -2px;\s*bottom: -3px;/);
-    expect(css).toMatch(/\n\.tbl-tile \{[^}]*column-gap: 6px;/);
-    expect(css.slice(css.indexOf('@container tile (max-width: 199px) {\n  .tbl-tile--full {'))).toMatch(/^@container tile \(max-width: 199px\) \{\s*\.tbl-tile--full \{\s*--face: 24px;\s*column-gap: 4px;/);
-    // Where the stack's line runs under the face (a narrow compact tile) the badge keeps to the avatar's height; the small tiles'
-    // dot keeps clear of the name under it.
-    expect(css).toMatch(/\.tbl-tile--compact \.tbl-tile__mark \{\s*bottom: 0;/);
     expect(css).toMatch(/\.tbl-tile--small \.tbl-tile__mark,\s*\.tbl-tile--dense \.tbl-tile__mark \{[^}]*left: -3px;\s*right: auto;\s*bottom: 0;/);
   });
 });
@@ -850,16 +708,6 @@ describe('the stack and the stake', () => {
     expect(css).toMatch(/\.tbl-stake \{\s*\/\*[^*]*\*\/\s*--stake-h: 1\.85em;[^}]*height: var\(--stake-h\);/);
     expect(css).toMatch(/\.tbl-stake__chip \{\s*display: block;\s*flex: none;\s*height: calc\(var\(--stake-h\) - 5px\);\s*width: auto;/);
     expect(css).toMatch(/\.tbl-stake__chip \+ \.tbl-stake__chip \{\s*margin-left: calc\(\(var\(--stake-h\) - 5px\) \* -2 \/ 3\);/);
-    // A compact tile under 100px (ten players on a 390px phone, five to nine on a 320px one) keeps the first chip alone, shows the spare plus and packs the pill tighter, so a chip, the plus and "1.3k" keep inside a 64px tile on its own line.
-    expect(css).toMatch(/\.tbl-stake__more--spare \{\s*display: none;/);
-    const tiny = css.slice(css.indexOf('@container tile (max-width: 99px)'), css.indexOf('@container tile (max-height: 46px) and (max-width: 79px)'));
-    expect(tiny).toMatch(/\.tbl-tile--compact \.tbl-stake__chip \+ \.tbl-stake__chip \{\s*display: none;/);
-    expect(tiny).toMatch(/\.tbl-tile--compact \.tbl-stake__more--spare \{\s*display: inline;/);
-    expect(tiny).toMatch(/\.tbl-tile--compact \.tbl-stake \{\s*gap: 0\.15em;\s*padding: 0 0\.25em 0 0\.2em;/);
-    // There the stack's word gives way to the hand's total on its line ("800" and "18"), never on a Poker tile, whose total badge is hidden there.
-    expect(tiny).toMatch(/\.tbl-tile--compact:not\(\.tbl-tile--short-badge\):has\(> \.tbl-tile__total\) \.tbl-stackcount__word \{\s*display: none;/);
-    // A slimmer total there, so a six-figure stack ("100k") keeps whole beside it in the turn ring of a 66px tile.
-    expect(tiny).toMatch(/\.tbl-tile--compact \.tbl-tile__total \.tbl-pill \{\s*min-width: 18px;\s*padding: 0 2px;/);
     expect(css).toMatch(/\.tbl-hand__head \.tbl-hand__stake \{\s*--stake-h: var\(--pill-h\);/);
     // No rule sets a stake pill's height behind the variable's back.
     for (const file of ['../styles/table.css', '../../games/blackjack/blackjack.css', '../../games/poker/poker.css']) {
@@ -878,49 +726,8 @@ describe('the stack and the stake', () => {
     expect(css).toMatch(/\.tbl-tile \.tbl-chip__spots \{\s*display: none;/);
     // On a tile the ink chip's lime edge is as heavy as the off-white chip's, so it reads at 1x on a dark panel.
     expect(css).toMatch(/\.tbl-tile \.tbl-chip--ink \{\s*--chip-edge-w: 2\.4;/);
-    expect(css).toMatch(/@container tile \(min-width: 200px\) \{\s*\.tbl-tile--full \.tbl-chip__spots \{\s*display: inline;/);
     // A plus in the display face, as big as the figure and as bold, when more chips are owed than drawn.
     expect(css).toMatch(/\.tbl-stake__more \{[^}]*font-family: var\(--font-display\);\s*font-size: 1em;\s*font-weight: 800;[^}]*color: var\(--color-warning-text\);/);
-    // A compact tile, at every width, shortens the figure beside two chips and a five-digit stack, so the stack and the bet keep to one line.
-    // The narrow compact layout (the stack and the pill across the tile's whole width, under the name) reaches 199px: beside the avatar, "9,010 chips" and two chips with a plus and "990" overran a desktop tile up to 184px wide.
-    const narrowStart = css.search(/@container tile \(max-width: 199px\) \{\s*\.tbl-tile--compact \{/);
-    expect(narrowStart).toBeGreaterThan(0);
-    expect(css.slice(narrowStart)).toMatch(/^@container tile \(max-width: 199px\) \{\s*\.tbl-tile--compact \{[^}]*grid-template-areas: 'face name total' 'meta meta meta';/);
-    expect(css).not.toMatch(/@container tile \(max-width: 155px\)/);
-    const compact = css.slice(css.indexOf('.tbl-tile--compact {'), narrowStart);
-    expect(compact).toMatch(/\n\.tbl-tile--compact \.tbl-tile__bet \.tbl-stake--wide \.tbl-figure__full,\s*\.tbl-tile--compact \.tbl-tile__chips\[data-long\] \.tbl-figure__full \{\s*display: none;/);
-    expect(compact).toMatch(/\n\.tbl-tile--compact \.tbl-tile__bet \.tbl-stake--wide \.tbl-figure__short,\s*\.tbl-tile--compact \.tbl-tile__chips\[data-long\] \.tbl-figure__short \{\s*display: inline;/);
-    // The stacked layout (a short narrow tile) now reaches 149px, so a 390px phone's three-across tiles and a desktop's 128px to 145px compact tiles use it.
-    // The bet pill has its line to itself and the total sits by the stack: side by side, the pill ran under the total on a 66px phone tile and lost its figure.
-    const stacked = css.slice(css.indexOf('@container tile (max-width: 149px) and (max-height: 70px) {'), css.indexOf('@container tile (max-height: 46px) {'));
-    expect(stacked).toMatch(/^@container tile \(max-width: 149px\) and \(max-height: 70px\) \{\s*\.tbl-tile--compact \{[^}]*grid-template-areas: 'face name name' 'chips chips total' 'bet bet bet';/);
-    expect(css).not.toContain("'bet bet total'");
-    // The total no taller than the stack's line, so the three lines take no more height than before; the stacked layout forces no short figure of its own (the compact rules above shorten a wide or four-digit pill).
-    expect(stacked).toMatch(/\.tbl-tile--compact \.tbl-tile__total \.tbl-pill \{\s*height: 13px;/);
-    // With no total on its line (the bets going down) the stack takes the whole line, total's column and all: "150k chips" lost 4px to the
-    // empty column on a 66px tile and ended in an ellipsis.
-    expect(stacked).toMatch(/\.tbl-tile--compact:not\(:has\(> \.tbl-tile__total\)\) \.tbl-tile__chips \{\s*grid-column: 1 \/ -1;\s*\}/);
-    expect(stacked).not.toContain('.tbl-tile__bet .tbl-figure__full');
-    expect(css).not.toMatch(/@container tile \(max-width: 139px\) and \(max-height: 70px\)/);
-    expect(css).not.toMatch(/@container tile \(max-width: 112px\) and \(max-height: 70px\)/);
-    expect(css).not.toMatch(/@container tile \(max-width: 124px\) and \(max-height: 70px\)/);
-    // Under 200px a four-digit stake reads short too, so the stack and the pill keep to one line inside the turn ring.
-    const narrow = css.slice(narrowStart, css.indexOf('@container tile (max-width: 112px)', narrowStart));
-    expect(narrow).toMatch(/\.tbl-tile--compact \.tbl-tile__bet \.tbl-stake\[data-long\] \.tbl-figure__full \{\s*display: none;/);
-    expect(narrow).toMatch(/\.tbl-tile--compact \.tbl-tile__bet \.tbl-stake\[data-long\] \.tbl-figure__short \{\s*display: inline;/);
-    // A narrow full tile shares the pill's row with the seat line: two chips and a short four-digit figure under 140px, one chip under 113px, the spare plus only when a drawn chip is hidden.
-    const narrowFull = css.slice(css.indexOf('@container tile (max-width: 139px) {'), css.indexOf('/* Compact (5 to 9)'));
-    expect(narrowFull).toMatch(/\.tbl-tile--full \.tbl-stake \{\s*gap: 0\.2em;\s*padding: 0 0\.3em 0 0\.25em;/);
-    expect(narrowFull).toMatch(/\.tbl-tile--full \.tbl-stake__chip:nth-child\(n \+ 3\) \{\s*display: none;/);
-    expect(narrowFull).toMatch(/\.tbl-tile--full \.tbl-stake__chips\[data-count='3'\] \+ \.tbl-stake__more--spare \{\s*display: inline;/);
-    expect(narrowFull).toMatch(/\.tbl-tile--full \.tbl-tile__bet \.tbl-stake\[data-long\] \.tbl-figure__short \{\s*display: inline;/);
-    expect(narrowFull).toMatch(/@container tile \(max-width: 112px\) \{\s*\.tbl-tile--full \.tbl-stake__chip \+ \.tbl-stake__chip \{\s*display: none;\s*\}\s*\.tbl-tile--full \.tbl-stake__chips\[data-count='2'\] \+ \.tbl-stake__more--spare \{\s*display: inline;/);
-    // A full tile 200px to 239px wide keeps the stack and the pill on one line: a wide pill (two chips, or a plus) reads a four-digit figure short
-    // there, as three chips, a plus and "12,000" beside "88,000 chips" once dropped the pill to a line of its own and laid the name over the stack.
-    // It keeps its three chips (a spare plus in place of the third would be no narrower), and a pill of one chip keeps its figure in full.
-    const midFull = css.slice(css.indexOf('@container tile (min-width: 200px) and (max-width: 239px) {'));
-    const midBlock = midFull.slice(0, midFull.indexOf('\n}'));
-    expect(midBlock).toMatch(/^@container tile \(min-width: 200px\) and \(max-width: 239px\) \{\s*\.tbl-tile--full \.tbl-tile__bet \.tbl-stake--wide\[data-long\] \.tbl-figure__full \{\s*display: none;\s*\}\s*\.tbl-tile--full \.tbl-tile__bet \.tbl-stake--wide\[data-long\] \.tbl-figure__short \{\s*display: inline;\s*\}\s*$/);
   });
 });
 

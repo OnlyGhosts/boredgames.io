@@ -1,6 +1,6 @@
 import type { BlackjackRoomState, BlackjackView } from '@shared/games/blackjack/protocol';
 import type { Tone } from '../../../platform/table/Outcome';
-import { PlayerTile, PlayersGrid, SeatSheet, tileChips, tileFigures, type SeatLine, type SeatMark } from '../../../platform/table/PlayersGrid';
+import { PlayerTile, PlayersGrid, SeatSheet, type SeatLine, type SeatMark } from '../../../platform/table/PlayersGrid';
 import { StackCount, StakePill } from '../../../platform/table/Stakes';
 import { shortChips } from '../../../platform/lib/format';
 import { playerOf } from '../hooks';
@@ -186,7 +186,8 @@ export function Seats({ room, view, ids, staged, table, timeline, now, leaving, 
                   mark={seatMark(line, hands, settledShown)}
                   outcome={settledShown ? seatOutcome(hands) : null}
                   chips={chipsOf(id)}
-                  bet={stake > 0 ? <StakePill value={stake} start={room.settings.startingChips} chips={tileChips(tier)} format={tileFigures(tier)} testId="seat-bet" /> : undefined}
+                  bet={stake > 0 ? stake : undefined}
+                  start={room.settings.startingChips}
                   total={tileTotal(id, hands, timeline, now, turn, view.turn?.handIndex ?? 0, oneTotal || hands.length > 2)}
                   dimmed={seat.bustedOut}
                   onOpen={() => openSeat(id)}

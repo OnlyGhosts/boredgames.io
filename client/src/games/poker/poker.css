@@ -223,16 +223,9 @@
   min-height: 14px;
 }
 
-/* ---------- The other seats: the hole cards on a full tile overlap a little ---------- */
+/* ---------- The other seats: the hole cards fan like a hand, the rank and suit of the first left in view ---------- */
 .pk .tbl-tile__cards > .tbl-card + .tbl-card {
-  margin-left: calc(var(--tbl-w) * -0.3);
-}
-
-/* A narrow phone tile's cards beside the words (table.css): a Blackjack hand's step, the rank and suit of the first left in view, so two take 1.44 card widths. */
-@container tile (max-width: 199px) and (min-height: 80px) {
-  .pk .tbl-grid:not(.tbl-grid--arc) .tbl-tile__cards > .tbl-card + .tbl-card {
-    margin-left: calc(var(--tbl-w) * (var(--fan-step) - 1));
-  }
+  margin-left: calc(var(--tbl-w) * (var(--fan-step) - 1));
 }
 
 /* The payout rises inside the tile (the grid clips anything that sticks out), on its right edge. */
@@ -246,23 +239,6 @@
   background: var(--color-surface-2);
   font-size: 0.9rem;
   animation-name: pk-seat-rise;
-}
-
-/* A narrow tile has no room beside "1,100 chips": the payout rises at the top right instead, clear of the stack. */
-@container tile (max-width: 160px) {
-  .pk .tbl-tile .tbl-payout {
-    top: 3px;
-    bottom: auto;
-  }
-}
-
-/* A wide full tile has its cards on the right (table.css): the payout rises at the bottom left instead, under the stack, clear of the cards. */
-@container tile (min-width: 270px) {
-  .pk .tbl-tile--full .tbl-payout {
-    left: 6px;
-    right: auto;
-    bottom: 2px;
-  }
 }
 
 @keyframes pk-seat-rise {

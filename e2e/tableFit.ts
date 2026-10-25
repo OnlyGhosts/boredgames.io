@@ -24,7 +24,8 @@ export async function tilesReadable(page: Page, label: string, minHeight = 0): P
         const t = tile.getBoundingClientRect();
         if (t.height < min) short++;
         const shown: { where: string; r: DOMRect }[] = [];
-        for (const part of Array.from(tile.querySelectorAll<HTMLElement>('.tbl-tile__name-text, [data-testid="seat-dealer"], [data-testid="seat-total"], [data-testid="seat-chips"], .tbl-tile__bet .tbl-stake, [data-testid="seat-line"]'))) {
+        // The status pill (the line inside it) is read as one; on a crowd tile, the line alone.
+        for (const part of Array.from(tile.querySelectorAll<HTMLElement>('.tbl-tile__name-text, [data-testid="seat-dealer"], [data-testid="seat-total"], [data-testid="seat-chips"], [data-testid="seat-bet"], [data-testid="seat-pill"], [data-testid="seat-line"]:not([data-testid="seat-pill"] *)'))) {
           const r = part.getBoundingClientRect();
           // Hidden by the tile's tier (display: none on it or its box) or empty: nothing to read.
           if (r.width === 0 || r.height === 0) continue;
@@ -33,6 +34,9 @@ export async function tilesReadable(page: Page, label: string, minHeight = 0): P
           else if (!part.matches('.tbl-tile__name-text') && part.scrollWidth > part.clientWidth + 1) truncated.push(where);
           shown.push({ where, r });
         }
+        // The line inside the pill: in full, never cut.
+        const inPill = tile.querySelector<HTMLElement>('[data-testid="seat-pill"] [data-testid="seat-line"]');
+        if (inPill && inPill.scrollWidth > inPill.clientWidth + 1) truncated.push(`${(tile as HTMLElement).dataset.name}: seat-line "${inPill.textContent}"`);
         // No two of them on top of each other: a half-pixel touch is allowed, any real overlap is not.
         const meet = (a: DOMRect | { left: number; right: number; top: number; bottom: number }, b: DOMRect) => Math.min(a.right, b.right) - Math.max(a.left, b.left) > 0.5 && Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 0.5;
         for (let i = 0; i < shown.length; i++) {
@@ -106,9 +110,9 @@ export async function myAreaOnScreen(page: Page, testId: string, label: string):
 }
 
 /**
- * Every seat shows its stack (in words; on a compact tile under 100px wide, its figure beside the
- * hand's total), and every seat with a stake its bet pill: on screen, a real size and wholly inside
- * its tile (a six-seat table on a 320x568 phone once hid both).
+ * Every seat's stack and bet, where the tile shows them, are a real size and wholly inside it, and
+ * a tile short of room drops them in a fixed order: the stack first, then the bet. A tile that
+ * shows the bet of a seat with a stake, or has dropped it, never shows the stack without it.
  */
 export async function stakesShown(page: Page, label: string): Promise<void> {
   const read = () =>
@@ -121,12 +125,48 @@ export async function stakesShown(page: Page, label: string): Promise<void> {
           const r = el.getBoundingClientRect();
           return r.width > 4 && r.height > 4 && r.left >= t.left - 1 && r.right <= t.right + 1 && r.top >= t.top - 1 && r.bottom <= t.bottom + 1;
         };
-        if (!shown(tile.querySelector('[data-testid="seat-chips"]'))) missing.push(`${tile.dataset.name}: chips`);
+        const visible = (el: Element | null) => el !== null && el.getBoundingClientRect().width > 0;
+        const chips = tile.querySelector('[data-testid="seat-chips"]');
         const stake = tile.querySelector('[data-testid="seat-bet"]');
         const bet = Number(stake?.getAttribute('data-bet') ?? 0);
-        if (bet > 0 && !shown(stake?.matches('.tbl-stake') ? stake : (stake?.querySelector('.tbl-stake') ?? null))) missing.push(`${tile.dataset.name}: bet`);
+        if (visible(chips) && !shown(chips)) missing.push(`${tile.dataset.name}: chips cut`);
+        if (bet > 0 && visible(stake) && !shown(stake)) missing.push(`${tile.dataset.name}: bet cut`);
+        if (bet > 0 && visible(chips) && !visible(stake)) missing.push(`${tile.dataset.name}: the bet dropped before the stack`);
       }
       return missing;
     });
   await expect.poll(read, { message: `${label}: every seat’s stack and bet on show` }).toEqual([]);
+}
+
+/**
+ * The floors a seat tile keeps: every card on a full tile at least `card` px wide (24 on a phone,
+ * 32 on a desktop; under it the tile shows the total alone), the big total at least 22px, and the
+ * status pill wholly inside the tile's header row.
+ */
+export async function seatFloors(page: Page, label: string, card: number): Promise<void> {
+  const read = () =>
+    page.evaluate((floor) => {
+      const bad: string[] = [];
+      for (const tile of Array.from(document.querySelectorAll<HTMLElement>('.tbl-tile--full[data-testid="seat"], .tbl-tile--compact[data-testid="seat"]'))) {
+        const name = tile.dataset.name;
+        for (const c of Array.from(tile.querySelectorAll('.tbl-tile__cards .playing-card'))) {
+          const w = c.getBoundingClientRect().width;
+          if (w > 0 && w < floor - 0.5) bad.push(`${name}: a ${w.toFixed(1)}px card`);
+        }
+        const total = tile.querySelector<HTMLElement>('[data-testid="seat-total"]');
+        if (total && total.getBoundingClientRect().width > 0 && !total.hasAttribute('data-long')) {
+          const size = parseFloat(getComputedStyle(total).fontSize);
+          if (size < 22) bad.push(`${name}: a ${size}px total`);
+        }
+        const pill = tile.querySelector('[data-testid="seat-pill"]')?.getBoundingClientRect();
+        const head = tile.querySelector('.tbl-tile__head')?.getBoundingClientRect();
+        const t = tile.getBoundingClientRect();
+        if (pill && pill.width > 0) {
+          if (pill.left < t.left - 0.5 || pill.right > t.right + 0.5 || pill.top < t.top - 0.5 || pill.bottom > t.bottom + 0.5) bad.push(`${name}: the pill off the tile`);
+          if (tile.classList.contains('tbl-tile--full') && head && (pill.top < head.top - 0.5 || pill.bottom > head.bottom + 0.5)) bad.push(`${name}: the pill off the header`);
+        }
+      }
+      return bad;
+    }, card);
+  await expect.poll(read, { message: `${label}: every card at ${card}px or more, every total 22px or more, the pill in the header` }).toEqual([]);
 }

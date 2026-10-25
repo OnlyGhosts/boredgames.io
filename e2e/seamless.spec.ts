@@ -281,7 +281,7 @@ test.describe('a phone that went quiet', () => {
       await expect(phone.page.getByTestId('table-turn').locator('.tbl-turn__text')).toHaveText('Bo is away', { timeout: 130_000 });
       await expect(seat).toHaveAttribute('data-state', 'away');
       await expect(seat.getByTestId('seat-line')).toHaveText('Away');
-      await expect(seat.getByTestId('seat-playing')).toHaveText('Away');
+      await expect(seat).toHaveAttribute('data-turn', 'true');
       // Nothing was played for it in all that time.
       await expect(host.page.getByTestId('blackjack-screen')).toHaveAttribute('data-turn-player', quiet.id);
       await phone.page.getByTestId('skip-turn').click();

@@ -1,4 +1,4 @@
-import { Children, isValidElement, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
+import { Children, createContext, isValidElement, useContext, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
 import type { Avatar as AvatarData } from '@shared/platform/avatar';
 import { Avatar } from '../components/Avatar';
 import { BottomSheet } from '../components/BottomSheet';
@@ -7,16 +7,18 @@ import { CheckIcon, CloseIcon, SparkIcon } from '../components/Icons';
 import { CardsIcon, OutIcon, StarIcon } from './Icons';
 import { TotalPill, type Tone } from './Outcome';
 import { FitText, TILE_FIT } from './fit';
-import { StackCount } from './Stakes';
+import { StackCount, StakePill } from './Stakes';
 import type { StakeFormat } from './stakes';
-import { ARC_LIFT, GRID_GAP, arcLift, fitGrid, fitsRoom, naturalHeight, shapeOf, tierFor, tileHeight, type Room, type TileTier } from './grid';
+import { GRID_GAP, TILE_MAX_WIDTH, cardsFit, fitGrid, fitsRoom, naturalHeight, shapeOf, tierFor, tileHeight, type Room, type TileTier } from './grid';
+import { chipFigure } from './stakes';
+import { shortChips } from '../lib/format';
 import { roomLeft } from './room';
 
 interface GridProps {
   /** How many tiles there are (the columns go by it, and the tier by the room they have). */
   count: number;
   label: string;
-  /** Desktop: wider tiles, set along a gentle arc. */
+  /** Desktop: wider tiles, a short last row centred under the others. */
   wide?: boolean;
   /** No seat has cards yet (before the deal): a full tile keeps to its top rows. */
   bare?: boolean;
@@ -67,11 +69,13 @@ function useMeasured(): [RefObject<HTMLUListElement | null>, Measured | null] {
   return [ref, measured];
 }
 
+/** The grid's tiles' width once measured (null before), and whether it is a desktop's: a full tile's cards keep their floor by it (grid.ts cardsFit). */
+const TileRoom = createContext<{ width: number | null; wide: boolean }>({ width: null, wide: false });
+
 /**
  * Every other seated player as a tile, in seat order (left to right, top to bottom, the order of
  * play). The grid never scrolls: it takes the space it is given, and the tiles step down in size
- * and detail as the table grows and the room shrinks (grid.ts). On a desktop the rows bow into a
- * gentle arc.
+ * and detail as the table grows and the room shrinks (grid.ts). A desktop row is flat.
  */
 export function PlayersGrid({ count, label, wide = false, bare = false, children }: GridProps) {
   const [ref, measured] = useMeasured();
@@ -86,8 +90,10 @@ export function PlayersGrid({ count, label, wide = false, bare = false, children
   // The height the grid asks for: what its tiles need at their natural size in this width, within the room where the tier fits it.
   const wanted = measured ? naturalHeight(count, measured.box.width, { wide, tier, bare }) : 0;
   const natural = measured ? `${fitsRoom(count, measured.room, { wide, tier }) ? Math.min(wanted, measured.room.height) : wanted}px` : undefined;
-  const style = { '--cols': cols, '--rows': rows, '--tile-w': `${shape.width}px`, '--tile-h': `${tileHeight(tier, wide, bare)}px`, '--grid-gap': `${GRID_GAP[tier]}px`, '--arc': `${ARC_LIFT[tier]}px`, '--grid-natural': natural } as CSSProperties;
+  const style = { '--cols': cols, '--rows': rows, '--tile-w': `${shape.width}px`, '--tile-h': `${tileHeight(tier, wide, bare)}px`, '--grid-gap': `${GRID_GAP[tier]}px`, '--grid-natural': natural } as CSSProperties;
+  const tileWidth = measured ? Math.min(TILE_MAX_WIDTH, (measured.box.width - (cols - 1) * GRID_GAP[tier]) / cols) : null;
   return (
+    <TileRoom.Provider value={{ width: tileWidth, wide }}>
     <ul ref={ref} className={`tbl-grid tbl-grid--${tier}${wide ? ' tbl-grid--arc' : ''}`} style={style} aria-label={label} data-testid="seats" data-tier={tier} data-cols={cols} data-count={count}>
       {Children.toArray(children(tier)).map((child, i) => (
         <li key={isValidElement(child) && child.key !== null ? child.key : i} className="tbl-grid__cell" style={wide ? arcCell(i, cols, count) : undefined}>
@@ -95,20 +101,20 @@ export function PlayersGrid({ count, label, wide = false, bare = false, children
         </li>
       ))}
     </ul>
+    </TileRoom.Provider>
   );
 }
 
-/**
- * A desktop tile's place on the arc: its lift, and on a short last row the half-column it starts
- * at, so that row sits centred under the others (the arc grid has two tracks a column).
- */
-function arcCell(i: number, cols: number, count: number): CSSProperties {
+/** A desktop tile on a short last row: the half-column it starts at, so that row sits centred under the others (the grid has two tracks a column). */
+function arcCell(i: number, cols: number, count: number): CSSProperties | undefined {
   const row = Math.floor(i / cols);
   const inRow = Math.min(cols, count - row * cols);
-  const col = i % cols;
-  const style: Record<string, string | number> = { '--lift': arcLift(col, inRow) };
-  if (col === 0 && inRow < cols) style.gridColumnStart = cols - inRow + 1;
-  return style as CSSProperties;
+  return i % cols === 0 && inRow < cols ? { gridColumnStart: cols - inRow + 1 } : undefined;
+}
+
+/** A figure on a tile's footer: whole under 10,000 ("1,040"), short above ("50k", "1.3M"). */
+export function tileFigure(n: number): string {
+  return n < 10_000 ? chipFigure(n, 'full') : shortChips(n);
 }
 
 /** How a seat's status line reads: the turn in the accent, a settled result strong, out in red, the rest quiet. */
@@ -179,8 +185,12 @@ interface TileProps {
   outcome?: SeatOutcome | null;
   /** The stack, in words ("1,000 chips"; "1.2k chips" where a tile is too small for the full figure, or its row too narrow for it whole, or too short for it beside the bet; the figure alone beside the total on a compact tile under 100px). */
   chips?: number;
-  /** The stake in front of the seat, as its own pill of chips (StakePill, with tileChips for the tier). */
-  bet?: ReactNode;
+  /** The stake in front of the seat: "bet 50k" on a tile's footer, a pill of chips on the crowd tiers. Unset: no bet line. */
+  bet?: number;
+  /** The starting stack, for the chips of a crowd tier's stake pill. */
+  start?: number;
+  /** On the bet's box (Poker's anchor for the chips flying to it). */
+  betData?: DataAttrs;
   /** The total, shown wherever the cards are not; `short` stands in for it where it shares the stack's line (table.css: Blackjack's two split hands, "21/15", read as the hand in play, "15"). */
   total?: { text: string; tone: Tone; short?: string } | null;
   /** Folded, out, not dealt in: dimmed. */
@@ -226,8 +236,89 @@ export function tileChips(tier: TileTier): number {
 }
 
 /** One player in the grid; how much it shows depends on the tier (table.css lays each tier out). */
-export function PlayerTile({ playerId, name, avatar, connected, tier, turn, turnNote, line, mark, outcome = null, chips, bet, total, dimmed = false, badge, tag, cards, fan, extra, onOpen, shortBadge = false, data }: TileProps) {
-  const fanStyle = fan ? ({ '--tile-fan': Math.max(2, fan.cards), '--tile-hands': Math.max(1, fan.hands) } as CSSProperties) : undefined;
+export function PlayerTile(props: TileProps) {
+  return props.tier === 'full' || props.tier === 'compact' ? <SeatTile {...props} /> : <CrowdTile {...props} />;
+}
+
+/**
+ * A full or compact tile, cards first (table.css): a header (avatar, name, the status pill with
+ * its mark), the hand as a fan with the big total beside it (the total alone on a compact tile or
+ * where the fan would go under its floor), a footer (the stack, the bet). The ring says whose turn.
+ */
+function SeatTile({ playerId, name, avatar, connected, tier, turn, line, mark, outcome = null, chips, bet, betData, total, dimmed = false, badge, cards, fan, extra, onOpen, shortBadge = false, data }: TileProps) {
+  const room = useContext(TileRoom);
+  const fanCards = fan?.cards ?? 2;
+  const showCards = tier === 'full' && cards !== undefined && cardsFit(room.width, fanCards, room.wide);
+  const fanStyle = { '--tile-fan': Math.max(2, fanCards), '--tile-hands': Math.max(1, fan?.hands ?? 1) } as CSSProperties;
+  // Poker's total only stood in for the stack, which the footer shows: no total there.
+  const hero = shortBadge ? null : total;
+  return (
+    <div
+      className={`tbl-tile tbl-tile--${tier}${turn ? ' tbl-tile--turn' : ''}${dimmed ? ' tbl-tile--dim' : ''}${outcome ? ` tbl-tile--${outcome}` : ''}`}
+      data-testid="seat"
+      data-player-id={playerId}
+      data-name={name}
+      data-state={line.state}
+      data-mark={mark}
+      data-result={outcome ?? undefined}
+      data-turn={turn}
+      aria-current={turn ? 'true' : undefined}
+      {...data}
+    >
+      <span className="tbl-tile__head">
+        <span className="tbl-tile__face" data-table-anchor={`seat:${playerId}`}>
+          <Avatar avatar={avatar} size="sm" dimmed={!connected} />
+        </span>
+        <span className="tbl-tile__name">
+          <span className="tbl-tile__name-text">{name}</span>
+          {badge}
+        </span>
+        {(line.text || mark === 'bet') && (
+          <span className={`tbl-tile__pill tbl-tile__pill--${line.tone} tbl-tile__pill--${mark}`} data-testid="seat-pill">
+            <span className="tbl-tile__pill-mark" aria-hidden="true">
+              <MarkIcon mark={mark} />
+            </span>
+            {/* Its last form is none: a pill with no room for even the shortest word keeps its mark alone (table.css). */}
+            {line.text && <FitText forms={[line.text, ...(line.short ?? []).filter(Boolean), '']} className={`tbl-tile__line tbl-tile__line--${line.tone}`} testId="seat-line" />}
+          </span>
+        )}
+      </span>
+      {(showCards || hero) && (
+        <span className="tbl-tile__hero">
+          {showCards && (
+            <span className="tbl-tile__cards" style={fanStyle}>
+              {cards}
+            </span>
+          )}
+          {hero && (
+            <span className="tbl-tile__total" data-testid="seat-total" data-tone={hero.tone} data-long={hero.text.length > 3 ? '' : undefined}>
+              {hero.text}
+            </span>
+          )}
+        </span>
+      )}
+      {(chips !== undefined || bet !== undefined) && (
+        <span className="tbl-tile__foot">
+          {chips !== undefined && (
+            <span className="tbl-tile__chips" data-testid="seat-chips" data-chips={chips}>
+              {tileFigure(chips)}
+            </span>
+          )}
+          {bet !== undefined && (
+            <span className="tbl-tile__bet" data-testid="seat-bet" data-bet={bet} {...betData}>
+              {bet > 0 ? `bet ${tileFigure(bet)}` : ''}
+            </span>
+          )}
+        </span>
+      )}
+      {extra}
+      {onOpen && <button type="button" className="tbl-tile__open" onClick={onOpen} aria-label={`${name}: ${line.text || 'seat'}. Show details`} data-testid="seat-open" />}
+    </div>
+  );
+}
+
+/** A crowd's tile (small, dense): the avatar with its status dot, the total, the name shortened. */
+function CrowdTile({ playerId, name, avatar, connected, tier, turn, turnNote, line, mark, outcome = null, chips, bet, start = 0, betData, total, dimmed = false, badge, tag, extra, onOpen, shortBadge = false, data }: TileProps) {
   return (
     <div
       className={`tbl-tile tbl-tile--${tier}${turn ? ' tbl-tile--turn' : ''}${dimmed ? ' tbl-tile--dim' : ''}${outcome ? ` tbl-tile--${outcome}` : ''}${shortBadge ? ' tbl-tile--short-badge' : ''}`}
@@ -254,7 +345,11 @@ export function PlayerTile({ playerId, name, avatar, connected, tier, turn, turn
       <span className="tbl-tile__meta">
         <span className="tbl-tile__money">
           {chips !== undefined && <StackCount value={chips} format={tileFigures(tier)} className="tbl-tile__chips" testId="seat-chips" fit={TILE_FIT} />}
-          {bet !== undefined && <span className="tbl-tile__bet">{bet}</span>}
+          {bet !== undefined && (
+            <span className="tbl-tile__bet" data-testid="seat-bet" data-bet={bet} {...betData}>
+              {bet > 0 && <StakePill value={bet} start={start} chips={tileChips(tier)} format={tileFigures(tier)} />}
+            </span>
+          )}
         </span>
         <FitText forms={[line.text, ...(line.short ?? [])]} className={`tbl-tile__line tbl-tile__line--${line.tone}`} testId="seat-line" />
       </span>
@@ -263,11 +358,6 @@ export function PlayerTile({ playerId, name, avatar, connected, tier, turn, turn
           <TotalPill tone={total.tone} testId="seat-total" short={total.short}>
             {total.text}
           </TotalPill>
-        </span>
-      )}
-      {tier === 'full' && cards && (
-        <span className="tbl-tile__cards" style={fanStyle}>
-          {cards}
         </span>
       )}
       {turn ? (

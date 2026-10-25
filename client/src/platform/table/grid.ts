@@ -5,8 +5,9 @@
  */
 
 /**
- * - `full`: avatar, name, the stack and the bet, the cards in miniature and the total.
- * - `compact`: avatar, name, total, the stack and the bet, and a status icon; no cards.
+ * - `full`: the cards-first tile. A header (avatar, name, status pill), the hand as a fan of
+ *   readable cards with a big total beside it, and a footer (the stack, the bet).
+ * - `compact`: the same skeleton with the total alone where the cards were.
  * - `small`: avatar with a status dot, total, the name shortened; the stack and the bet too where
  *   the tile is tall enough (a desktop).
  * - `dense`: an avatar chip with a total badge and a status dot.
@@ -16,9 +17,9 @@ export type TileTier = 'full' | 'compact' | 'small' | 'dense';
 /** Richest first. */
 export const TIERS: readonly TileTier[] = ['full', 'compact', 'small', 'dense'];
 
-/** The tier a table of `count` others usually takes: full to 4, compact to 9, small to 23, dense beyond (the room decides, tierFor). */
+/** The tier a table of `count` others usually takes: full to 7, compact to 9, small to 23, dense beyond (the room decides, tierFor). */
 export function tileTier(count: number): TileTier {
-  if (count <= 4) return 'full';
+  if (count <= 7) return 'full';
   if (count <= 9) return 'compact';
   if (count <= 23) return 'small';
   return 'dense';
@@ -44,31 +45,51 @@ export interface TierShape {
 }
 
 /**
- * A phone's tiles. A full tile writes the stack in words beside the face ("12,500 chips"), which
- * needs 103px in the thick ring of the seat on turn ("1,250 chips" 96px): so never under 104px,
- * three across a 360px phone (105px), two across a 320px one (three there were 93px, and cut the
- * stack to "1,250 chip").
+ * A phone's tiles: never under 140px wide, so two across every phone (the header's name and
+ * status pill side by side, the fan at its 24px floor beside the total). A full tile's least
+ * height drops its footer (the stack and the bet), tightens its padding and keeps the cards at
+ * their floor (table.css: 70px).
  */
 export const TIER_SHAPES: Record<TileTier, TierShape> = {
-  full: { width: 168, height: 96, minHeight: 94, cols: [1, 4], maxCols: 4, minWidth: 104 },
-  compact: { width: 116, height: 68, minHeight: 52, cols: [3, 5], maxCols: 5, minWidth: 64 },
+  full: { width: 140, height: 104, minHeight: 70, cols: [1, 4], maxCols: 4, minWidth: 140 },
+  compact: { width: 150, height: 68, minHeight: 52, cols: [2, 3], maxCols: 3, minWidth: 88 },
   small: { width: 70, height: 50, minHeight: 36, cols: [4, 6], maxCols: 10, minWidth: 44 },
   dense: { width: 46, height: 30, minHeight: 26, cols: [6, 8], maxCols: 14, minWidth: 24 },
 };
 
-/** A desktop table is wider than a phone: the tiles may be too, and a row of full tiles may run to eight. */
+/** A desktop's: up to five across a row (capped at 320px wide, table.css), the cards 32px to 40px. */
 export const WIDE_TIER_SHAPES: Record<TileTier, TierShape> = {
-  full: { width: 210, height: 122, minHeight: 90, cols: [1, 4], maxCols: 8, minWidth: 120 },
-  compact: { width: 140, height: 60, minHeight: 54, cols: [3, 5], maxCols: 9, minWidth: 110 },
+  full: { width: 200, height: 126, minHeight: 100, cols: [1, 5], maxCols: 5, minWidth: 150 },
+  compact: { width: 150, height: 84, minHeight: 56, cols: [3, 5], maxCols: 9, minWidth: 110 },
   small: { width: 84, height: 84, minHeight: 40, cols: [4, 8], maxCols: 9, minWidth: 64 },
   dense: { width: 52, height: 34, minHeight: 28, cols: [6, 10], maxCols: 12, minWidth: 48 },
 };
 
 /** The gap between tiles, in px (table.css reads it from the grid). */
-export const GRID_GAP: Record<TileTier, number> = { full: 6, compact: 6, small: 4, dense: 4 };
+export const GRID_GAP: Record<TileTier, number> = { full: 5, compact: 6, small: 4, dense: 4 };
 
-/** How far the ends of a desktop row lift: a gentle arc for a few big tiles, barely a curve for many small ones (it costs height). */
-export const ARC_LIFT: Record<TileTier, number> = { full: 16, compact: 16, small: 8, dense: 4 };
+/** The narrowest a seat's card is drawn: under it the tile shows the total alone (cardsFit). */
+export const CARD_FLOOR = { phone: 24, wide: 32 } as const;
+
+/** How far each card of a fan steps right, in card widths (table.css --fan-step). */
+const FAN_STEP = 0.44;
+
+/** What a full tile's hero row keeps beside its fan: the padding, the border, the gap and the big total. */
+const HERO_SIDE = { phone: 72, wide: 88 } as const;
+
+/**
+ * Whether a fan of `cards` fits a full tile `width` px wide at the card floor beside the total.
+ * Unmeasured (null): yes. Never a fan cut at the tile's edge: below the floor, the total alone.
+ */
+export function cardsFit(width: number | null, cards: number, wide: boolean): boolean {
+  if (width === null) return true;
+  const floor = wide ? CARD_FLOOR.wide : CARD_FLOOR.phone;
+  const fan = floor * (1 + FAN_STEP * (Math.max(2, cards) - 1));
+  return width - (wide ? HERO_SIDE.wide : HERO_SIDE.phone) >= fan;
+}
+
+/** The widest a tile is drawn (table.css caps its column at the same). */
+export const TILE_MAX_WIDTH = 320;
 
 export interface GridOptions {
   wide?: boolean;
@@ -80,24 +101,26 @@ export interface GridOptions {
  * tall empty boxes. The avatar's row, the 5px under it (clear of the avatar's badge) and the stake
  * pill's line (a wide tile's side layout, table.css) take 54.3px, the tile's padding and border 13px.
  */
-export const BARE_FULL_HEIGHT = 68;
+export const BARE_FULL_HEIGHT = 58;
+export const WIDE_BARE_FULL_HEIGHT = 72;
 
 /** The height a tile takes: its tier's, or a full tile's bare height while no seat has cards. */
 export function tileHeight(tier: TileTier, wide: boolean, bare: boolean): number {
-  return bare && tier === 'full' ? BARE_FULL_HEIGHT : shapeOf(tier, wide).height;
+  if (bare && tier === 'full') return wide ? WIDE_BARE_FULL_HEIGHT : BARE_FULL_HEIGHT;
+  return shapeOf(tier, wide).height;
 }
 
 export function shapeOf(tier: TileTier, wide: boolean): TierShape {
   return (wide ? WIDE_TIER_SHAPES : TIER_SHAPES)[tier];
 }
 
-/** The gap between a desktop's rows includes the arc's lift, and the grid pads for the lifted ends. */
-export function rowGapOf(tier: TileTier, wide: boolean): number {
-  return GRID_GAP[tier] + (wide ? ARC_LIFT[tier] : 0);
+/** The gap between rows: the tiles' own gap (a desktop row is flat, no arc). */
+export function rowGapOf(tier: TileTier, _wide: boolean): number {
+  return GRID_GAP[tier];
 }
 
-export function paddingOf(tier: TileTier, wide: boolean): number {
-  return wide ? ARC_LIFT[tier] + 2 : 0;
+export function paddingOf(_tier: TileTier, _wide: boolean): number {
+  return 0;
 }
 
 export interface GridFit {
@@ -112,9 +135,10 @@ export function defaultColumns(count: number, tier: TileTier = tileTier(count)):
   if (count <= 0) return 1;
   switch (tier) {
     case 'full':
-      return clamp(count, 1, 4);
+      return clamp(count, 1, 5);
     case 'compact':
-      return clamp(Math.ceil(count / 2), 3, 5);
+      // Three or fewer in one row; more, two columns (a phone) or two rows (a desktop's columns go by its shape).
+      return count <= 3 ? count : clamp(Math.ceil(count / 2), 2, 5);
     case 'small':
       return clamp(Math.ceil(count / 3), 4, 6);
     case 'dense':
@@ -212,7 +236,7 @@ export function fitsRoom(count: number, room: Room, { wide = false, tier = tileT
 export const SPARE = 8;
 
 /** The poorest tier a count may fall to when its usual one has no room: full gives up its cards for compact; the rest keep what they show (the stack and the bet stay on a compact tile). */
-const LOWEST: Record<TileTier, TileTier> = { full: 'compact', compact: 'compact', small: 'small', dense: 'dense' };
+const LOWEST: Record<TileTier, TileTier> = { full: 'small', compact: 'small', small: 'small', dense: 'dense' };
 
 /**
  * The tier the room allows: the richest, down to the count's own or one step under it, whose
@@ -252,7 +276,11 @@ export const TURN_CLOCK = 7;
  */
 export function seatsNeed(count: number, room: Room, { wide = false, growth = 0 }: { wide?: boolean; growth?: number } = {}): number {
   if (count <= 0) return Math.min(room.height, growth);
-  const tier = tierFor(count, room, { wide });
+  // Full tiles only where their least height still fits once the line under the ribbon has grown (and past the few pixels a
+  // grid showing total-only tiles wants to spare before it takes them): planned otherwise, the seats kept the room for
+  // cards the grid never showed. The crowd tiers go by the room as it is.
+  const plain = tierFor(count, room, { wide });
+  const tier = plain === 'full' ? tierFor(count, { width: room.width, height: room.height - growth }, { wide }) : plain;
   const natural = naturalHeight(count, room.width, { wide, tier }) + SPARE;
   const least = leastHeight(count, room.width, { wide, tier }) + growth;
   return Math.min(room.height, Math.max(natural, least));
@@ -261,15 +289,4 @@ export function seatsNeed(count: number, room: Room, { wide = false, growth = 0 
 /** What the seats leave the cards of `room`, in whole pixels (seatsNeed): 0 where they need it all. */
 export function seatsSpare(count: number, room: Room, options: { wide?: boolean; growth?: number } = {}): number {
   return Math.max(0, Math.floor(room.height - seatsNeed(count, room, options)));
-}
-
-/**
- * The desktop's gentle arc: how far a tile in column `col` of `cols` sits up from the row's lowest
- * point, 0 in the middle to 1 at the ends (the players round the near edge of the table).
- */
-export function arcLift(col: number, cols: number): number {
-  if (cols <= 1) return 0;
-  const mid = (cols - 1) / 2;
-  const x = (col - mid) / mid;
-  return Math.round(x * x * 100) / 100;
 }
