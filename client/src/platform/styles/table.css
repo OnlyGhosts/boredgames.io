@@ -643,7 +643,7 @@
 /* ---------- The stack and the stake (Stakes): "1,000 chips" and a gold pill of chips ("Bet 10"), never confused ---------- */
 .tbl-stackcount {
   display: inline-flex;
-  align-items: baseline;
+  align-items: center;
   gap: 0.25em;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
@@ -1512,6 +1512,26 @@
 
 .tbl-tile__total[data-tone='blackjack'] {
   color: var(--color-warning-text);
+}
+
+/* A chip or two drawn before a figure: as tall as the text, overlapping like a bet's chips. */
+.tbl-chipmark {
+  --stake-h: calc(1.15em + 5px);
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  margin-right: 0.3em;
+  align-self: center;
+}
+
+.tbl-chipmark .tbl-stake__chip + .tbl-stake__chip {
+  margin-left: calc((var(--stake-h) - 5px) * -1 / 2);
+}
+
+.tbl-tile__foot .tbl-tile__chips,
+.tbl-tile__foot .tbl-tile__bet {
+  display: inline-flex;
+  align-items: center;
 }
 
 /* The footer: the stack small and quiet, the bet in lime on the right. */

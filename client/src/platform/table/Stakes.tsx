@@ -45,6 +45,20 @@ const LONG_STAKE = 5;
 
 const noBox = () => null;
 
+/** A stack's chip: one lime chip before the figure. */
+export const STACK_CHIP: readonly ChipBand[] = ['lime'];
+
+/** A chip drawn beside a figure (a stack's single lime chip, a bet's chips), sized to the text it sits by (table.css). */
+export function ChipMark({ bands }: { bands: readonly ChipBand[] }) {
+  return (
+    <span className="tbl-chipmark" aria-hidden="true">
+      {bands.map((band, i) => (
+        <ChipFace key={i} band={band} />
+      ))}
+    </span>
+  );
+}
+
 /** A player's stack, in words: the figure large and bold, "chips" after it ("1,000 chips"); `data-long` marks a five-digit one. */
 export function StackCount({ value, format = 'full', className, testId, fit }: StackProps) {
   const ref = useRef<HTMLSpanElement>(null);
@@ -53,6 +67,7 @@ export function StackCount({ value, format = 'full', className, testId, fit }: S
   const at = useFitForm(ref, String(value), forms, fit?.box ?? noBox, fit?.cut);
   return (
     <span ref={ref} className={`tbl-stackcount${className ? ` ${className}` : ''}`} data-testid={testId} data-chips={value} data-long={chipFigure(value, 'full').length >= LONG_FIGURE ? '' : undefined}>
+      <ChipMark bands={STACK_CHIP} />
       <Figure value={value} format={at > 0 ? 'short' : format} className="tbl-stackcount__value" /> <span className="tbl-stackcount__word">{value === 1 ? 'chip' : 'chips'}</span>
     </span>
   );

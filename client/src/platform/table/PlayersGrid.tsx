@@ -7,10 +7,10 @@ import { CheckIcon, CloseIcon, SparkIcon } from '../components/Icons';
 import { CardsIcon, OutIcon, StarIcon } from './Icons';
 import { TotalPill, type Tone } from './Outcome';
 import { FitText, TILE_FIT } from './fit';
-import { StackCount, StakePill } from './Stakes';
+import { ChipMark, STACK_CHIP, StackCount, StakePill } from './Stakes';
 import type { StakeFormat } from './stakes';
 import { GRID_GAP, TILE_MAX_WIDTH, cardsFit, fitGrid, fitsRoom, naturalHeight, shapeOf, tierFor, tileHeight, type Room, type TileTier } from './grid';
-import { chipFigure } from './stakes';
+import { betChips, chipFigure } from './stakes';
 import { shortChips } from '../lib/format';
 import { roomLeft } from './room';
 
@@ -245,7 +245,7 @@ export function PlayerTile(props: TileProps) {
  * its mark), the hand as a fan with the big total beside it (the total alone on a compact tile or
  * where the fan would go under its floor), a footer (the stack, the bet). The ring says whose turn.
  */
-function SeatTile({ playerId, name, avatar, connected, tier, turn, line, mark, outcome = null, chips, bet, betData, total, dimmed = false, badge, cards, fan, extra, onOpen, shortBadge = false, data }: TileProps) {
+function SeatTile({ playerId, name, avatar, connected, tier, turn, line, mark, outcome = null, chips, bet, start, betData, total, dimmed = false, badge, cards, fan, extra, onOpen, shortBadge = false, data }: TileProps) {
   const room = useContext(TileRoom);
   const fanCards = fan?.cards ?? 2;
   const showCards = tier === 'full' && cards !== undefined && cardsFit(room.width, fanCards, room.wide);
@@ -301,11 +301,13 @@ function SeatTile({ playerId, name, avatar, connected, tier, turn, line, mark, o
         <span className="tbl-tile__foot">
           {chips !== undefined && (
             <span className="tbl-tile__chips" data-testid="seat-chips" data-chips={chips}>
+              <ChipMark bands={STACK_CHIP} />
               {tileFigure(chips)}
             </span>
           )}
           {bet !== undefined && (
             <span className="tbl-tile__bet" data-testid="seat-bet" data-bet={bet} {...betData}>
+              {bet > 0 && <ChipMark bands={betChips(bet, start ?? bet, 2).bands} />}
               {bet > 0 ? `bet ${tileFigure(bet)}` : ''}
             </span>
           )}

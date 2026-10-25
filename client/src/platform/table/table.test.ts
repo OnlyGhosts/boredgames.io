@@ -383,9 +383,10 @@ describe('the components', () => {
     const out = html(createElement(PlayerTile, props));
     expect(out).toMatch(/<span class="tbl-tile__head">.*<span class="tbl-tile__name">.*<span class="tbl-tile__pill tbl-tile__pill--quiet tbl-tile__pill--done" data-testid="seat-pill">.*Stands<\/span><\/span><\/span>/);
     expect(out).toContain('<span class="tbl-tile__hero"><span class="tbl-tile__cards" style="--tile-fan:3;--tile-hands:1"><i>cards</i></span><span class="tbl-tile__total" data-testid="seat-total" data-tone="neutral">18</span></span>');
-    expect(out).toContain('<span class="tbl-tile__foot"><span class="tbl-tile__chips" data-testid="seat-chips" data-chips="1250000">1.3M</span><span class="tbl-tile__bet" data-testid="seat-bet" data-bet="50000">bet 50k</span></span>');
-    // No chip icons, no plus, no mark in the avatar's corner.
-    expect(out).not.toContain('tbl-chip');
+    // The stack and the bet each have their chips drawn before the figure: one lime chip for the stack.
+    expect(out).toMatch(/<span class="tbl-tile__chips" data-testid="seat-chips" data-chips="1250000"><span class="tbl-chipmark" aria-hidden="true"><svg[^>]*><g class="tbl-chip tbl-chip--lime"/);
+    expect(out.replace(/<span class="tbl-chipmark" aria-hidden="true">(?:<svg.*?<\/svg>)+<\/span>/g, '')).toContain('<span class="tbl-tile__foot"><span class="tbl-tile__chips" data-testid="seat-chips" data-chips="1250000">1.3M</span><span class="tbl-tile__bet" data-testid="seat-bet" data-bet="50000">bet 50k</span></span>');
+    // No plus, no mark in the avatar's corner.
     expect(out).not.toContain('tbl-tile__mark');
     // A compact tile: the total alone, never the cards.
     const compact = html(createElement(PlayerTile, { ...props, tier: 'compact' }));
@@ -581,7 +582,7 @@ describe('the words on a table read whole', () => {
     const raised = html(createElement(PlayerTile, { ...props, line: { state: 'acted', text: 'Raise to 12,000', tone: 'quiet', short: ['Raise 12k', 'Raise'] } }));
     expect(raised).toContain('<span class="tbl-tile__line tbl-tile__line--quiet" data-testid="seat-line" data-fit="0">Raise to 12,000</span>');
     // The stack writes both figures; the stylesheet picks one by the tile's width, and the measured fit the short one where that is still cut.
-    expect(raised).toContain('<span class="tbl-tile__chips" data-testid="seat-chips" data-chips="100000">100k</span>');
+    expect(raised.replace(/<span class="tbl-chipmark" aria-hidden="true">(?:<svg.*?<\/svg>)+<\/span>/g, '')).toContain('<span class="tbl-tile__chips" data-testid="seat-chips" data-chips="100000">100k</span>');
     // The open button's label (what a screen reader gets) says the line in full, whatever form the tile shows.
     expect(raised).toContain('aria-label="Ravi: Raise to 12,000. Show details" data-testid="seat-open"');
     const plain = html(createElement(PlayerTile, { ...props, line: { state: 'waiting', text: 'Waiting', tone: 'quiet' } }));
@@ -669,11 +670,11 @@ describe('the stack and the stake', () => {
     expect(chips(300, 1000, 0)).toEqual({ bands: ['lilac'], count: 2, more: true });
   });
 
-  it('renders the stack as a bold figure and a word, the stake as its own pill of chips: never two bare numbers side by side', () => {
-    expect(html(createElement(StackCount, { value: 1000, testId: 'stack' }))).toBe('<span class="tbl-stackcount" data-testid="stack" data-chips="1000"><span class="tbl-stackcount__value">1,000</span> <span class="tbl-stackcount__word">chips</span></span>');
+  it('renders the stack as a lime chip, a bold figure and a word, the stake as its own pill of chips: never two bare numbers side by side', () => {
+    expect(html(createElement(StackCount, { value: 1000, testId: 'stack' }))).toBe('<span class="tbl-stackcount" data-testid="stack" data-chips="1000"><span class="tbl-chipmark" aria-hidden="true"><svg class="tbl-stake__chip" viewBox="0 0 25.5 25.5"><g class="tbl-chip tbl-chip--lime" data-band="lime"><circle class="tbl-chip__shadow" cx="13.2" cy="13.4" r="10.6"></circle><circle class="tbl-chip__disc" cx="12" cy="12" r="10.6"></circle><circle class="tbl-chip__spots" cx="12" cy="12" r="8.4"></circle><circle class="tbl-chip__ring" cx="12" cy="12" r="4.6"></circle></g></svg></span><span class="tbl-stackcount__value">1,000</span> <span class="tbl-stackcount__word">chips</span></span>');
     expect(html(createElement(StackCount, { value: 1 }))).toContain('>chip<');
     // A five-digit stack is marked long, so a narrow tile can read it short.
-    expect(html(createElement(StackCount, { value: 12_500, format: 'fit' }))).toBe('<span class="tbl-stackcount" data-chips="12500" data-long=""><span class="tbl-stackcount__value tbl-figure"><span class="tbl-figure__full">12,500</span><span class="tbl-figure__short">13k</span></span> <span class="tbl-stackcount__word">chips</span></span>');
+    expect(html(createElement(StackCount, { value: 12_500, format: 'fit' }))).toBe('<span class="tbl-stackcount" data-chips="12500" data-long=""><span class="tbl-chipmark" aria-hidden="true"><svg class="tbl-stake__chip" viewBox="0 0 25.5 25.5"><g class="tbl-chip tbl-chip--lime" data-band="lime"><circle class="tbl-chip__shadow" cx="13.2" cy="13.4" r="10.6"></circle><circle class="tbl-chip__disc" cx="12" cy="12" r="10.6"></circle><circle class="tbl-chip__spots" cx="12" cy="12" r="8.4"></circle><circle class="tbl-chip__ring" cx="12" cy="12" r="4.6"></circle></g></svg></span><span class="tbl-stackcount__value tbl-figure"><span class="tbl-figure__full">12,500</span><span class="tbl-figure__short">13k</span></span> <span class="tbl-stackcount__word">chips</span></span>');
     expect(html(createElement(StackCount, { value: 9_000 }))).not.toContain('data-long');
     // A bet: the chips in place of the word, the figure beside them, "Bet 10" as its label.
     const bet = html(createElement(StakePill, { value: 10, start: 1000, testId: 'bet' }));

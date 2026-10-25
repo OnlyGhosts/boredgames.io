@@ -1384,11 +1384,13 @@ describe('the players grid', () => {
     }
   });
 
-  it('tells the stack and the bet apart on every tile: the stack quiet on the left, "bet 10" on the right, no chips drawn', () => {
-    const full = render(bigTable(2, 1), 'p0');
+  it('tells the stack and the bet apart on every tile: the stack quiet on the left with its chip, "bet 10" on the right with its chips', () => {
+    const drawn = render(bigTable(2, 1), 'p0');
+    const marks = drawn.slice(drawn.indexOf('data-testid="seats"'), drawn.indexOf('</ul>')).match(/class="tbl-chipmark"/g) ?? [];
+    expect(marks.length).toBeGreaterThanOrEqual(2);
+    const full = drawn.replace(/<span class="tbl-chipmark" aria-hidden="true">(?:<svg.*?<\/svg>)+<\/span>/g, '');
     expect(full).toContain('<span class="tbl-tile__chips" data-testid="seat-chips" data-chips="1000">1,000</span><span class="tbl-tile__bet" data-testid="seat-bet" data-bet="10">bet 10</span>');
     const tiles = full.slice(full.indexOf('data-testid="seats"'), full.indexOf('</ul>'));
-    expect(tiles).not.toContain('tbl-chip');
     expect(tiles).not.toContain('tbl-stake');
     // The panel's line says my stack in words.
     expect(full).toMatch(/data-testid="my-chips" data-chips="1000" aria-label="Balance 1000 chips"><span class="tbl-stackcount"[^>]*><span class="tbl-stackcount__value">1,000<\/span>/);
@@ -1400,7 +1402,7 @@ describe('the players grid', () => {
     if (!game) throw new Error('no game');
     const at = (chips: number, bet: number) => ({ chips, bet, hands: [hand([c('9'), c('7')], { total: 16, bet })] });
     const view = { ...game, players: { ...game.players, p2: { ...game.players.p2, ...at(1040, 1040) }, p3: { ...game.players.p3, ...at(1_250_000, 50_000) } } };
-    const html = render({ ...table, game: view }, 'p0');
+    const html = render({ ...table, game: view }, 'p0').replace(/<span class="tbl-chipmark" aria-hidden="true">(?:<svg.*?<\/svg>)+<\/span>/g, '');
     expect(textOf(html.slice(html.indexOf('data-player-id="p2"')), 'seat-bet')).toBe('bet 1,040');
     const big = html.slice(html.indexOf('data-player-id="p3"'));
     expect(textOf(big, 'seat-chips')).toBe('1.3M');

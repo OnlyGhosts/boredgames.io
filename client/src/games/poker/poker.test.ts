@@ -613,8 +613,9 @@ describe('the screen', () => {
     expect(attr(tagWith(html, 'my-bet'), 'data-bet')).toBe('0');
     expect(html).toMatch(/data-testid="my-cards"[^>]*><div class="tbl-hand__head"><span class="pk-dealer"[^>]*data-testid="my-dealer"/);
     // A blind of 10 on the tile's footer, "bet 10", where the chips fly to; the stack beside it.
-    expect(html).toMatch(/data-testid="seat-bet" data-bet="10" data-table-anchor="[^"]+">bet 10<\/span>/);
-    expect(html).toMatch(/data-testid="seat-chips" data-chips="990">990<\/span>/);
+    const plain = html.replace(/<span class="tbl-chipmark" aria-hidden="true">(?:<svg.*?<\/svg>)+<\/span>/g, '');
+    expect(plain).toMatch(/data-testid="seat-bet" data-bet="10" data-table-anchor="[^"]+">bet 10<\/span>/);
+    expect(plain).toMatch(/data-testid="seat-chips" data-chips="990">990<\/span>/);
     expect(html).toMatch(/class="tbl-stake tbl-stake--pot pk-pot__pill" data-testid="pot" data-bet="15" data-chips="15" data-shown="15" data-table-anchor="pot"><span class="tbl-stake__word">Pot<\/span> <span class="tbl-stake__value">15</);
   });
 
