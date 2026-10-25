@@ -1522,8 +1522,8 @@
   align-items: center;
   flex: none;
   margin-right: 0.3em;
-  /* A chip a size up on its figure, overhanging the line rather than making it taller (the tiles' heights are worked out from their lines). */
-  margin-block: -0.3em;
+  /* A chip a size up on its figure, overhanging the line rather than making it taller (the tiles' and the panel's heights are worked out from their lines). */
+  height: 1em;
   align-self: center;
 }
 
