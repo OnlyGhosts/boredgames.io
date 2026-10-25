@@ -62,7 +62,7 @@ test('a third phone joins a running game, watches it without controls, and plays
   await expect
     .poll(
       async () => {
-        for (const p of [host, pia]) if (await p.getByTestId('action-stand').isEnabled()) await p.getByTestId('action-stand').click();
+        for (const p of [host, pia]) if ((await p.locator('[data-testid="action-stand"]:not([aria-pressed]):enabled').count()) > 0) await p.getByTestId('action-stand').click();
         await expectWatching(rae);
         return round();
       },

@@ -123,7 +123,7 @@ test.describe('a second tap', () => {
       // A double tap of Hit draws one card, whenever a hand to hit comes up in the next rounds.
       let tapped = false;
       for (let tries = 0; tries < 40 && !tapped; tries++) {
-        const actor = (await host.page.getByTestId('action-hit').isEnabled()) ? host : (await phone.page.getByTestId('action-hit').isEnabled()) ? phone : null;
+        const actor = (await host.page.locator('[data-testid="action-hit"]:not([aria-pressed]):enabled').count()) > 0 ? host : (await phone.page.locator('[data-testid="action-hit"]:not([aria-pressed]):enabled').count()) > 0 ? phone : null;
         if (actor) {
           const before = await myCards(actor.page);
           await actor.page.getByTestId('action-hit').dblclick();
@@ -136,7 +136,7 @@ test.describe('a second tap', () => {
         }
         // Nobody can hit right now: stand whoever acts, or bet into the next round.
         for (const p of [host, phone]) {
-          if (await p.page.getByTestId('action-stand').isEnabled()) await p.page.getByTestId('action-stand').click();
+          if ((await p.page.locator('[data-testid="action-stand"]:not([aria-pressed]):enabled').count()) > 0) await p.page.getByTestId('action-stand').click();
           if (await p.page.getByTestId('place-bet').isEnabled()) await p.page.getByTestId('place-bet').click();
         }
         await host.page.waitForTimeout(500);
@@ -166,7 +166,7 @@ test.describe('a weak connection', () => {
       // The host plays first; once the bot's turn comes, its phone blinks: the socket drops and comes straight back.
       for (let i = 0; i < 20; i++) {
         if (bot.latest?.game?.turn?.playerId === bot.id) break;
-        if (await host.page.getByTestId('action-stand').isEnabled()) await host.page.getByTestId('action-stand').click();
+        if ((await host.page.locator('[data-testid="action-stand"]:not([aria-pressed]):enabled').count()) > 0) await host.page.getByTestId('action-stand').click();
         await host.page.waitForTimeout(300);
         if ((await roundOn(host.page)) > 1) {
           // The round ended without the bot acting (a natural, the dealer's blackjack): bet again.
@@ -260,7 +260,7 @@ test.describe('a phone that went quiet', () => {
         const state = async () => {
           if (quiet.latest?.game?.turn?.playerId === quiet.id) return 'quiet';
           if ((await roundOn(host.page)) > round) return 'settled';
-          for (const p of [host, phone]) if (await p.page.getByTestId('action-stand').isEnabled()) return p.name;
+          for (const p of [host, phone]) if ((await p.page.locator('[data-testid="action-stand"]:not([aria-pressed]):enabled').count()) > 0) return p.name;
           return null;
         };
         for (let moves = 0; moves < 6; moves++) {

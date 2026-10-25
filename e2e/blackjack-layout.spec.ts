@@ -175,7 +175,7 @@ async function fixedPlaces(browser: Browser, base: string, size: { width: number
       for (let step = 0; step < 12; step++) {
         const state = async () => {
           if ((await roundOf()) > round) return 'settled';
-          if (await page.getByTestId('action-stand').isEnabled()) return 'mine';
+          if ((await page.locator('[data-testid="action-stand"]:not([aria-pressed]):enabled').count()) > 0) return 'mine';
           const turn = (await screen.getAttribute('data-turn-player')) ?? '';
           return botIds.has(turn) ? 'bot' : null;
         };
@@ -187,7 +187,7 @@ async function fixedPlaces(browser: Browser, base: string, size: { width: number
           await check('my turn');
           const before = await screen.getAttribute('data-turn-hand');
           await page.getByTestId('action-stand').click();
-          await expect.poll(async () => (await roundOf()) > round || !(await page.getByTestId('action-stand').isEnabled()) || (await screen.getAttribute('data-turn-hand')) !== before).toBe(true);
+          await expect.poll(async () => (await roundOf()) > round || (await page.locator('[data-testid="action-stand"]:not([aria-pressed]):enabled').count()) === 0 || (await screen.getAttribute('data-turn-hand')) !== before).toBe(true);
           continue;
         }
         await expect(page.getByTestId('hand-stage')).toHaveAttribute('data-kind', 'turn');

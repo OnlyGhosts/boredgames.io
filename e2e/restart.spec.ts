@@ -165,7 +165,7 @@ async function standOut(players: Player[]): Promise<void> {
       .poll(async () => {
         if ((await bj(host).getAttribute('data-phase')) !== 'acting') return 'settled';
         for (const p of players) {
-          if (await p.page.getByTestId('action-stand').isEnabled()) {
+          if ((await p.page.locator('[data-testid="action-stand"]:not([aria-pressed]):enabled').count()) > 0) {
             actor = p;
             return p.name;
           }
