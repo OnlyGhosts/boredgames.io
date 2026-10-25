@@ -5,7 +5,7 @@ import { createParty, expectReadyCount, joinByCode, readyAll } from './party';
 /**
  * Play that stays smooth on a real phone link: a second tap never plays a second move or shows a
  * red box, a blink in the connection costs nothing, a phone that went quiet shows as away and
- * anyone may skip it, a tap made on a dead link still arrives after the reconnect, typing the code
+ * the host may skip it, a tap made on a dead link still arrives after the reconnect, typing the code
  * of a room again goes back into the same seat, and a server restart says so plainly.
  */
 
@@ -235,7 +235,7 @@ test.describe('a weak connection', () => {
 });
 
 test.describe('a phone that went quiet', () => {
-  test('shows as away on its turn, and anyone may skip it; nothing is played for it', async ({ browser, baseURL }) => {
+  test('shows as away on its turn, and only the host may skip it; nothing is played for it', async ({ browser, baseURL }) => {
     // The room marks a connection idle after 90 s of silence (checked every 10 s).
     test.setTimeout(240_000);
     const base = baseURL ?? 'http://localhost:4173';
@@ -277,16 +277,17 @@ test.describe('a phone that went quiet', () => {
       const seat = phone.page.locator(`[data-testid="seat"][data-player-id="${quiet.id}"]`);
       // Before the silence is long: an ordinary turn, and only the host may skip it.
       await expect(phone.page.getByTestId('skip-turn')).toHaveCount(0);
-      // Then the seat shows as away, and the other player (not the host) may skip it.
+      // Then the seat shows as away; still only the host may skip it.
       await expect(phone.page.getByTestId('table-turn').locator('.tbl-turn__text')).toHaveText('Bo is away', { timeout: 130_000 });
       await expect(seat).toHaveAttribute('data-state', 'away');
       await expect(seat.getByTestId('seat-line')).toHaveText('Away');
       await expect(seat).toHaveAttribute('data-turn', 'true');
       // Nothing was played for it in all that time.
       await expect(host.page.getByTestId('blackjack-screen')).toHaveAttribute('data-turn-player', quiet.id);
-      await phone.page.getByTestId('skip-turn').click();
+      await expect(phone.page.getByTestId('skip-turn')).toHaveCount(0);
+      await host.page.getByTestId('skip-turn').click();
       await expect(host.page.getByTestId('blackjack-screen')).not.toHaveAttribute('data-turn-player', quiet.id);
-      for (const p of [host, phone]) await expect(p.page.getByTestId('toast').filter({ hasText: "Pia stood Bo’s hand." })).toBeVisible();
+      for (const p of [host, phone]) await expect(p.page.getByTestId('toast').filter({ hasText: "Hana stood Bo’s hand." })).toBeVisible();
       quiet.socket.close();
       expect([...host.errors, ...phone.errors]).toEqual([]);
     } finally {

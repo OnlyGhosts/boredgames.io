@@ -107,7 +107,7 @@ export type BlackjackServerMessage = never;
  * `lastRound` until the deal). Betting has no clock: the cards go out once every connected seat
  * with chips has bet or sat out, or when the host deals. `acting` is one hand at a time, also
  * unclocked (a player who dropped has their hand stood once the platform tells the game, and the
- * host, or anyone for a player who is away, may skip an idle one), `held` waits for a player still
+ * host alone may skip an idle one), `held` waits for a player still
  * in the game to reconnect, `ending` keeps the final table on show for the reveal and a short beat
  * after it (BLACKJACK_FINAL_HOLD_MS in deal.ts) before the results.
  */

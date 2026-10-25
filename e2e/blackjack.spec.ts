@@ -894,8 +894,8 @@ test('no clocks: a player sits a hand out, the host deals now to whoever has bet
         if (now === 'settled') break;
         if (now === 'hana') {
           await expect(desk.getByTestId('skip-turn')).toHaveCount(0);
-          // An idle host never stalls the table: on the host's own turn Pia may stand it.
-          await expect(phone.getByTestId('skip-turn')).toHaveAttribute('aria-label', "Stand Hana’s hand");
+          // Only the host skips: on the host's own turn nobody may stand it.
+          await expect(phone.getByTestId('skip-turn')).toHaveCount(0);
           const before = await turnKeyOn(desk);
           await desk.getByTestId('action-stand').click();
           await expect.poll(async () => (await roundOn(desk)) > round || (await turnKeyOn(desk)) !== before).toBe(true);

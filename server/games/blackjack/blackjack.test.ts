@@ -728,7 +728,7 @@ describe('Blackjack: away players and the host’s Skip', () => {
     expect(view(s).turn).toEqual({ playerId: cleo, handIndex: 0 });
   });
 
-  it('never lets an idle host stall the table: while it waits on the host, anyone may deal now or skip the host’s hand', () => {
+  it('never lets an idle host stall the bets: while they wait on the host, anyone may deal now; only the host skips a hand', () => {
     const s = table();
     const [alice, bob, carol] = startGame(s, ['Alice', 'Bob', 'Carol']);
     act(s, bob, { t: 'bet', amount: 10 });
@@ -745,19 +745,22 @@ describe('Blackjack: away players and the host’s Skip', () => {
     // Carol deals: the host is no longer the one waited on, so she cannot; the host can.
     expect(controls(s, carol).canDealNow).toBe(false);
     act(s, alice, { t: 'dealNow' });
-    // The host's own turn: anyone else may stand it; nobody may skip their own.
+    // The host's own turn: nobody may skip it, the host included (it is their own).
     expect(view(s).turn).toEqual({ playerId: alice, handIndex: 0 });
-    expect(controls(s, bob)).toEqual({ canSitOut: false, canDealNow: false, canSkip: true });
-    expect(controls(s, carol).canSkip).toBe(true);
+    expect(controls(s, bob)).toEqual({ canSitOut: false, canDealNow: false, canSkip: false });
+    expect(controls(s, carol).canSkip).toBe(false);
     expect(controls(s, alice).canSkip).toBe(false);
-    expect(chatTexts(act(s, carol, skipNow(s)))).toEqual(["Carol stood Alice’s hand."]);
+    expect(errorsOf(act(s, carol, skipNow(s)))).toEqual(['Only the host can skip a turn.']);
+    act(s, alice, { t: 'stand' });
     // Bob's turn: only the host may skip it.
     expect(view(s).turn).toEqual({ playerId: bob, handIndex: 0 });
     expect(controls(s, carol).canSkip).toBe(false);
+    expect(controls(s, alice).canSkip).toBe(true);
     expect(errorsOf(act(s, carol, skipNow(s)))).toEqual(['Only the host can skip a turn.']);
+    expect(chatTexts(act(s, alice, skipNow(s)))).toContain('Alice stood Bob’s hand.');
   });
 
-  it('lets a lone other player move a 2-player table on past an idle host', () => {
+  it('lets a lone other player deal past an idle host, but never skip the host’s hand', () => {
     const s = table();
     const [alice, bob] = startGame(s, ['Alice', 'Bob']);
     rig(s, '10S', '9H', '10C', '6D', '8S', '7D', '10H');
@@ -766,11 +769,11 @@ describe('Blackjack: away players and the host’s Skip', () => {
     expect(view(s)).toMatchObject({ phase: 'acting', order: [bob] });
     act(s, bob, { t: 'stand' });
     nextRound(s);
-    // Both bet; the host's turn comes and the host is idle: Bob stands it and plays on.
+    // Both bet; the host's turn comes: only the host plays it, Bob may not skip it.
     betAll(s, [alice, bob]);
     expect(view(s).turn).toEqual({ playerId: alice, handIndex: 0 });
-    act(s, bob, skipNow(s));
-    expect(view(s).turn).toEqual({ playerId: bob, handIndex: 0 });
+    expect(errorsOf(act(s, bob, skipNow(s)))).toEqual(['Only the host can skip a turn.']);
+    expect(view(s).turn).toEqual({ playerId: alice, handIndex: 0 });
   });
 
   it('lets a host who sits the game out skip and deal', () => {
@@ -1879,7 +1882,7 @@ describe('Blackjack: a blink in the connection', () => {
 describe('Blackjack: a phone that went quiet', () => {
   const idle = (s: Sim, id: string, name: string, quiet = true) => s.apply({ type: 'activity', playerId: id, connectionId: `conn-${name}`, idle: quiet });
 
-  it('shows the player away on their turn and lets anyone skip them, but plays nothing for them', () => {
+  it('shows the player away on their turn and lets the host alone skip them, but plays nothing for them', () => {
     const s = table();
     const [alice, bob, carol] = startGame(s, ['Alice', 'Bob', 'Carol']);
     rig(s, '10S', '5H', '9D', '6C', '7S', '8H', '10D');
@@ -1889,12 +1892,14 @@ describe('Blackjack: a phone that went quiet', () => {
     expect(controls(s, carol).canSkip).toBe(false);
     idle(s, bob, 'Bob');
     expect(view(s).away).toEqual([bob]);
-    expect(controls(s, carol).canSkip).toBe(true);
+    expect(controls(s, carol).canSkip).toBe(false);
+    expect(controls(s, alice).canSkip).toBe(true);
     // No clock: however long it stays quiet, the table only waits.
     expect(nextDeadline(s.data)).toBeNull();
     expect(tick(s, LONG_MS)).toEqual([]);
     expect(view(s).turn?.playerId).toBe(bob);
-    expect(chatTexts(act(s, carol, skipNow(s)))).toEqual(["Carol stood Bob’s hand."]);
+    expect(errorsOf(act(s, carol, skipNow(s)))).toEqual(['Only the host can skip a turn.']);
+    expect(chatTexts(act(s, alice, skipNow(s)))).toEqual(["Alice stood Bob’s hand."]);
     expect(view(s).turn?.playerId).toBe(carol);
     // Not waited on any more: not shown away.
     expect(view(s).away).toEqual([]);

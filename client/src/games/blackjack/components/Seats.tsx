@@ -37,7 +37,7 @@ export function seatLine(view: BlackjackView, id: string, hands: TableHand[], se
   const seat = view.players[id];
   if (dealerPlaying && hands.length > 0) return { state: 'waiting', text: 'Waiting', tone: 'quiet' };
   if (seat.bustedOut) return { state: 'out', text: 'Out', tone: 'bad' };
-  // The table waits on them and their phone has gone quiet: anyone may Skip or Deal now for them.
+  // The table waits on them and their phone has gone quiet: anyone may Deal now for them, the host Skip them.
   if ((view.away ?? []).includes(id)) return { state: 'away', text: 'Away', tone: 'quiet' };
   const betting = view.phase === 'betting' && view.order.includes(id);
   if (betting && seat.bet > 0) return { state: 'bet', text: '', tone: 'quiet' };

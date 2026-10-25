@@ -196,10 +196,11 @@ export function canDealNow(ctx: Pick<Ctx, 'players' | 'hostId'>, data: Blackjack
   return viewerId === ctx.hostId || (findPlayer(ctx, viewerId) !== undefined && othersMayAct(ctx, data));
 }
 
-/** Whether `viewerId` may stand the hand in play: someone else's turn, and the host (or anyone, on the host's own turn or an away player's). */
+/** Whether `viewerId` may stand the hand in play: the host alone, on someone else's turn. */
 export function canSkip(ctx: Pick<Ctx, 'players' | 'hostId'>, data: BlackjackData, viewerId: string): boolean {
   if (data.phase.kind !== 'acting' || data.phase.playerId === viewerId || viewerId === '') return false;
-  return viewerId === ctx.hostId || (findPlayer(ctx, viewerId) !== undefined && othersMayAct(ctx, data));
+  // The host alone stands another player's hand (a host who is away hands the role on: seats.ts).
+  return viewerId === ctx.hostId;
 }
 
 /** The viewer's table controls: sitting out, Deal now and Skip. */

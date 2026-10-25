@@ -731,7 +731,7 @@ is exactly the set of participants: ready, not sitting out, connected, within th
 - There is no idle event: a connection that has sent nothing for `IDLE_AFTER_MS` (90 s; a live
   page pings every 20 s) shows `idle: true` on its `PlatformPlayer` and `PlayerPublic`, and the
   platform sends everyone a snapshot. A game without clocks may let the others act for an idle
-  player it waits on (Blackjack shows the seat away and lets anyone Skip or Deal now for it);
+  player it waits on (Blackjack shows the seat away, lets anyone Deal now for it, and lets the host Skip it);
   the platform never plays for anyone.
 
 **Moves that a second tap must not repeat.** A phone on a weak link sends a move, sees nothing
@@ -1075,8 +1075,8 @@ holds once nobody connected is left to bet. Everyone ready at the start is seate
 starting chips; nobody is seated later (a newcomer watches until the next game). The turns wait too: the player in play acts when ready, a player who
 drops (or is away when their turn comes) stands at once, and the host's Skip stands an idle
 player's hand in play (a skip names the hand, so a second tap never stands the next one). An idle
-host never stalls the table: while the bets wait on the host, anyone may Deal now, and on the
-host's own turn anyone may Skip it. The starting chips are its only setting: the house rules are fixed in
+host never stalls the bets: while they wait on the host, anyone may Deal now. Only the host may
+Skip a hand. The starting chips are its only setting: the house rules are fixed in
 [`cards.ts`](../shared/games/blackjack/cards.ts) (the dealer stands on every 17, a natural pays 3 to
 2, any two cards may double and any pair may split). Stored rooms with the old `betSeconds`,
 `actSeconds`, `resultsSeconds`, `decks`, `dealerHitsSoft17`, `blackjackPayout`, `allowDouble` and

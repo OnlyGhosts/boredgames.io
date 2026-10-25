@@ -95,7 +95,7 @@ export function split(gx: Gx, playerId: string, aim: MoveAim = {}): void {
 /**
  * On another player's turn: the hand named stands (a split hand at a time), if it is still the
  * one in play; a stale target (a second tap after the turn moved on) is ignored without a word.
- * The host's Skip, or anyone's on the host's own turn or on the turn of a player who is away.
+ * The host's Skip: the host alone stands another player's hand in play.
  */
 export function skip(gx: Gx, playerId: string, target: { playerId: string; handIndex: number }): void {
   const { data, ctx } = gx;
