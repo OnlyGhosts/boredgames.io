@@ -1342,6 +1342,71 @@ test.describe('many hands (the harness)', () => {
   // stake and the total), through the deal and in every phase after it: each hand's stake and total stay on the stage. The room a slot
   // keeps before its cards was 3px short (the words end 3px inside the hand's box, at its fan's right edge), and while both hands' words
   // were the row's widest, the first hand's "+ 12k" settled 2.6px off the stage's left edge.
+  test('a natural settled in one snapshot: no stack moves before its outcome shows', async ({ page }) => {
+    // My stack 900 with 10 down; the next round deals and settles at once, my blackjack paying 25, Pia winning 20 on 10.
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await open(page, 'phase=natural&others=1&chips=900&stake=10&bet=10&myBet=10&stepMs=0');
+    const html = page.locator('html');
+    await expect(html).toHaveAttribute('data-harness-step', '0');
+    await page.getByTestId('seat-open').first().click();
+    const read = () =>
+      page.evaluate(() => {
+        const q = (sel: string) => document.querySelector(sel);
+        return {
+          mine: q('[data-testid="my-chips"]')?.getAttribute('data-chips') ?? null,
+          mineText: q('[data-testid="my-chips"]')?.textContent ?? null,
+          seat: q('[data-testid="seat"]')?.getAttribute('data-chips') ?? null,
+          seatText: q('[data-testid="seat-chips"]')?.textContent ?? null,
+          sheet: /^[\d,.]+k? chips/.exec(q('[data-testid="seat-detail"]')?.textContent ?? '')?.[0] ?? null,
+          max: q('[data-testid="bj-panel"]')?.getAttribute('data-max') ?? null,
+        };
+      });
+    const pre = await read();
+    expect(pre.mine).toBe('900');
+    expect(pre.sheet).toBe('900 chips');
+    expect(pre.seat).toBe('900');
+    // Every frame from the new snapshot until my blackjack's outcome tag shows, the stacks read what they did before it.
+    const frames = await page.evaluate(async () => {
+      const q = (sel: string) => document.querySelector(sel);
+      const snap = () => ({
+        mine: q('[data-testid="my-chips"]')?.getAttribute('data-chips') ?? null,
+        mineText: q('[data-testid="my-chips"]')?.textContent ?? null,
+        seat: q('[data-testid="seat"]')?.getAttribute('data-chips') ?? null,
+        seatText: q('[data-testid="seat-chips"]')?.textContent ?? null,
+        sheet: /^[\d,.]+k? chips/.exec(q('[data-testid="seat-detail"]')?.textContent ?? '')?.[0] ?? null,
+        max: q('[data-testid="bj-panel"]')?.getAttribute('data-max') ?? null,
+        // The last round's tags stay up while its cards leave: this round's is my blackjack's.
+        outcome: Array.from(document.querySelectorAll('[data-testid="hand-outcome"]')).some((el) => el.textContent?.includes('Blackjack')),
+        step: document.documentElement.dataset.harnessStep,
+      });
+      (window as Window & { harnessNext?: () => void }).harnessNext?.();
+      const out: ReturnType<typeof snap>[] = [];
+      const started = performance.now();
+      while (performance.now() - started < 15_000) {
+        await new Promise((r) => requestAnimationFrame(r));
+        const s = snap();
+        out.push(s);
+        if (s.outcome) break;
+      }
+      return out;
+    });
+    const before = frames.filter((f) => f.step === '1' && !f.outcome);
+    const shown = frames[frames.length - 1];
+    expect(before.length, 'frames of the reveal before the outcome').toBeGreaterThan(5);
+    expect(shown.outcome, 'the outcome tag shows').toBe(true);
+    for (const f of before) {
+      expect(f.mine, 'my balance before the outcome').toBe(pre.mine);
+      expect(f.mineText).toBe(pre.mineText);
+      expect(f.seat, 'Pia’s stack before the outcome').toBe(pre.seat);
+      expect(f.seatText).toBe(pre.seatText);
+      expect(f.sheet, 'Pia’s sheet before the outcome').toBe(pre.sheet);
+      expect(Number(f.max), 'Max no more than the balance on show').toBeLessThanOrEqual(Number(pre.mine));
+    }
+    // Once the outcome shows, the stacks move to the truth.
+    await expect(page.getByTestId('my-chips')).toHaveAttribute('data-chips', '925');
+    await expect(page.getByTestId('seat')).toHaveAttribute('data-chips', '920');
+  });
+
   test('320x568: two split hands on the least cards keep their stakes on the stage through the deal', async ({ browser }) => {
     const pages = harnessPages(browser, { width: 320, height: 568 });
     try {

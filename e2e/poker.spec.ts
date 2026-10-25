@@ -100,6 +100,43 @@ async function phoneLayoutHolds(p: Player, size: { width: number; height: number
   await cornersClear(p.page, p.name);
 }
 
+/** Starts recording, every frame, the stacks on `page` (my balance, each seat's figure and its data-chips) and whether a hand's outcome shows. */
+async function watchStacks(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const w = window as Window & { stackFrames?: { outcome: boolean; stacks: Record<string, number> }[] };
+    w.stackFrames = [];
+    const tick = () => {
+      const stacks: Record<string, number> = {};
+      const mine = document.querySelector('[data-testid="my-chips"]');
+      if (mine) stacks.mine = Number(mine.getAttribute('data-chips'));
+      for (const seat of Array.from(document.querySelectorAll('[data-testid="seat"]'))) {
+        const name = seat.getAttribute('data-name') ?? '?';
+        stacks[`${name} data`] = Number(seat.getAttribute('data-chips'));
+        const figure = seat.querySelector('[data-testid="seat-chips"]')?.getAttribute('data-chips');
+        if (figure) stacks[`${name} figure`] = Number(figure);
+      }
+      const outcome = document.querySelector('[data-testid="my-area"][data-outcome], [data-testid="seat"][data-outcome]') !== null;
+      w.stackFrames?.push({ outcome, stacks });
+      if (!outcome) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
+}
+
+/** Every recorded frame before the outcome showed: no stack went up (the pot is paid only once the outcome is on screen). */
+async function noStackRoseEarly(page: Page, name: string): Promise<void> {
+  const frames = await page.evaluate(() => (window as Window & { stackFrames?: { outcome: boolean; stacks: Record<string, number> }[] }).stackFrames ?? []);
+  expect(frames.some((f) => f.outcome), `${name}: the outcome showed`).toBe(true);
+  const before = frames.slice(0, frames.findIndex((f) => f.outcome));
+  expect(before.length, `${name}: frames before the outcome`).toBeGreaterThan(0);
+  for (let i = 1; i < before.length; i++) {
+    for (const [key, value] of Object.entries(before[i].stacks)) {
+      const was = before[i - 1].stacks[key];
+      if (was !== undefined) expect(value, `${name}: ${key} before the outcome showed`).toBeLessThanOrEqual(was);
+    }
+  }
+}
+
 async function chipsOf(p: Player): Promise<number> {
   return Number((await p.page.getByTestId('my-chips').getAttribute('data-chips')) ?? 'NaN');
 }
@@ -118,6 +155,8 @@ async function scoresOnHost(): Promise<Record<string, number>> {
 
 /** The platform score is the chip count, for every player. */
 async function scoresMatchChips(): Promise<void> {
+  // The stacks on show reach the truth once the payout has landed: the score is the truth.
+  for (const p of players) await expect(screen(p)).toHaveAttribute('data-busy', 'false', { timeout: 10_000 });
   const chips: Record<string, number> = {};
   for (const p of players) chips[p.name] = await chipsOf(p);
   await expect.poll(scoresOnHost, { message: 'score == chips' }).toEqual(chips);
@@ -393,6 +432,8 @@ test('hand one: a raise through the panel, a call and a fold, the board street b
   for (const p of players) await expect(p.page.locator('[data-testid="community-card"][data-face="up"]')).toHaveCount(3);
   await chipsConserved();
 
+  // From here to the showdown, every page records every frame's stacks (my balance and each seat's) and whether an outcome shows yet.
+  for (const p of players) await watchStacks(p.page);
   const boards = await callDown();
   // The board came out street by street: the flop, then the turn, then the river.
   expect(boards).toEqual([3, 4, 5]);
@@ -432,6 +473,8 @@ test('hand one: a raise through the panel, a call and a fold, the board street b
     await expect(byName(name).page.getByTestId('my-area')).toHaveAttribute('data-payout', String(amount));
   }
   for (const p of phones()) await expect(p.page.getByTestId('table-turn').locator('.tbl-turn__text')).toHaveText(Object.keys(paid).length > 1 ? /^Split pot/ : /(wins|win) \d+/);
+  // No stack rose before the showdown's outcome was on that page: until then chips only go out, to bets.
+  for (const p of players) await noStackRoseEarly(p.page, p.name);
   await chipsConserved();
   await scoresMatchChips();
 

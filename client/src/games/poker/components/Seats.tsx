@@ -7,7 +7,7 @@ import { playerOf } from '../hooks';
 import { holeOnScreen, sameCard, winningCards, wonOnScreen } from '../lib/screen';
 import type { PokerTable } from '../lib/table';
 import { shortChips } from '../../../platform/lib/format';
-import { betAnchor, betValue, chipsValue, outcomesShown, paidOut, valueAt, type Timeline } from '../lib/timeline';
+import { betAnchor, betValue, chipsOnScreen, outcomesShown, paidOut, valueAt, type Timeline } from '../lib/timeline';
 import { categoryLabel, lastActionForms, payoutText } from '../lib/text';
 import { usePoker, usePokerStore } from '../store';
 import { DealerButton } from './DealerButton';
@@ -79,14 +79,14 @@ export function seatMark(line: SeatLine): SeatMark {
 }
 
 /** A seat's sheet: its stack, its bet, what it did and its cards (backs until a showdown). */
-function SeatDetail({ view, id, meId, start, table, timeline, now, leaving }: { view: PokerView; id: string; meId: string; start: number; table: PokerTable | null; timeline: Timeline; now: number; leaving: boolean }) {
+function SeatDetail({ view, id, meId, start, table, timeline, now, leaving, chips }: { view: PokerView; id: string; meId: string; start: number; table: PokerTable | null; timeline: Timeline; now: number; leaving: boolean; chips: number }) {
   const seat = view.players[id];
   const line = seatLine(view, table, id, timeline, now);
   const cards = holeOnScreen(table, timeline, id, meId, now);
   return (
     <div className="pk-seat-detail" data-testid="seat-detail" data-player-id={id}>
       <p className="pk-seat-detail__line">
-        <StackCount value={seat?.chips ?? 0} />
+        <StackCount value={chips} />
         {(seat?.bet ?? 0) > 0 && <StakePill value={seat?.bet ?? 0} start={start} />}
         {line.text && <span className="pk-seat-detail__state">{line.text}</span>}
       </p>
@@ -126,7 +126,7 @@ export function Seats({ room, view, ids, meId, staged, table, timeline, live, no
             if (!player || !seat) return null;
             const won = wonOnScreen(table, timeline, id, now);
             const bet = valueAt(live, betValue(id), seat.bet, now);
-            const stack = valueAt(live, chipsValue(id), seat.chips, now);
+            const stack = chipsOnScreen(live, id, seat.chips, now);
             const status = seat.busted ? 'out' : seat.status;
             const line = seatLine(view, table, id, timeline, now);
             return (
@@ -151,7 +151,7 @@ export function Seats({ room, view, ids, meId, staged, table, timeline, live, no
                 badge={seat.isDealer && <DealerButton testId="seat-dealer" />}
                 tag={seat.status === 'allIn' && !seat.busted ? 'All in' : null}
                 onOpen={() => openSeat(id)}
-                data={{ 'data-chips': seat.chips, 'data-bet': seat.bet, 'data-status': status, 'data-dealer': seat.isDealer, 'data-outcome': won > 0 ? 'win' : undefined, 'data-payout': won > 0 ? won : undefined }}
+                data={{ 'data-chips': stack, 'data-bet': seat.bet, 'data-status': status, 'data-dealer': seat.isDealer, 'data-outcome': won > 0 ? 'win' : undefined, 'data-payout': won > 0 ? won : undefined }}
                 cards={(id === staged ? [] : holeOnScreen(table, timeline, id, meId, now)).map((c) => (
                   <TableCard key={`${timeline.id}:${c.key}`} card={c.card} size="sm" motion={c.motion} leaving={leaving || c.leaving} flipping={c.flipping} highlight={c.card !== null && best.some((b) => c.card !== null && sameCard(b, c.card))} testId="seat-card" />
                 ))}
@@ -162,7 +162,7 @@ export function Seats({ room, view, ids, meId, staged, table, timeline, live, no
         }
       </PlayersGrid>
       <SeatSheet title={openPlayer ? openPlayer.name : null} onClose={() => openSeat(null)}>
-        {openPlayer && <SeatDetail view={view} id={openPlayer.id} meId={meId} start={room.settings.startingChips} table={table} timeline={timeline} now={now} leaving={leaving} />}
+        {openPlayer && <SeatDetail view={view} id={openPlayer.id} meId={meId} start={room.settings.startingChips} table={table} timeline={timeline} now={now} leaving={leaving} chips={chipsOnScreen(live, openPlayer.id, view.players[openPlayer.id]?.chips ?? 0, now)} />}
       </SeatSheet>
     </>
   );

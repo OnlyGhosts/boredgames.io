@@ -138,7 +138,7 @@ export function ControlPanel({ room, view, meId, balance, watching, canSend, mov
     return () => window.clearTimeout(t);
   }, [turn, skipped]);
 
-  const range = seat && !seat.bustedOut ? betWindow(seat.chips, seat.bet) : null;
+  const range = seat && !seat.bustedOut ? betWindow(Math.min(balance, seat.chips), seat.bet) : null;
   const text = betText ?? (range ? String(defaultBet(lastBet, range, suggestedBet(settings.startingChips))) : '');
   const amount = range ? betAmount(text, range) : null;
   const held = pending !== null;
@@ -209,7 +209,7 @@ export function ControlPanel({ room, view, meId, balance, watching, canSend, mov
       data={{ 'data-min': range?.min, 'data-max': range?.max, 'data-amount': amount ?? undefined }}
       actions={<TableAction view={view} meId={meId} turnName={turnName} live={live} skipped={skipped} onSkip={setSkipped} />}
     >
-      <PanelLabelRow label="Bet amount" htmlFor="bj-bet-amount" balance={balance} truth={seat?.chips ?? 0} />
+      <PanelLabelRow label="Bet amount" htmlFor="bj-bet-amount" balance={balance} />
       <AmountField
         id="bj-bet-amount"
         value={shown}

@@ -13,7 +13,7 @@ import { Table } from './components/Table';
 import { isInHand, isMyTurn, useConnected, useRejoining } from './hooks';
 import { focusOf } from './lib/focus';
 import { tableOf } from './lib/table';
-import { animating, chipsValue, frameAt, outcomesShown, valueAt } from './lib/timeline';
+import { animating, chipsOnScreen, frameAt, outcomesShown, viewOnScreen } from './lib/timeline';
 import { standingOf } from './lib/text';
 import { snapTimeline, usePoker } from './store';
 
@@ -36,12 +36,14 @@ export function PokerScreen({ room, meId, isHost }: GameScreenProps<PokerView, P
   const sheet = usePoker((s) => s.sheet);
   const openSheet = usePoker((s) => s.openSheet);
   const stored = usePoker((s) => s.timeline);
-  const view = room.game;
-  const table = tableOf(view, meId);
+  const table = tableOf(room.game, meId);
   // A timeline planned for another hand (a render before the store caught up) shows the truth.
   const timeline = stored.id === (table?.hand ?? null) || stored.discard ? stored : snapTimeline(table, 0);
   const now = useTableNow(timeline);
-  if (!view) return null;
+  if (!room.game) return null;
+  // Who went out of chips waits for the showdown on screen, like the stacks.
+  const view = viewOnScreen(room.game, table, timeline, now);
+  const shown = view === room.game ? room : { ...room, game: view };
 
   const frame = frameAt(timeline, table, now);
   const playing = room.phase === 'playing';
@@ -64,12 +66,12 @@ export function PokerScreen({ room, meId, isHost }: GameScreenProps<PokerView, P
       mainTestId="poker-main"
       data={{ 'data-phase': view.phase, 'data-hand': view.hand, 'data-street': view.street ?? '', 'data-turn-player': view.turn ?? '', 'data-busy': busy }}
       isPhone={isPhone}
-      room={room}
-      players={<PlayerList room={room} meId={meId} isHost={isHost} mode="game" game={game} />}
+      room={shown}
+      players={<PlayerList room={shown} meId={meId} isHost={isHost} mode="game" game={game} />}
       sheet={sheet}
       onSheet={openSheet}
-      table={<Table room={room} view={view} meId={meId} frame={frame} live={timeline} now={now} isPhone={isPhone} focus={focus} standing={standing} clock={clock} />}
-      panel={<ControlPanel view={view} meId={meId} balance={valueAt(timeline, chipsValue(meId), seat?.chips ?? 0, now)} watching={standing === 'watching'} canSend={playing && connected && !rejoining} busy={busy} hotkeys={!isPhone} />}
+      table={<Table room={shown} view={view} meId={meId} frame={frame} live={timeline} now={now} isPhone={isPhone} focus={focus} standing={standing} clock={clock} />}
+      panel={<ControlPanel view={view} meId={meId} balance={chipsOnScreen(timeline, meId, seat?.chips ?? 0, now)} watching={standing === 'watching'} canSend={playing && connected && !rejoining} busy={busy} hotkeys={!isPhone} />}
     />
   );
 }

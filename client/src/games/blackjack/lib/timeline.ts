@@ -4,12 +4,14 @@
  * outcomes show, and the old cards going to the discards before a new deal. Pure, so the store can
  * plan and the tests can check it without a browser.
  */
+import type { BlackjackView } from '@shared/games/blackjack/protocol';
 import {
   DEAL_MS,
   FLIP_MS,
   MOVE_MS,
   OUTCOMES,
   beginPlan,
+  chipsOnScreen,
   faceDown,
   finishPlan,
   flipping,
@@ -149,6 +151,22 @@ export function outcomesShown(timeline: Timeline, now: number): boolean {
 }
 
 /**
+ * A seat's stack on screen: until the outcomes of the round on the table show, it leaves out what
+ * that round's settle paid. Read from the latest table and its own timeline, never the frame: while
+ * the last round's cards are still leaving, the frame is that old table, and the new round (a
+ * natural settles the moment it is dealt) has already paid.
+ */
+/** The settled round on the table is still revealing: its outcomes (and what they paid or took) are not on screen yet. */
+export function revealPending(table: TableModel | null, timeline: Timeline, now: number): boolean {
+  return Boolean(table?.settled) && timeline.id === table?.round && !outcomesShown(timeline, now);
+}
+
+export function stackOnScreen(table: TableModel | null, timeline: Timeline, id: string, truth: number, now: number): number {
+  const owed = table?.settled && timeline.id === table.round ? (table.hands[id] ?? []).reduce((sum, h) => sum + (h.payout ?? 0), 0) : 0;
+  return chipsOnScreen(timeline, id, truth, now, owed);
+}
+
+/**
  * My moves may go once the cards they depend on have landed: my hand in play and the dealer's up
  * card. The rest of the deal (the other seats, the hole card) can still be sliding in.
  */
@@ -156,4 +174,12 @@ export function myHandLanded(timeline: Timeline, table: TableModel | null, meId:
   const hand = table?.hands[meId]?.[handIndex];
   if (!table || !hand || (timeline.discard && now < timeline.discard.until)) return false;
   return landed(timeline, dealerKey(0), now) && hand.cards.every((card, i) => landed(timeline, cardKey(meId, handIndex, i, card), now));
+}
+
+/** The view as the screen may tell it: a seat the settle left out of chips is not out until the outcomes show. */
+export function viewOnScreen(view: BlackjackView, table: TableModel | null, timeline: Timeline, now: number): BlackjackView {
+  if (!revealPending(table, timeline, now) || !Object.values(view.players).some((p) => p.bustedOut)) return view;
+  const players: BlackjackView['players'] = {};
+  for (const [id, p] of Object.entries(view.players)) players[id] = p.bustedOut ? { ...p, bustedOut: false } : p;
+  return { ...view, players };
 }

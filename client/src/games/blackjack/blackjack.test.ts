@@ -242,6 +242,40 @@ describe('the animation timeline', () => {
     expect(T.nextEvent(tl, NOW + 10)).toBe(NOW + 150);
   });
 
+  it('holds a stack at its pre-settle count until the outcome shows, the old table leaving included', () => {
+    const prevTl = plan(acting(), nextBetting(), T.EMPTY_TIMELINE, NOW - 20000);
+    // Round 3 is a natural: dealt and settled in one snapshot, the host's blackjack paying 125 on 50.
+    const natural = nextBetting({
+      round: 4,
+      players: {
+        host: { chips: 1125, bet: 0, hands: [], inRound: true, sittingOut: false, bustedOut: false },
+        bob: { chips: 280, bet: 0, hands: [], inRound: true, sittingOut: false, bustedOut: false },
+      },
+      lastRound: lastRound({
+        round: 3,
+        dealer: { cards: [c('9', 'H'), c('7', 'C')], holeHidden: false, total: 16, soft: false, blackjack: false },
+        hands: {
+          host: [settled([c('A'), c('K', 'D')], 'blackjack', 125, { status: 'blackjack' })],
+          bob: [settled([c('9'), c('10', 'C')], 'win', 40, { bet: 20, status: 'stood' })],
+        },
+      }),
+    });
+    const tl = plan(nextBetting(), natural, prevTl);
+    const table = tableOf(natural);
+    const at = T.outcomesAt(tl);
+    if (at === null || !table) throw new Error('no reveal planned');
+    // The old table is still leaving: the frame shows round 2, but the stacks must not move yet.
+    expect(tl.discard).not.toBeNull();
+    expect(T.stackOnScreen(table, tl, 'host', 1125, NOW + 10)).toBe(1000);
+    expect(T.stackOnScreen(table, tl, 'bob', 280, at - 1)).toBe(240);
+    expect(T.stackOnScreen(table, tl, 'host', 1125, at)).toBe(1125);
+    expect(T.stackOnScreen(table, tl, 'bob', 280, at)).toBe(280);
+    // A seat the settle left out of chips is not out on screen before the outcomes either.
+    const out = { ...natural, players: { ...natural.players, bob: { ...natural.players.bob, chips: 0, bustedOut: true } } };
+    expect(T.viewOnScreen(out, table, tl, at - 1).players.bob.bustedOut).toBe(false);
+    expect(T.viewOnScreen(out, table, tl, at).players.bob.bustedOut).toBe(true);
+  });
+
   it('updates a total pill when a card lands, not when it starts sliding in', async () => {
     const { handOnScreen } = await import('./components/Hand');
     const { dealerOnScreen } = await import('./components/Dealer');

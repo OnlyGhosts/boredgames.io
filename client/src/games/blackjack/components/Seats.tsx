@@ -191,7 +191,7 @@ export function Seats({ room, view, ids, staged, table, timeline, now, leaving, 
                   total={tileTotal(id, hands, timeline, now, turn, view.turn?.handIndex ?? 0, oneTotal || hands.length > 2)}
                   dimmed={seat.bustedOut}
                   onOpen={() => openSeat(id)}
-                  data={{ 'data-chips': seat.chips, 'data-bet': seat.bet }}
+                  data={{ 'data-chips': chipsOf(id), 'data-bet': seat.bet }}
                   cards={
                     hands.length > 0 && id !== staged ? (
                       <HandRow playerId={id} hands={hands} start={room.settings.startingChips} timeline={timeline} now={now} leaving={leaving} activeIndex={turn ? (view.turn?.handIndex ?? -1) : -1} place="seat" size="sm" mini testId="seat-hand" />

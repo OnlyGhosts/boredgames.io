@@ -312,7 +312,7 @@ describe('the components', () => {
         data: { 'data-amount': 40 },
         actions: createElement(TableButton, { label: 'Sit out', testId: 'sit-out', onClick: noop }),
         children: [
-        createElement(PanelLabelRow, { key: 'l', label: 'Bet amount', htmlFor: 'amt', balance: 960, truth: 1000, anchor: 'seat:me' }),
+        createElement(PanelLabelRow, { key: 'l', label: 'Bet amount', htmlFor: 'amt', balance: 960, anchor: 'seat:me' }),
         createElement(AmountField, {
           key: 'a',
           id: 'amt',
@@ -335,7 +335,7 @@ describe('the components', () => {
     // Whose turn it is lives on the table: the panel has no status line and no shortcut hint.
     expect(out).not.toContain('turn-status');
     expect(out).not.toContain('hotkey-hint');
-    expect(out).toMatch(/data-testid="my-chips" data-chips="1000" data-table-anchor="seat:me" aria-label="Balance 960 chips"/);
+    expect(out).toMatch(/data-testid="my-chips" data-chips="960" data-table-anchor="seat:me" aria-label="Balance 960 chips"/);
     expect(out).toMatch(/<input[^>]*inputMode="numeric"[^>]*value="40"/);
     expect(out).toContain('data-testid="clear"');
     expect(out).toMatch(/aria-pressed="true" data-testid="max"/);

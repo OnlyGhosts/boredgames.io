@@ -14,9 +14,10 @@ export const ME = 'me';
 /**
  * `over`: the final table once the game has ended, the last round's hands still on it and "Game over" under the banner.
  * `walk`: my turn moving through my hands, one a beat (`stepMs`) from the first to the last. `splits`: my hands split one
- * at a time, from two up to `hands`, the newest hand in play each beat.
+ * at a time, from two up to `hands`, the newest hand in play each beat. `natural`: the next round dealt and
+ * settled in one snapshot (my blackjack pays 3:2, every other seat wins), its stacks already paid in the truth.
  */
-export const PHASES = ['betting', 'deal', 'other', 'mine', 'dealer', 'results', 'over', 'walk', 'splits'] as const;
+export const PHASES = ['betting', 'deal', 'other', 'mine', 'dealer', 'results', 'over', 'walk', 'splits', 'natural'] as const;
 export type HarnessPhase = (typeof PHASES)[number];
 
 export interface Scenario {
@@ -274,6 +275,29 @@ function seatedRooms(s: Scenario): BlackjackRoomState[] {
       return Array.from({ length: s.hands }, (_, i) => room(acting(ME, i)));
     case 'splits':
       return Array.from({ length: Math.max(1, s.hands - 1) }, (_, i) => room(acting(ME, i + 1, i + 2)));
+    case 'natural': {
+      // Round 4 is dealt and settled at once: the snapshot's stacks carry the payouts before any card is on screen.
+      const before = settled();
+      const blackjack: Card[] = [{ rank: 'A', suit: 'S' }, { rank: 'K', suit: 'H' }];
+      const hands: Record<string, SettledHandView[]> = {};
+      const paid: Record<string, number> = {};
+      for (const id of order) {
+        const bet = id === ME ? s.stake : s.bet;
+        const h = id === ME ? hand(blackjack, 'blackjack', false, bet) : hand(cardsFor(others.indexOf(id) + 3, 2), 'stood', false, bet);
+        const payout = id === ME ? bet + Math.floor((bet * 3) / 2) : bet * 2;
+        hands[id] = [{ ...h, status: id === ME ? 'blackjack' : 'won', outcome: id === ME ? 'blackjack' : 'win', payout }];
+        paid[id] = payout;
+      }
+      const after: BlackjackView = {
+        ...before,
+        round: base.round + 2,
+        waitingFor: ids,
+        players: Object.fromEntries(ids.map((id) => [id, seat([], 0, { chips: s.chips + paid[id] })])),
+        controls: { canSitOut: true, canDealNow: false, canSkip: false },
+        lastRound: { round: base.round + 1, order, dealer: { cards: [{ rank: '10', suit: 'D' }, { rank: '8', suit: 'C' }], holeHidden: false, total: 18, soft: false, blackjack: false }, hands, peeked: false, revealEndsAt: Date.now() + 2200 },
+      };
+      return [room(before), room(after)];
+    }
     case 'over': {
       // The host ended the game: the last round's hands stay on the table, no stake down, nothing on offer.
       const done = settled();

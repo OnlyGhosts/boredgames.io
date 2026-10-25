@@ -6,8 +6,10 @@
  * the muck, the hands turning over at a showdown and the pot sliding to the winners. Pure, so the
  * store can plan and the tests can check it without a browser.
  */
+import type { PokerView } from '@shared/games/poker/protocol';
 import { dealGapMs } from '@shared/games/poker/reveal';
 import {
+  chipsValue,
   CHIP_MS,
   DEAL_GAP_MS,
   DEAL_MS,
@@ -24,7 +26,7 @@ import {
 } from '../../../platform/table/timeline';
 import { boardKey, committedBefore, dealingOrder, holding, holeKey, potsTotal, winnings, type PokerTable } from './table';
 
-export { CHIP_MS, DEAL_GAP_MS, DEAL_MS, DISCARD_MS, FLIP_MS, MAX_BACKLOG_MS, animating, cardMotion, cardShown, departure, faceDown, flightsAt, flipping, frameAt, nextEvent, valueAt } from '../../../platform/table/timeline';
+export { CHIP_MS, chipsOnScreen, chipsValue, DEAL_GAP_MS, DEAL_MS, DISCARD_MS, FLIP_MS, MAX_BACKLOG_MS, animating, cardMotion, cardShown, departure, faceDown, flightsAt, flipping, frameAt, nextEvent, valueAt } from '../../../platform/table/timeline';
 
 /** The pot sliding over to a winner. */
 export const PAY_MS = 500;
@@ -47,7 +49,6 @@ export const EMPTY_TIMELINE: Timeline = snapTimeline(null, 0);
 
 /** Names of the numbers the table shows on their way to the truth. */
 export const betValue = (id: string): string => `bet:${id}`;
-export const chipsValue = (id: string): string => `chips:${id}`;
 export const POT_VALUE = 'pot';
 /** Anchors (data-table-anchor) the chips fly between. */
 export const seatAnchor = (id: string): string => `seat:${id}`;
@@ -221,4 +222,17 @@ export function outcomesShown(timeline: Timeline, now: number): boolean {
 
 export function paidOut(timeline: Timeline, now: number): boolean {
   return reached(timeline, PAID, now);
+}
+
+/** The settled hand on the table is still revealing: its outcomes (and who they left out of chips) are not on screen yet. */
+export function revealPending(table: PokerTable | null, timeline: Timeline, now: number): boolean {
+  return Boolean(table?.results) && timeline.id === table?.hand && !outcomesShown(timeline, now);
+}
+
+/** The view as the screen may tell it: a seat the showdown left out of chips is not out until the outcomes show. */
+export function viewOnScreen(view: PokerView, table: PokerTable | null, timeline: Timeline, now: number): PokerView {
+  if (!revealPending(table, timeline, now) || !Object.values(view.players).some((p) => p.busted)) return view;
+  const players: PokerView['players'] = {};
+  for (const [id, p] of Object.entries(view.players)) players[id] = p.busted ? { ...p, busted: false } : p;
+  return { ...view, players };
 }

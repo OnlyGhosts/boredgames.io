@@ -11,17 +11,11 @@ import { Table } from './components/Table';
 import { isActing, nameOf, useConnected, useRejoining, useTableNow } from './hooks';
 import { focusOf } from './lib/focus';
 import { tableOf, type TableModel } from './lib/table';
-import { animating, frameAt, myHandLanded, outcomesShown, snapTimeline, type Timeline } from './lib/timeline';
+import { animating, frameAt, myHandLanded, outcomesShown, snapTimeline, stackOnScreen, viewOnScreen } from './lib/timeline';
 import { standingOf } from './lib/text';
 import { useBlackjack } from './store';
 
 const meta = gameById('blackjack');
-
-/** Chips a settled hand is still to hand back on screen: the balance catches up when the outcome shows. */
-function pendingPayout(table: TableModel | null, timeline: Timeline, now: number, id: string): number {
-  if (!table?.settled || outcomesShown(timeline, now)) return 0;
-  return (table.hands[id] ?? []).reduce((sum, h) => sum + (h.payout ?? 0), 0);
-}
 
 /**
  * The Blackjack table on the platform's table shell: the top bar (the game, players, options), the control
@@ -43,20 +37,23 @@ export function BlackjackScreen({ room, meId, isHost }: GameScreenProps<Blackjac
   const sheet = useBlackjack((s) => s.sheet);
   const openSheet = useBlackjack((s) => s.openSheet);
   const stored = useBlackjack((s) => s.timeline);
-  const view = room.game;
-  const table = tableOf(view);
+  const table = tableOf(room.game);
   // A timeline planned for another table (a render before the store caught up) shows the truth.
   const timeline = stored.id === (table?.round ?? null) || stored.discard ? stored : snapTimeline(table, 0);
   const now = useTableNow(timeline);
-  if (!view) return null;
+  if (!room.game) return null;
+  // Who went out of chips waits for the reveal, like the stacks.
+  const view = viewOnScreen(room.game, table, timeline, now);
+  const shown = view === room.game ? room : { ...room, game: view };
 
   const frame = frameAt(timeline, table, now);
   const playing = room.phase === 'playing';
   const held = Boolean(room.waiting) || view.phase === 'held';
   const myTurn = isActing(view, meId);
-  const turnName = nameOf(room, view.turn?.playerId);
+  const turnName = nameOf(shown, view.turn?.playerId);
   const seat = view.players[meId];
-  const chipsOf = (id: string) => (view.players[id]?.chips ?? 0) - pendingPayout(frame.table, frame.timeline, now, id);
+  // Every stack on screen holds its pre-settle count until the round's outcomes show.
+  const chipsOf = (id: string) => stackOnScreen(table, timeline, id, view.players[id]?.chips ?? 0, now);
   const busy = animating(timeline, now);
   // The settled round's reveal is still playing: every part of the screen says it is the dealer's turn.
   const dealerPlaying = Boolean(frame.table?.settled) && !outcomesShown(frame.timeline, now);
@@ -83,14 +80,14 @@ export function BlackjackScreen({ room, meId, isHost }: GameScreenProps<Blackjac
       mainTestId="blackjack-main"
       data={{ 'data-phase': view.phase, 'data-round': view.round, 'data-turn-player': view.turn?.playerId, 'data-turn-hand': view.turn?.handIndex, 'data-busy': busy }}
       isPhone={isPhone}
-      room={room}
-      players={<PlayerList room={room} meId={meId} isHost={isHost} mode="game" game={game} />}
+      room={shown}
+      players={<PlayerList room={shown} meId={meId} isHost={isHost} mode="game" game={game} />}
       sheet={sheet}
       onSheet={openSheet}
-      table={<Table room={room} view={view} meId={meId} truth={table} frame={frame} now={now} isPhone={isPhone} focus={focus} line={line} chipsOf={chipsOf} />}
+      table={<Table room={shown} view={view} meId={meId} truth={table} frame={frame} now={now} isPhone={isPhone} focus={focus} line={line} chipsOf={chipsOf} />}
       panel={
         <ControlPanel
-          room={room}
+          room={shown}
           view={view}
           meId={meId}
           balance={chipsOf(meId)}

@@ -99,7 +99,7 @@ export function ControlPanel({ view, meId, balance, watching, canSend, busy, hot
       testId="pk-panel"
       data={{ 'data-kind': range?.kind, 'data-min': range?.min, 'data-max': range?.max, 'data-amount': amount ?? undefined, 'data-my-turn': myTurn, 'data-premove': pick ? (premove?.kind ?? 'none') : undefined }}
     >
-      <PanelLabelRow label={kind === 'bet' ? 'Bet amount' : 'Raise to'} htmlFor="pk-raise-amount" balance={balance} truth={seat?.chips ?? 0} anchor={seatAnchor(meId)} />
+      <PanelLabelRow label={kind === 'bet' ? 'Bet amount' : 'Raise to'} htmlFor="pk-raise-amount" balance={balance} anchor={seatAnchor(meId)} />
       <AmountField
         id="pk-raise-amount"
         value={shown}

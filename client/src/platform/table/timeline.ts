@@ -214,6 +214,19 @@ export function valueAt<T>(timeline: Timeline<T>, name: string, truth: number, n
   return value;
 }
 
+/** The shown number for a seat's stack (a game may tween it on its way to the truth). */
+export const chipsValue = (id: string): string => `chips:${id}`;
+
+/**
+ * The chips a seat shows at `now`, the one figure every stack, balance and bet limit reads: the
+ * stack's planned tween if it has one, and until the round's outcomes show, less `owed`, what the
+ * settle paid that seat. So no count moves before the cards that decide it are on screen.
+ */
+export function chipsOnScreen<T>(timeline: Timeline<T>, id: string, truth: number, now: number, owed = 0): number {
+  const shown = valueAt(timeline, chipsValue(id), truth, now);
+  return reached(timeline, OUTCOMES, now) ? shown : shown - owed;
+}
+
 /** The chips in the air at `now`. */
 export function flightsAt<T>(timeline: Timeline<T>, now: number): Flight[] {
   return timeline.flights.filter((f) => now >= f.at && now < f.at + f.ms);

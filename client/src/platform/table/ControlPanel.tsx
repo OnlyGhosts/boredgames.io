@@ -77,16 +77,16 @@ export function TableButton({ label, ariaLabel, testId, onClick, enabled = true 
 }
 
 /**
- * Row 1: what the amount is for, and my stack (`truth` is the real count behind a balance still
- * catching up). `anchor`: where my chips fly from and back to (Poker's `seat:<id>`).
+ * Row 1: what the amount is for, and my stack as it is on show (a payout still to show is not on it,
+ * not even in data-chips). `anchor`: where my chips fly from and back to (Poker's `seat:<id>`).
  */
-export function PanelLabelRow({ label, htmlFor, balance, truth, anchor }: { label: string; htmlFor: string; balance: number; truth: number; anchor?: string }) {
+export function PanelLabelRow({ label, htmlFor, balance, anchor }: { label: string; htmlFor: string; balance: number; anchor?: string }) {
   return (
     <div className="tbl-panel__label-row">
       <label className="tbl-panel__label" htmlFor={htmlFor}>
         {label}
       </label>
-      <span className="tbl-panel__balance" data-testid="my-chips" data-chips={truth} data-table-anchor={anchor} aria-label={`Balance ${balance} chips`}>
+      <span className="tbl-panel__balance" data-testid="my-chips" data-chips={balance} data-table-anchor={anchor} aria-label={`Balance ${balance} chips`}>
         <StackCount value={balance} />
       </span>
     </div>
