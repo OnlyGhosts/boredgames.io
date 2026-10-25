@@ -465,6 +465,8 @@ test('hand one: a raise through the panel, a call and a fold, the board street b
   }
   expect(Object.keys(paid).length).toBeGreaterThan(0);
   const total = Object.values(paid).reduce((a, b) => a + b, 0);
+  // The stacks on show reach the truth once the payout has landed.
+  for (const p of players) await expect(screen(p)).toHaveAttribute('data-busy', 'false', { timeout: 10_000 });
   const committed: Record<string, number> = {};
   for (const p of players) committed[p.name] = STARTING_CHIPS - (await chipsOf(p)) + (paid[p.name] ?? 0);
   expect(total).toBe(Object.values(committed).reduce((a, b) => a + b, 0));
