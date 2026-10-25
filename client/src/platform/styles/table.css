@@ -1516,7 +1516,7 @@
 
 /* A chip or two drawn before a figure: as tall as the text, overlapping like a bet's chips. */
 .tbl-chipmark {
-  --stake-h: calc(1.15em + 5px);
+  --stake-h: calc(1.55em + 5px);
   display: inline-flex;
   align-items: center;
   flex: none;
