@@ -946,11 +946,18 @@ test('a move picked before my turn: Pia taps Stand while Hana plays, and it stan
       const state = async () => {
         if ((await roundOn(a)) > round) return 'settled';
         for (const p of [a, b]) if ((await p.locator('[data-testid="action-stand"][aria-pressed="false"]').count()) > 0) return p === a ? 'a' : 'b';
+        // The other hand has nothing to pick (a natural): only a live move is left, so play the round out.
+        for (const p of [a, b]) if ((await p.locator('[data-testid="action-stand"]:not([aria-pressed]):enabled').count()) > 0) return p === a ? 'live-a' : 'live-b';
         return null;
       };
       await expect.poll(state, { timeout: 20_000 }).not.toBeNull();
       const now = await state();
       if (now === 'settled') continue;
+      if (now === 'live-a' || now === 'live-b') {
+        await (now === 'live-a' ? a : b).getByTestId('action-stand').click();
+        await expect.poll(() => roundOn(a), { timeout: 20_000 }).toBeGreaterThan(round);
+        continue;
+      }
       const waiting = now === 'a' ? a : b;
       const acting = waiting === a ? b : a;
       const stand = waiting.getByTestId('action-stand');
