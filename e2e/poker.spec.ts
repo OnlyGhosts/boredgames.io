@@ -703,8 +703,9 @@ test('no page errors were raised in any browser', async () => {
  * A 100,000 table of three on a 320px phone (me and two players on bare sockets, moved by the spec):
  * a seat that calls my 12,000 raise gets a pill of chips beside its line, and the 142px tile
  * squeezes the line to "Call 12k" while they fly in; once the street has closed and the chips have
- * gone to the pot, the line has its row again and reads "Call 12,000" in full (it once stayed
- * "Call 12k" for the whole next street, measured only when its tile resized). The seat that closes
+ * gone to the pot, the line reads the fullest form its header holds beside the name, the same form
+ * a freshly loaded page picks (it once stayed short for the whole next street, measured only when
+ * its tile resized). The seat that closes
  * the street is read, its call being the move that stays on show into the flop; a hand where that
  * seat would then be first to act (me the big blind, the small blind closing), where its line says
  * "Thinking", is folded out first, and the next hand deals me the small blind.
@@ -764,11 +765,17 @@ test('a 100,000 table of three on a 320px phone: a seat’s call reads in full o
     }
     await expect(board).toHaveAttribute('data-street', 'flop');
     expect(closer, 'a bot closed the street').not.toBe('');
-    // Its chips went to the pot: the line has its row again and reads in full, the first of its forms.
+    // Its chips went to the pot. The line beside its name reads the fullest form its header holds,
+    // the same form a page measuring it afresh picks: never one left over from the street before.
     const seat = page.locator(`[data-testid="seat"][data-player-id="${closer}"]`);
     await expect(seat.getByTestId('seat-bet')).toHaveAttribute('data-bet', '0');
-    await expect(seat.getByTestId('seat-line')).toHaveText('Call 12,000');
-    await expect(seat.getByTestId('seat-line')).toHaveAttribute('data-fit', '0');
+    await page.waitForTimeout(500);
+    const live = { text: await seat.getByTestId('seat-line').textContent(), fit: await seat.getByTestId('seat-line').getAttribute('data-fit') };
+    expect(['Call 12,000', 'Call 12k']).toContain(live.text);
+    await page.reload();
+    await expect(board).toHaveAttribute('data-street', 'flop');
+    await expect(seat.getByTestId('seat-line')).toHaveText(live.text ?? '');
+    await expect(seat.getByTestId('seat-line')).toHaveAttribute('data-fit', live.fit ?? '');
     await expect(page.getByTestId('pot')).toHaveText(/^Pot\s+36,000$/, { useInnerText: true });
     await tilesReadable(page, 'the flop on a 320px phone');
     expect(errors).toEqual([]);
