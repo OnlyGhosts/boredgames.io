@@ -2,7 +2,7 @@ import { expect, test, type Browser, type BrowserContext, type Locator, type Pag
 import { BLACKJACK_FINAL_HOLD_MS } from '../shared/games/blackjack/deal';
 import { closeResults, createParty, expectReadyCount, joinByCode, readyAll } from './party';
 import { tableBots, type TableBot } from './tableBots';
-import { cornersClear, tilesReadable } from './tableFit';
+import { cornersClear, seatFloors, tilesReadable } from './tableFit';
 
 /**
  * Blackjack the Stake way, between a desktop host and two phones (390x844, touch): no rounds, no
@@ -759,25 +759,22 @@ async function bigTable(browser: Browser, base: string, size: number): Promise<v
     await expect(phone.getByTestId('table-turn')).toHaveAttribute('data-state', 'result');
     await expect(phone.getByTestId('place-bet')).toBeEnabled();
     await fitsEverySize(phone, PHONES, `${size} players, settled`);
-    // The tiles step down with the table (and the room a 390x844 phone leaves the seats: grid.ts tierFor).
-    const tiers: Record<number, string> = { 2: 'full', 6: 'compact', 12: 'small', 24: 'small', 50: 'dense' };
+    // The tiles step down with the table (and the room a 390x844 phone leaves the seats: grid.ts tierFor): every opponent's cards,
+    // bet and stack on full tiles, then on compact ones three across; past what the room holds, the crowd's chips.
+    const tiers: Record<number, RegExp> = { 2: /^full$/, 6: /^full$/, 12: /^compact$/, 24: /^small$/, 50: /^(small|dense)$/ };
     await expect(phone.getByTestId('seats')).toHaveAttribute('data-tier', tiers[size]);
-    // The cards take the room the seats leave (room.ts useSeatRoom): a table of two leaves the dealer's row and my hand big
-    // (55.5px when the cards went by the table's height alone); a table of twelve leaves them 1px, its small tiles taking their
-    // 158px and the 8px kept over them, and the two rows at the least card (a pill's height and 1.67 card widths each) leaving
-    // 167.95px, just under the 168px compact tiles would need: 0.3px of card (3.34px of the rows a card pixel) over the least;
-    // a table of twenty-four or more needs all its room, so its cards keep their least size (11% of the table's height).
+    if (size <= 12) await seatFloors(phone, `${size} players, settled`, 24);
+    // The cards take the room the seats leave (room.ts useSeatRoom): a table of two or six leaves the dealer's row and my hand big;
+    // a table of twelve leaves them what its three rows of compact tiles do not need; a table of twenty-four, on the crowd's
+    // chips, leaves them big again; fifty need all the room, so the cards keep their least size.
     const cards = await phone.getByTestId('bj-table').evaluate((el) => {
       const style = getComputedStyle(el);
       return { w: parseFloat(style.getPropertyValue('--bj-card-w')), base: parseFloat(style.getPropertyValue('--bj-card-base')), spare: style.getPropertyValue('--tbl-spare') };
     });
-    // A table of two stops where the dealer's four and a shoe the cards' own size still fit beside each other: 61.9px.
-    if (size === 2) expect(cards.w, '2 players: the cards').toBeGreaterThanOrEqual(61.5);
-    if (size === 12) {
-      expect(cards.spare, '12 players: the room the seats leave the cards').toBe('1px');
-      expect(Math.abs(cards.w - (cards.base + 1 / 3.34)), '12 players: the cards that pixel over their least size').toBeLessThanOrEqual(0.01);
-    }
-    if (size >= 24) expect(Math.abs(cards.w - cards.base), `${size} players: the cards at their least size`).toBeLessThanOrEqual(0.1);
+    // A small table stops where the dealer's four and a shoe the cards' own size still fit beside each other: 61.9px.
+    if (size <= 6 || size === 24) expect(cards.w, `${size} players: the cards`).toBeGreaterThanOrEqual(61.5);
+    if (size === 12) expect(cards.w, '12 players: the cards over their least size').toBeGreaterThan(cards.base + 5);
+    if (size >= 50) expect(Math.abs(cards.w - cards.base), `${size} players: the cards at their least size`).toBeLessThanOrEqual(0.1);
     expect(errors).toEqual([]);
   } finally {
     for (const b of bots) b.close();

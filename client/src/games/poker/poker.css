@@ -44,7 +44,15 @@
    */
   --pk-deck-least: clamp(48px, 7cqh, 72px);
   --pk-board-room: 40px;
-  --pk-card-w: min(clamp(56px, 12cqh, 120px), calc((100cqw - 2 * var(--tbl-pad) - 2 * var(--pk-deck-least) - var(--pk-board-room)) / 5.4));
+  /*
+   * A desktop's cards take the room the seats leave them (--tbl-spare, room.ts useSeatRoom), from
+   * their least up to the size the table gives them (--pk-card-top): a card pixel takes 3.17px, the
+   * board's card and my hand's. A few seats leave them at the top; a crowd takes what its tiles need.
+   */
+  --pk-card-top: min(clamp(56px, 12cqh, 120px), calc((100cqw - 2 * var(--tbl-pad) - 2 * var(--pk-deck-least) - var(--pk-board-room)) / 5.4));
+  --pk-card-base: min(var(--pk-card-top), clamp(36px, 6cqh, 56px));
+  --pk-card-w: clamp(var(--pk-card-base), calc(var(--pk-card-base) + var(--tbl-spare) / (1.5 + var(--hand-k))), var(--pk-card-top));
+  --tbl-grow: calc((var(--pk-card-w) - var(--pk-card-base)) * (1.5 + var(--hand-k)));
   --pk-stage-w: var(--pk-card-w);
   --pk-pot-h: clamp(30px, 4.4cqh, 40px);
   --tbl-mini-w: clamp(30px, 4.6cqh, 40px);
@@ -319,7 +327,7 @@
 /* A short desktop window (1024x768, 1280x800): the cards a step smaller, so a big table's seats keep their height. */
 @media (min-width: 761px) and (max-height: 820px) {
   .pk-table {
-    --pk-card-w: min(clamp(52px, 10.5cqh, 120px), calc((100cqw - 2 * var(--tbl-pad) - 2 * var(--pk-deck-least) - var(--pk-board-room)) / 5.4));
+    --pk-card-top: min(clamp(52px, 10.5cqh, 120px), calc((100cqw - 2 * var(--tbl-pad) - 2 * var(--pk-deck-least) - var(--pk-board-room)) / 5.4));
   }
 }
 
@@ -356,11 +364,12 @@
 }
 
 /*
- * The shortest phones (320x568, a phone on its side): the pot beside the board rather than over
- * it, so the seats keep the height: the pot at the left, the board in the room between it and the
- * deck.
+ * Short phones (an iPhone in Safari, 393x688; an SE, 375x548; a phone on its side): the pot
+ * beside the board rather than over it, so the seats keep the height for every opponent's cards,
+ * bet and stack: the pot at the left, the board in the room between it and the deck. A taller
+ * phone has the room for the pot over a bigger board.
  */
-@media (max-width: 760px) and (max-height: 620px), (min-aspect-ratio: 3/2) and (max-height: 520px) {
+@media (max-width: 760px) and (max-height: 760px), (min-aspect-ratio: 3/2) and (max-height: 520px) {
   .pk-table {
     --pk-pot-h: 24px;
     --pk-card-w: 30px;

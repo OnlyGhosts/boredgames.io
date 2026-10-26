@@ -9,7 +9,7 @@ import { TotalPill, type Tone } from './Outcome';
 import { FitText, TILE_FIT } from './fit';
 import { ChipMark, STACK_CHIP, StackCount, StakePill } from './Stakes';
 import type { StakeFormat } from './stakes';
-import { GRID_GAP, TILE_MAX_WIDTH, cardsFit, fitGrid, fitsRoom, naturalHeight, shapeOf, tierFor, tileHeight, type Room, type TileTier } from './grid';
+import { CARD_FLOOR, GRID_GAP, columnWidth, fanStep, fitGrid, fitsRoom, naturalHeight, shapeOf, tierFor, tileHeight, type Room, type TileTier } from './grid';
 import { betChips, chipFigure } from './stakes';
 import { shortChips } from '../lib/format';
 import { roomLeft } from './room';
@@ -69,8 +69,8 @@ function useMeasured(): [RefObject<HTMLUListElement | null>, Measured | null] {
   return [ref, measured];
 }
 
-/** The grid's tiles' width once measured (null before), and whether it is a desktop's: a full tile's cards keep their floor by it (grid.ts cardsFit). */
-const TileRoom = createContext<{ width: number | null; wide: boolean }>({ width: null, wide: false });
+/** Whether the grid is a desktop's: a tile's cards keep that floor (grid.ts CARD_FLOOR). */
+const TileRoom = createContext<{ wide: boolean }>({ wide: false });
 
 /**
  * Every other seated player as a tile, in seat order (left to right, top to bottom, the order of
@@ -90,10 +90,10 @@ export function PlayersGrid({ count, label, wide = false, bare = false, children
   // The height the grid asks for: what its tiles need at their natural size in this width, within the room where the tier fits it.
   const wanted = measured ? naturalHeight(count, measured.box.width, { wide, tier, bare }) : 0;
   const natural = measured ? `${fitsRoom(count, measured.room, { wide, tier }) ? Math.min(wanted, measured.room.height) : wanted}px` : undefined;
-  const style = { '--cols': cols, '--rows': rows, '--tile-w': `${shape.width}px`, '--tile-h': `${tileHeight(tier, wide, bare)}px`, '--grid-gap': `${GRID_GAP[tier]}px`, '--grid-natural': natural } as CSSProperties;
-  const tileWidth = measured ? Math.min(TILE_MAX_WIDTH, (measured.box.width - (cols - 1) * GRID_GAP[tier]) / cols) : null;
+  const colWidth = measured ? columnWidth(measured.box.width, cols, GRID_GAP[tier]) : null;
+  const style = { '--cols': cols, '--rows': rows, '--tile-w': `${shape.width}px`, '--tile-h': `${tileHeight(tier, wide, bare, colWidth)}px`, '--grid-gap': `${GRID_GAP[tier]}px`, '--grid-natural': natural } as CSSProperties;
   return (
-    <TileRoom.Provider value={{ width: tileWidth, wide }}>
+    <TileRoom.Provider value={{ wide }}>
     <ul ref={ref} className={`tbl-grid tbl-grid--${tier}${wide ? ' tbl-grid--arc' : ''}`} style={style} aria-label={label} data-testid="seats" data-tier={tier} data-cols={cols} data-count={count}>
       {Children.toArray(children(tier)).map((child, i) => (
         <li key={isValidElement(child) && child.key !== null ? child.key : i} className="tbl-grid__cell" style={wide ? arcCell(i, cols, count) : undefined}>
@@ -112,9 +112,16 @@ function arcCell(i: number, cols: number, count: number): CSSProperties | undefi
   return i % cols === 0 && inRow < cols ? { gridColumnStart: cols - inRow + 1 } : undefined;
 }
 
-/** A figure on a tile's footer: whole under 10,000 ("1,040"), short above ("50k", "1.3M"). */
+/** A figure on a tile: whole under 10,000 ("1,040"), short above ("50k", "1.3M"). */
 export function tileFigure(n: number): string {
   return n < 10_000 ? chipFigure(n, 'full') : shortChips(n);
+}
+
+/** A tile's figure, then its short form where that differs ("1,250", then "1.3k"), for a line with no room for the whole one. */
+export function figureForms(n: number): string[] {
+  const whole = tileFigure(n);
+  const short = shortChips(n);
+  return short === whole ? [whole] : [whole, short];
 }
 
 /** How a seat's status line reads: the turn in the accent, a settled result strong, out in red, the rest quiet. */
@@ -175,7 +182,7 @@ interface TileProps {
   connected: boolean;
   /** The tier the grid settled on (PlayersGrid hands it to its children). */
   tier: TileTier;
-  /** Whose turn it is: a thick lime ring and the Playing tag. */
+  /** Whose turn it is: a thick lime ring. */
   turn: boolean;
   /** On turn but not playing it (the phone went quiet): this word in a plain tag instead of Playing. */
   turnNote?: string;
@@ -183,7 +190,7 @@ interface TileProps {
   mark: SeatMark;
   /** The settled outcome, kept on show until the next deal. */
   outcome?: SeatOutcome | null;
-  /** The stack, in words ("1,000 chips"; "1.2k chips" where a tile is too small for the full figure, or its row too narrow for it whole, or too short for it beside the bet; the figure alone beside the total on a compact tile under 100px). */
+  /** The stack: its figure by a lime chip ("1,040", "1.3M": tileFigure); the crowd's tiers write it in words where they have the room. */
   chips?: number;
   /** The stake in front of the seat: "bet 50k" on a tile's footer, a pill of chips on the crowd tiers. Unset: no bet line. */
   bet?: number;
@@ -191,7 +198,7 @@ interface TileProps {
   start?: number;
   /** On the bet's box (Poker's anchor for the chips flying to it). */
   betData?: DataAttrs;
-  /** The total, shown wherever the cards are not; `short` stands in for it where it shares the stack's line (table.css: Blackjack's two split hands, "21/15", read as the hand in play, "15"). */
+  /** The hand's total, big beside the cards (Blackjack: two split hands joined, "21/15"). */
   total?: { text: string; tone: Tone; short?: string } | null;
   /** Folded, out, not dealt in: dimmed. */
   dimmed?: boolean;
@@ -199,12 +206,16 @@ interface TileProps {
   badge?: ReactNode;
   /** A word in the corner ("All in"). */
   tag?: string | null;
-  /** The cards in miniature, on full tiles. */
+  /** The cards in miniature. */
   cards?: ReactNode;
+  /** How many cards the seat holds in this tile (data-cards, for the tests): 0 before the deal, or where its hands are on my stage. */
+  held?: number;
+  /** Folded (Poker): two empty places where the cards were, the pill saying so. */
+  folded?: boolean;
   /**
-   * How the cards lie, for their size on a narrow phone tile (table.css): the most cards in any one
-   * hand and how many hands there are (a row of split hands keeps room for the next one to peek
-   * in). Unset: one hand of two (Poker's hole cards).
+   * How the cards lie, for their size (table.css) and their step (a long hand overlaps more): the
+   * most cards in any one hand and how many hands there are (split hands side by side where they
+   * fit at the floor). Unset: one hand of two (Poker's hole cards).
    */
   fan?: { cards: number; hands: number };
   /** Laid over the tile (a payout rising). */
@@ -241,17 +252,42 @@ export function PlayerTile(props: TileProps) {
 }
 
 /**
- * A full or compact tile, cards first (table.css): a header (avatar, name, the status pill with
- * its mark), the hand as a fan with the big total beside it (the total alone on a compact tile or
- * where the fan would go under its floor), a footer (the stack, the bet). The ring says whose turn.
+ * The fan's step for `cards` cards in a box `width` px wide at the card floor (grid.ts fanStep),
+ * measured as the tile lays out, so a long hand overlaps more rather than run off the tile.
  */
-function SeatTile({ playerId, name, avatar, connected, tier, turn, line, mark, outcome = null, chips, bet, start, betData, total, dimmed = false, badge, cards, fan, extra, onOpen, shortBadge = false, data }: TileProps) {
+function useFanStep(ref: RefObject<HTMLElement | null>, cards: number, floor: number): number | null {
+  const [step, setStep] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const read = () => {
+      const next = fanStep(el.clientWidth, cards, floor);
+      setStep((prev) => (prev === next ? prev : next));
+    };
+    read();
+    const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(read) : null;
+    observer?.observe(el);
+    return () => observer?.disconnect();
+  }, [ref, cards, floor]);
+  return step;
+}
+
+/**
+ * A seat's tile (full or compact), everything a player looks for at once (table.css): a header
+ * (avatar, name, the status pill with its mark); then the hand as a fan of readable cards, the big
+ * total beside it (Blackjack), and the stack and the bet. A full tile puts the stack and the bet
+ * in a column right of the cards; a compact one, narrower, on a line under them. The ring says
+ * whose turn it is.
+ */
+function SeatTile({ playerId, name, avatar, connected, tier, turn, line, mark, outcome = null, chips, bet, start, betData, total, dimmed = false, badge, cards, held = 0, folded = false, fan, extra, onOpen, shortBadge = false, data }: TileProps) {
   const room = useContext(TileRoom);
-  const fanCards = fan?.cards ?? 2;
-  const showCards = tier === 'full' && cards !== undefined && cardsFit(room.width, fanCards, room.wide);
-  const fanStyle = { '--tile-fan': Math.max(2, fanCards), '--tile-hands': Math.max(1, fan?.hands ?? 1) } as CSSProperties;
-  // Poker's total only stood in for the stack, which the footer shows: no total there.
+  const cardsRef = useRef<HTMLSpanElement>(null);
+  const fanCards = Math.max(2, fan?.cards ?? 2);
+  const step = useFanStep(cardsRef, fanCards, room.wide ? CARD_FLOOR.wide : CARD_FLOOR.phone);
+  const fanStyle = { '--tile-fan': fanCards, '--tile-hands': Math.max(1, fan?.hands ?? 1), ...(step === null ? {} : { '--fan-step': step }) } as CSSProperties;
+  // Poker's total only stood in for the stack, which the tile shows anyway: no total there.
   const hero = shortBadge ? null : total;
+  const showCards = held > 0 && cards !== undefined;
   return (
     <div
       className={`tbl-tile tbl-tile--${tier}${turn ? ' tbl-tile--turn' : ''}${dimmed ? ' tbl-tile--dim' : ''}${outcome ? ` tbl-tile--${outcome}` : ''}`}
@@ -262,6 +298,7 @@ function SeatTile({ playerId, name, avatar, connected, tier, turn, line, mark, o
       data-mark={mark}
       data-result={outcome ?? undefined}
       data-turn={turn}
+      data-cards={held}
       aria-current={turn ? 'true' : undefined}
       {...data}
     >
@@ -283,36 +320,43 @@ function SeatTile({ playerId, name, avatar, connected, tier, turn, line, mark, o
           </span>
         )}
       </span>
-      {(showCards || hero) && (
-        <span className="tbl-tile__hero">
-          {showCards && (
-            <span className="tbl-tile__cards" style={fanStyle}>
-              {cards}
-            </span>
-          )}
-          {hero && (
-            <span className="tbl-tile__total" data-testid="seat-total" data-tone={hero.tone} data-long={hero.text.length > 3 ? '' : undefined}>
-              {hero.text}
-            </span>
-          )}
-        </span>
-      )}
-      {(chips !== undefined || bet !== undefined) && (
-        <span className="tbl-tile__foot">
-          {chips !== undefined && (
-            <span className="tbl-tile__chips" data-testid="seat-chips" data-chips={chips}>
-              <ChipMark bands={STACK_CHIP} />
-              {tileFigure(chips)}
-            </span>
-          )}
-          {bet !== undefined && (
-            <span className="tbl-tile__bet" data-testid="seat-bet" data-bet={bet} {...betData}>
-              {bet > 0 && <ChipMark bands={betChips(bet, start ?? bet, 2).bands} />}
-              {bet > 0 ? `bet ${tileFigure(bet)}` : ''}
-            </span>
-          )}
-        </span>
-      )}
+      <span className="tbl-tile__body">
+        {(showCards || folded) && (
+          <span ref={cardsRef} className={`tbl-tile__cards${folded && !showCards ? ' tbl-tile__cards--folded' : ''}`} style={fanStyle} data-testid="seat-cards">
+            {showCards ? (
+              cards
+            ) : (
+              <>
+                <span className="tbl-tile__slot" />
+                <span className="tbl-tile__slot" />
+              </>
+            )}
+          </span>
+        )}
+        {hero && (showCards || !folded) && (
+          <span className="tbl-tile__total" data-testid="seat-total" data-tone={hero.tone} data-long={hero.text.length > 3 ? '' : undefined}>
+            {/* Split hands' totals joined ("21/15"), or the hand in play's alone where the tile has no room for both. */}
+            <FitText forms={hero.short ? [hero.text, hero.short] : [hero.text]} className="tbl-tile__total-text" />
+          </span>
+        )}
+        {(chips !== undefined || bet !== undefined) && (
+          <span className="tbl-tile__foot">
+            {chips !== undefined && (
+              <span className="tbl-tile__chips" data-testid="seat-chips" data-chips={chips}>
+                <ChipMark bands={STACK_CHIP} />
+                <FitText forms={figureForms(chips)} className="tbl-tile__chips-text" />
+              </span>
+            )}
+            {bet !== undefined && (
+              <span className="tbl-tile__bet" data-testid="seat-bet" data-bet={bet} {...betData}>
+                {bet > 0 && <ChipMark bands={betChips(bet, start ?? bet, 2).bands} />}
+                {/* "bet 50k"; where the tile has no room for the word, "50k" by its chips; for a long figure, its short form. */}
+                {bet > 0 && <FitText forms={[`bet ${tileFigure(bet)}`, ...figureForms(bet)]} className="tbl-tile__bet-text" />}
+              </span>
+            )}
+          </span>
+        )}
+      </span>
       {extra}
       {onOpen && <button type="button" className="tbl-tile__open" onClick={onOpen} aria-label={`${name}: ${line.text || 'seat'}. Show details`} data-testid="seat-open" />}
     </div>

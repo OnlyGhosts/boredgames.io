@@ -1266,29 +1266,28 @@
 }
 
 /*
- * Full and compact (a table of a few): one skeleton, cards first. A header (avatar, name, the
- * status pill with its mark), the hero (the hand as an overlapping fan, the big total beside it;
- * the total alone on a compact tile), a footer (the stack quiet on the left, the bet on the
- * right). Nothing in it ever runs past its edge: the name is the only thing cut (an ellipsis);
- * the footer goes where the tile is short, the stack first where it is narrow; the cards shrink
- * to their floor (24px on a phone, 32px on a desktop), under which the tile shows the total alone
- * (PlayersGrid, grid.ts cardsFit).
+ * Full and compact (every table of a few, and as many more as the room has): one skeleton that
+ * always shows what a player looks for at once. A header (avatar, name, the status pill with its
+ * mark); then the hand as an overlapping fan of readable cards, the big total beside it (Blackjack),
+ * and the stack and the bet. A full tile puts the stack over the bet in a column right of the
+ * cards; a compact one, narrower, puts them on a line under the cards. The cards take the room
+ * the words leave them, from their floor (24px on a phone, 32px on a desktop) to a little over it;
+ * a long hand overlaps more rather than run off the tile (PlayersGrid's fan step). Nothing runs
+ * past the tile's edge: the name is the only thing cut (an ellipsis), and the pill steps to a
+ * shorter word, then to its mark alone.
  */
 .tbl-grid {
   --card-min: 24px;
   --card-max: 30px;
-  --hero-side: 72px;
-  /* The tile's padding and border, the header and the gaps under it, as the cards' height reads them. */
-  --tile-chrome: calc(15px + 1.4em + 4px);
-  --foot-h: calc(4px + 0.95em);
+  /* The tile's border, padding, header and the step under it, as the cards' height reads them. */
+  --tile-chrome: calc(14px + max(18px, 1.125em));
+  --money-h: 0px;
 }
 
 .tbl-grid--arc {
   --card-min: 32px;
   --card-max: 40px;
-  --hero-side: 88px;
-  --tile-chrome: calc(15px + 1.4em + 4px);
-  --foot-h: calc(4px + 0.95em);
+  --tile-chrome: calc(19px + max(22px, 1.125em));
 }
 
 .tbl-tile--full,
@@ -1297,37 +1296,38 @@
   flex-direction: column;
   align-items: stretch;
   justify-content: center;
-  gap: 4px;
-  padding: 6px 7px;
+  gap: 3px;
+  padding: 4px 6px;
 }
 
 .tbl-grid--arc .tbl-tile--full,
 .tbl-grid--arc .tbl-tile--compact {
-  padding: 6px 10px;
+  gap: 4px;
+  padding: 6px 8px;
 }
 
 /* The turn's ring is 1.5px thicker: the padding gives it back, so nothing inside moves. */
 .tbl-tile--full.tbl-tile--turn,
 .tbl-tile--compact.tbl-tile--turn {
-  padding: 4.5px 5.5px;
+  padding: 2.5px 4.5px;
 }
 
 .tbl-grid--arc .tbl-tile--full.tbl-tile--turn,
 .tbl-grid--arc .tbl-tile--compact.tbl-tile--turn {
-  padding: 4.5px 8.5px;
+  padding: 4.5px 6.5px;
 }
 
 .tbl-tile__head {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   min-width: 0;
-  min-height: 20px;
+  min-height: 18px;
 }
 
 .tbl-tile--full .tbl-tile__face,
 .tbl-tile--compact .tbl-tile__face {
-  --face: 20px;
+  --face: 18px;
   flex: none;
 }
 
@@ -1336,14 +1336,19 @@
   --face: 22px;
 }
 
+.tbl-grid--arc .tbl-tile__head {
+  min-height: 22px;
+}
+
 .tbl-tile__head .tbl-tile__name {
   flex: 1 1 0;
-  font-size: 0.875em;
+  font-size: 0.8125em;
 }
 
 /*
  * The status pill: the mark and the word, coloured by what it says. The name gives way first; past
- * 70% of the header the word steps to a shorter form ("Win +81k", then "Win": FitText), never cut.
+ * 70% of the header the word steps to a shorter form ("Win +81k", then "Win": FitText), then to the
+ * mark alone, never cut.
  */
 .tbl-tile__pill {
   display: inline-flex;
@@ -1353,7 +1358,7 @@
   min-width: 0;
   max-width: 70%;
   height: 1.5em;
-  padding: 0 0.6em;
+  padding: 0 0.55em;
   border-radius: var(--radius-pill);
   background: var(--color-surface-3);
   color: var(--color-text-muted);
@@ -1430,28 +1435,43 @@
   color: var(--color-text);
 }
 
-/* The hero: the fan on the left, the total on the right. */
-.tbl-tile__hero {
+/* The body: the fan, the total beside it, the stack and the bet (a column on a full tile, a line under the cards on a compact one). */
+.tbl-tile__body {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
   min-height: 0;
 }
 
-.tbl-tile--full .tbl-tile__cards,
-.tbl-tile--compact .tbl-tile__cards {
-  --tile-k: calc(1 + var(--fan-step) * (var(--tile-fan, 2) - 1));
-  --tile-card-w: clamp(var(--card-min), min(calc((100cqw - var(--hero-side)) / var(--tile-k)), calc((100cqh - var(--tile-chrome) - var(--foot-h)) / 1.62)), var(--card-max));
-  --tbl-w: var(--tile-card-w);
+.tbl-tile__cards {
   display: flex;
   align-items: center;
-  flex: 1;
-  min-width: 0;
+  flex: 1 1 0;
+  /* Never narrower than the hand's fan at the floor, at its closest step: the words beside it give way instead. */
+  min-width: calc(var(--card-min) * (1 + 0.3 * (var(--tile-fan, 2) - 1)));
   overflow: hidden;
-  /* Its own width, for a row of split hands' fades (below); the card width above reads the tile's. */
+  /* Its own width: the cards in it take what the words beside them leave. */
   container-type: inline-size;
+}
+
+/*
+ * Every card here one width, worked out once on each child of the cards' box (its width, 100cqw,
+ * over the hands' card widths; the tile's height, 100cqh, less its words) and inherited as pixels.
+ * A row of split hands shows every hand where they fit at the floor; past that it slides to the
+ * hand in play, each hand at the floor.
+ */
+.tbl-tile__cards > * {
+  --hand-span: calc(1 + var(--fan-step) * (var(--tile-fan, 2) - 1));
+  --tile-k: calc(var(--tile-hands, 1) * var(--hand-span) + (var(--tile-hands, 1) - 1) * 0.17);
+  --tile-card-w: clamp(var(--card-min), min(calc(100cqw / var(--tile-k)), calc((100cqh - var(--tile-chrome) - var(--money-h)) / 1.5)), var(--card-max));
+  --tbl-w: var(--tile-card-w);
+}
+
+/* A seat's fan keeps its cards level, one card's height: the room goes to the cards' width. */
+.tbl-tile__cards .tbl-hand--mini .tbl-fan {
+  --fan-dy: 0px;
+  height: calc(var(--tbl-w) * 1.5);
 }
 
 /*
@@ -1459,7 +1479,7 @@
  * the hand itself, with 2px to spare each side for a scroll that lands on a whole pixel.
  */
 .tbl-tile__cards > .scroll-fade--x {
-  --fade-x: max(0px, calc((100cqw - var(--tbl-w) * var(--tile-k)) / 2 - 2px));
+  --fade-x: max(0px, calc((100cqw - var(--tbl-w) * var(--hand-span)) / 2 - 2px));
 }
 
 /* A seat's hand says its total once, big, beside it: the hands' own pills stay off the tile. */
@@ -1471,11 +1491,23 @@
   opacity: 0.5;
 }
 
-.tbl-tile--full .tbl-tile__total,
-.tbl-tile--compact .tbl-tile__total {
-  display: block;
+/* Folded (Poker): two empty places where the cards were. */
+.tbl-tile__slot {
   flex: none;
-  margin-left: auto;
+  width: var(--tbl-w);
+  height: calc(var(--tbl-w) * 1.5);
+  border: 1.5px dashed var(--color-border-strong);
+  border-radius: calc(var(--tbl-w) * 0.12);
+}
+
+.tbl-tile__slot + .tbl-tile__slot {
+  margin-left: calc(var(--tbl-w) * (var(--fan-step) - 1));
+}
+
+.tbl-tile__total {
+  display: block;
+  flex: 0 1 auto;
+  min-width: 0;
   font-family: var(--font-display);
   font-size: 1.4em;
   font-weight: 900;
@@ -1484,17 +1516,23 @@
   white-space: nowrap;
 }
 
-.tbl-grid--arc .tbl-tile--full .tbl-tile__total {
+.tbl-grid--arc .tbl-tile__total {
   font-size: 1.75em;
 }
 
-/* Two split hands' totals ("21/15"): a size down, still over 22px on a desktop. */
-.tbl-tile--full .tbl-tile__total[data-long],
-.tbl-tile--compact .tbl-tile__total[data-long] {
+.tbl-tile__total-text {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: clip;
+}
+
+/* Two split hands' totals ("21/15"): a size down, never under 22px on a desktop. */
+.tbl-tile__total[data-long] {
   font-size: 1.15em;
 }
 
-.tbl-grid--arc .tbl-tile--full .tbl-tile__total[data-long] {
+.tbl-grid--arc .tbl-tile__total[data-long] {
   font-size: 1.4em;
 }
 
@@ -1536,18 +1574,35 @@
 .tbl-tile__foot .tbl-tile__bet {
   display: inline-flex;
   align-items: baseline;
+  min-width: 0;
+  max-width: 100%;
 }
 
-/* The footer: the stack small and quiet, the bet in lime on the right. */
+/* A figure with no room for its whole form steps to a shorter one (FitText): "bet 1,250", "1,250", "1.3k"; never cut. */
+.tbl-tile__chips-text,
+.tbl-tile__bet-text {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: clip;
+}
+
+/* The stack and the bet: the stack quiet, the bet in lime. A full tile's are a column right of the cards. */
 .tbl-tile__foot {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 6px;
+  flex: 0 1 auto;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
   min-width: 0;
+  margin-left: auto;
   font-size: 0.75em;
-  line-height: 1.25;
+  line-height: 1.15;
   white-space: nowrap;
+}
+
+.tbl-grid--arc .tbl-tile__foot {
+  font-size: 0.8125em;
 }
 
 .tbl-tile__foot .tbl-tile__chips {
@@ -1555,137 +1610,131 @@
 }
 
 .tbl-tile__foot .tbl-tile__bet {
-  margin-left: auto;
   font-weight: 800;
   color: var(--color-primary-text);
 }
 
-/* A compact tile: the total alone in the hero, the pill beside it where the header has no room. */
-.tbl-tile--compact .tbl-tile__total {
+.tbl-tile__foot .tbl-tile__bet:empty {
+  display: none;
+}
+
+/* No cards yet (the bets going down): a full tile's stack and bet share one line; a compact tile's, narrower, keep a line each. */
+.tbl-tile--full .tbl-tile__body:not(:has(.tbl-tile__cards, .tbl-tile__total)) .tbl-tile__foot {
+  flex: 1;
+  flex-direction: row;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
   margin-left: 0;
 }
 
-/* Short, the cards out: the footer goes (the stack and the bet), the cards keep their floor. Before the deal the footer stays. */
-@container tile (max-height: 99px) {
-  .tbl-grid:not(.tbl-grid--arc) .tbl-tile--full {
-    --foot-h: 0px;
-  }
-
-  .tbl-grid:not(.tbl-grid--arc) .tbl-tile--full:has(.tbl-tile__cards) .tbl-tile__foot {
-    display: none;
-  }
+/* A compact tile, narrower: the stack and the bet on a line of their own under the cards. */
+/*
+ * A compact tile, narrower and a little tighter (three across a phone, six across a small desktop):
+ * the stack and the bet on a line of their own under the cards.
+ */
+.tbl-tile--compact {
+  --tile-chrome: calc(11px + max(17px, 1.05em));
+  --money-h: calc(1px + 0.825em);
+  gap: 2px;
+  padding: 3px 5px;
 }
 
-/* Shorter still on a phone: tighter padding and a smaller avatar, so two rows of tiles keep the cards at 24px in 70px. */
-@container tile (max-height: 84px) {
-  .tbl-grid:not(.tbl-grid--arc) .tbl-tile--full {
-    --tile-chrome: calc(13px + 1.125em);
-    gap: 3px;
-    padding-top: 3.5px;
-    padding-bottom: 3.5px;
-  }
-
-  .tbl-grid:not(.tbl-grid--arc) .tbl-tile--full.tbl-tile--turn {
-    padding-top: 2px;
-    padding-bottom: 2px;
-  }
-
-  .tbl-grid:not(.tbl-grid--arc) .tbl-tile--full .tbl-tile__face {
-    --face: 18px;
-  }
-
-  .tbl-grid:not(.tbl-grid--arc) .tbl-tile--full .tbl-tile__head {
-    min-height: 18px;
-  }
+.tbl-tile--compact.tbl-tile--turn {
+  padding: 1.5px 3.5px;
 }
 
-@container tile (max-height: 111px) {
-  .tbl-grid--arc .tbl-tile--full {
-    --foot-h: 0px;
-  }
-
-  .tbl-grid--arc .tbl-tile--full:has(.tbl-tile__cards) .tbl-tile__foot {
-    display: none;
-  }
+.tbl-tile--compact .tbl-tile__face {
+  --face: 16px;
 }
 
-@container tile (max-height: 75px) {
-  .tbl-tile--compact .tbl-tile__foot {
-    display: none;
-  }
+.tbl-tile--compact .tbl-tile__head {
+  min-height: 17px;
 }
 
-/* A short compact tile (a small phone): tighter, a smaller avatar; the total keeps its size. */
-@container tile (max-height: 61px) {
-  .tbl-tile--compact,
-  .tbl-grid--arc .tbl-tile--compact {
-    gap: 2px;
-    row-gap: 2px;
-    padding-top: 3px;
-    padding-bottom: 3px;
-  }
-
-  .tbl-tile--compact.tbl-tile--turn,
-  .tbl-grid--arc .tbl-tile--compact.tbl-tile--turn {
-    padding-top: 1.5px;
-    padding-bottom: 1.5px;
-  }
-
-  .tbl-tile--compact .tbl-tile__face,
-  .tbl-grid--arc .tbl-tile--compact .tbl-tile__face {
-    --face: 18px;
-  }
-
-  .tbl-tile--compact .tbl-tile__head {
-    min-height: 18px;
-  }
+.tbl-tile--compact .tbl-tile__pill {
+  height: 1.4em;
+  padding: 0 0.45em;
 }
 
-/* Narrow: the stack goes first, the bet keeps the footer. */
-@container tile (max-width: 129px) {
-  .tbl-tile--full .tbl-tile__chips,
-  .tbl-tile--compact .tbl-tile__chips {
-    display: none;
-  }
+.tbl-grid--arc .tbl-tile--compact {
+  --tile-chrome: calc(14px + max(20px, 1.25em));
+  --money-h: calc(2px + 0.935em);
+  gap: 3px;
+  padding: 4px 6px;
 }
 
-/* A narrow compact tile (three across a phone): the name alone in the header, the pill beside the total. */
-@container tile (max-width: 149px) {
+.tbl-grid--arc .tbl-tile--compact.tbl-tile--turn {
+  padding: 2.5px 4.5px;
+}
+
+.tbl-grid--arc .tbl-tile--compact .tbl-tile__face {
+  --face: 20px;
+}
+
+.tbl-grid--arc .tbl-tile--compact .tbl-tile__head {
+  min-height: 20px;
+}
+
+.tbl-tile--compact .tbl-tile__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: 'cards total' 'foot foot';
+  align-items: center;
+  column-gap: 6px;
+  row-gap: 1px;
+}
+
+.tbl-tile--compact .tbl-tile__cards {
+  grid-area: cards;
+}
+
+.tbl-tile--compact .tbl-tile__total {
+  grid-area: total;
+  justify-self: end;
+  max-width: 100%;
+}
+
+.tbl-tile--compact .tbl-tile__foot {
+  grid-area: foot;
+  flex-direction: row;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  margin-left: 0;
+}
+
+.tbl-tile--compact .tbl-tile__body:not(:has(.tbl-tile__cards, .tbl-tile__total)) .tbl-tile__foot {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+}
+
+/* A compact tile under 100px (three across a 320px phone): the stack over the bet, each its own line (grid.ts: 15px taller). */
+@container tile (max-width: 99px) {
   .tbl-tile--compact {
-    display: grid;
-    grid-template-columns: max-content minmax(0, 1fr);
-    grid-template-areas: 'face name' 'hero pill' 'foot foot';
-    align-items: center;
-    column-gap: 4px;
-    row-gap: 3px;
-    padding-left: 5px;
-    padding-right: 5px;
-  }
-
-  .tbl-tile--compact.tbl-tile--turn {
-    padding-left: 3.5px;
-    padding-right: 3.5px;
-  }
-
-  .tbl-tile--compact .tbl-tile__head,
-  .tbl-tile--compact .tbl-tile__hero {
-    display: contents;
-  }
-
-  .tbl-tile--compact .tbl-tile__total {
-    grid-area: hero;
-  }
-
-  .tbl-tile--compact .tbl-tile__pill {
-    grid-area: pill;
-    justify-self: end;
-    max-width: 100%;
-    padding: 0 0.45em;
+    --money-h: calc(2px + 1.65em);
   }
 
   .tbl-tile--compact .tbl-tile__foot {
-    grid-area: foot;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1px;
   }
+}
+
+/* On that line each figure keeps one chip, a step closer, so the two keep their room (the bet's in lime, bold). */
+.tbl-tile--compact .tbl-tile__foot {
+  gap: 4px;
+  line-height: 1.1;
+}
+
+.tbl-tile--compact .tbl-chipmark {
+  margin-right: 0.2em;
+}
+
+.tbl-tile--compact .tbl-chipmark .tbl-stake__chip + .tbl-stake__chip {
+  display: none;
 }
 
 /* Small (10 to 23): avatar with a status dot and the total; the name shortened under them. */
@@ -1764,11 +1813,11 @@
 }
 
 /*
- * A narrow small tile (a 320px phone, 22 or more others): no room for the total beside the
- * avatar, so it sits on the tile's corner as a badge over the avatar's edge, never cut off. The
- * avatar shrinks with a short tile rather than overflow it.
+ * A narrow small tile (six across a phone, 22 or more others): no room for the total beside the
+ * avatar (a three-digit stack's pill needs 66px), so it sits on the tile's corner as a badge over
+ * the avatar's edge, never cut off. The avatar shrinks with a short tile rather than overflow it.
  */
-@container tile (max-width: 56px) {
+@container tile (max-width: 65px) {
   .tbl-tile--small {
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas: 'face' 'name';
@@ -2298,8 +2347,8 @@
   }
 }
 
-/* Short phones (an SE, a phone with the browser bars out, a phone on its side): the banner goes; the round and whose turn it is stay. */
-@media (max-width: 760px) and (max-height: 760px), (min-aspect-ratio: 3/2) and (max-height: 520px) {
+/* Every phone (an SE, a phone with the browser bars out, a phone on its side): the banner goes; the round and whose turn it is stay. */
+@media (max-width: 760px), (min-aspect-ratio: 3/2) and (max-height: 520px) {
   .tbl-felt--calm .tbl-ribbon__band {
     display: none;
   }
@@ -2320,8 +2369,12 @@
   }
 }
 
-/* Short phones and phones on their side: compact seats and panel, the ribbon gone. */
-@media (max-width: 760px) and (max-height: 620px), (min-aspect-ratio: 3/2) and (max-height: 520px) {
+/*
+ * Every phone (an iPhone in Safari, 393x688; an SE, 375x548; a phone on its side): a tighter felt
+ * and panel (the table's own buttons beside the main one), so the seats have the height for every
+ * opponent's cards, bet and stack. Every control stays.
+ */
+@media (max-width: 760px), (min-aspect-ratio: 3/2) and (max-height: 520px) {
   .tbl-felt {
     --tbl-pad: 6px;
     gap: 4px;

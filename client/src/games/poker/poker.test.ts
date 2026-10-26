@@ -614,8 +614,8 @@ describe('the screen', () => {
     expect(html).toMatch(/data-testid="my-cards"[^>]*><div class="tbl-hand__head"><span class="pk-dealer"[^>]*data-testid="my-dealer"/);
     // A blind of 10 on the tile's footer, "bet 10", where the chips fly to; the stack beside it.
     const plain = html.replace(/<span class="tbl-chipmark" aria-hidden="true">(?:<svg.*?<\/svg>)+<\/span>/g, '');
-    expect(plain).toMatch(/data-testid="seat-bet" data-bet="10" data-table-anchor="[^"]+">bet 10<\/span>/);
-    expect(plain).toMatch(/data-testid="seat-chips" data-chips="990">990<\/span>/);
+    expect(plain).toMatch(/data-testid="seat-bet" data-bet="10" data-table-anchor="[^"]+"><span class="tbl-tile__bet-text" data-fit="0">bet 10<\/span><\/span>/);
+    expect(plain).toMatch(/data-testid="seat-chips" data-chips="990"><span class="tbl-tile__chips-text">990<\/span><\/span>/);
     expect(html).toMatch(/class="tbl-stake tbl-stake--pot pk-pot__pill" data-testid="pot" data-bet="15" data-chips="15" data-shown="15" data-table-anchor="pot"><span class="tbl-stake__word">Pot<\/span> <span class="tbl-stake__value">15</);
   });
 
@@ -789,7 +789,9 @@ describe('the table keeps its places', () => {
     // Worked out once on the table, from its height and its width (five cards and the deck at its least on either side across).
     expect(css).toMatch(/@property --pk-card-w \{\s*syntax: '<length>';/);
     expect(css).toMatch(/@property --pk-stage-w \{\s*syntax: '<length>';\s*inherits: true;/);
-    expect(css).toMatch(/--pk-card-w: min\(clamp\(56px, 12cqh, 120px\), calc\(\(100cqw - 2 \* var\(--tbl-pad\) - 2 \* var\(--pk-deck-least\) - var\(--pk-board-room\)\) \/ 5\.4\)\);\s*--pk-stage-w: var\(--pk-card-w\);/);
+    // On a desktop they take the room the seats leave: from their least (6% of the table's height, 36px to 56px) up to the top
+    // the table gives them, a card pixel taking 3.17px (the board's card and my hand's).
+    expect(css).toMatch(/--pk-card-top: min\(clamp\(56px, 12cqh, 120px\), calc\(\(100cqw - 2 \* var\(--tbl-pad\) - 2 \* var\(--pk-deck-least\) - var\(--pk-board-room\)\) \/ 5\.4\)\);\s*--pk-card-base: min\(var\(--pk-card-top\), clamp\(36px, 6cqh, 56px\)\);\s*--pk-card-w: clamp\(var\(--pk-card-base\), calc\(var\(--pk-card-base\) \+ var\(--tbl-spare\) \/ \(1\.5 \+ var\(--hand-k\)\)\), var\(--pk-card-top\)\);\s*--tbl-grow: calc\(\(var\(--pk-card-w\) - var\(--pk-card-base\)\) \* \(1\.5 \+ var\(--hand-k\)\)\);\s*--pk-stage-w: var\(--pk-card-w\);/);
     // The deck is the size of the board's cards as far as the room beside the board allows, never under its least.
     expect(css).toMatch(/\.pk-table \{[^}]*--pk-deck-least: clamp\(48px, 7cqh, 72px\);\s*--pk-board-room: 40px;/);
     expect(css).toMatch(/\.pk-table \{[^}]*--tbl-deck-w: max\(var\(--pk-deck-least\), min\(var\(--pk-card-w\), calc\(\(100cqw - 2 \* var\(--tbl-pad\) - var\(--pk-board-room\) - var\(--pk-card-w\) \* 5\.4\) \/ 2\)\)\);/);
@@ -804,7 +806,7 @@ describe('the table keeps its places', () => {
       /\.pk-table \{[^}]*--pk-stage-w: clamp\(var\(--pk-card-w\), calc\(var\(--pk-card-w\) \+ var\(--tbl-spare\) \/ var\(--hand-k\)\), max\(var\(--pk-card-w\), min\(84px, var\(--pk-card-w\) \* 1\.5\)\)\);\s*--tbl-grow: calc\(\(var\(--pk-stage-w\) - var\(--pk-card-w\)\) \* var\(--hand-k\)\);/,
     );
     // The shortest phones pin the board at 30px; my cards take the same rule over it (45px at the most).
-    expect(css.slice(css.indexOf('@media (max-width: 760px) and (max-height: 620px)'))).toMatch(/\.pk-table \{[^}]*--pk-card-w: 30px;\s*--tbl-pill-h/);
+    expect(css.slice(css.indexOf('@media (max-width: 760px) and (max-height: 760px)'))).toMatch(/\.pk-table \{[^}]*--pk-card-w: 30px;\s*--tbl-pill-h/);
     // The banner with the blinds stays wherever the phone is tall enough (table.css hides it under 761px): they show nowhere else.
     expect(phone).not.toMatch(/tbl-ribbon__band/);
     // A watcher's taller table (no bet controls under it) gives its seats that room first, the cards what they leave: the felt
@@ -838,9 +840,9 @@ describe('the table keeps its places', () => {
     expect(css).toMatch(/\.pk-mine \.tbl-payout \{\s*left: calc\(100% - var\(--pk-fan-w\) \/ 2\);/);
   });
 
-  it('puts the pot beside the board on the shortest phones, the board clear of the deck, so the seats keep the height', () => {
+  it('puts the pot beside the board on short phones (an iPhone in Safari, 688px and under 760px), the board clear of the deck, so the seats keep the height', () => {
     const css = readFileSync(join(import.meta.dirname, 'poker.css'), 'utf8');
-    const short = css.slice(css.indexOf('@media (max-width: 760px) and (max-height: 620px)'));
+    const short = css.slice(css.indexOf('@media (max-width: 760px) and (max-height: 760px)'));
     expect(short).toMatch(/\.pk-centre \{\s*flex-direction: row;[^}]*padding-right: calc\(var\(--tbl-deck-w\) \* 1\.45\);/);
     expect(short).toMatch(/--tbl-head-h: calc\(var\(--pk-card-w\) \* 1\.5 \+ 4px\);/);
     // The side pots stay on show.

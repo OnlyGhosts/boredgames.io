@@ -29,7 +29,16 @@
 }
 
 .bj-table {
-  --bj-card-w: clamp(64px, 13cqh, 132px);
+  /*
+   * A desktop's cards, as a phone's, take the room the seats leave them (--tbl-spare, room.ts
+   * useSeatRoom): from their least (--bj-card-base) up to the size the table's height gives them
+   * (--bj-card-top), a card pixel taking 3.34px of the dealer's row and the stage. A few seats
+   * leave them at the top; a crowd takes what its tiles need, cards and all.
+   */
+  --bj-card-top: clamp(64px, 13cqh, 132px);
+  --bj-card-base: min(var(--bj-card-top), clamp(36px, 6cqh, 64px));
+  --bj-card-w: clamp(var(--bj-card-base), calc(var(--bj-card-base) + var(--tbl-spare) / (2 * var(--hand-k))), var(--bj-card-top));
+  --tbl-grow: calc((var(--bj-card-w) - var(--bj-card-base)) * 2 * var(--hand-k));
   --bj-label-h: 22px;
   --tbl-mini-w: clamp(30px, 4.6cqh, 40px);
   --tbl-pill-h: clamp(28px, 3.9cqh, 36px);
@@ -402,7 +411,7 @@
 /* A short desktop window (1024x768, 1280x800): the cards a step smaller, so a big table's seats keep their height. */
 @media (min-width: 761px) and (max-height: 820px) {
   .bj-table {
-    --bj-card-w: clamp(56px, 11.5cqh, 132px);
+    --bj-card-top: clamp(56px, 11.5cqh, 132px);
   }
 }
 
@@ -440,14 +449,15 @@
 }
 
 /*
- * The shortest phones (320x568, a phone on its side): five other players need two rows of tiles
- * tall enough for the stack and the bet, so the least card is 30px. The word Dealer goes, and the
+ * The seats' room on every phone (an iPhone in Safari, 393x688; an SE, 375x548; a phone on its
+ * side): every opponent's cards, bet and stack need the height, so the least card is 30px (the
+ * least a "10" reads at, its corner clear of the next card). The word Dealer goes, and the
  * round and whose turn it is move up into the room left of the dealer's hand (its cards fan right
  * from the centre) rather than take a row of their own. A table with nobody else at it has the
  * room: it keeps the line in the middle, halfway between the dealer and my hand. Either way the
  * cards take the room the seats leave, as on any phone.
  */
-@media (max-width: 760px) and (max-height: 620px), (min-aspect-ratio: 3/2) and (max-height: 520px) {
+@media (max-width: 760px), (min-aspect-ratio: 3/2) and (max-height: 520px) {
   .bj-table {
     --bj-card-base: 30px;
     --bj-label-h: 0px;

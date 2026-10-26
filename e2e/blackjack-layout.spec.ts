@@ -242,11 +242,11 @@ async function playOut(page: Page, round: number): Promise<void> {
 
 /**
  * The cards on a phone take the room the seats leave, as many seats as the round on the table was
- * dealt with: three players leaving in the middle of a round leave the cards as they are until the
- * round is over, and the next deal sizes them for the two seats left (total-only tiles become one
- * row of full ones, and the cards take the rest).
+ * dealt with: nine players leaving in the middle of a round leave the cards as they are until the
+ * round is over, and the next deal sizes them for the two seats left (three rows of compact tiles
+ * become one row of full ones, and the cards take the rest).
  */
-test('390x844: three players leave mid-round: the cards keep their size to the end of the round, and the next deal sizes them for the seats left', async ({ browser, baseURL }) => {
+test('390x844: nine players leave mid-round: the cards keep their size to the end of the round, and the next deal sizes them for the seats left', async ({ browser, baseURL }) => {
   test.setTimeout(120_000);
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
   const page = await ctx.newPage();
@@ -255,43 +255,43 @@ test('390x844: three players leave mid-round: the cards keep their size to the e
   let bots: TableBot[] = [];
   try {
     const code = await createParty(page, 'Hana', 'blackjack');
-    bots = await tableBots(5, code, baseURL ?? 'http://localhost:4173', { game: 'blackjack', hold: true, thinkMs: 50 });
-    await expectReadyCount(page, 6);
+    bots = await tableBots(11, code, baseURL ?? 'http://localhost:4173', { game: 'blackjack', hold: true, thinkMs: 50 });
+    await expectReadyCount(page, 12);
     await page.getByTestId('start-game').click();
     const screen = page.getByTestId('blackjack-screen');
     const table = page.getByTestId('bj-table');
     await expect(screen).toHaveAttribute('data-phase', 'betting');
-    await expect(page.getByTestId('seat')).toHaveCount(5);
-    await expect(table).toHaveAttribute('data-seats', '5');
-    const five = await cardWidth(page);
+    await expect(page.getByTestId('seat')).toHaveCount(11);
+    await expect(table).toHaveAttribute('data-seats', '11');
+    const eleven = await cardWidth(page);
     const ref = await places(page);
     const same = async (label: string) => {
       const now = await places(page);
       expectSame(`${label}: the dealer’s hand`, ref.dealer, now.dealer);
       expectSame(`${label}: my hands`, ref.mine, now.mine);
-      expect(await cardWidth(page), `${label}: the cards`).toBe(five);
+      expect(await cardWidth(page), `${label}: the cards`).toBe(eleven);
       await nothingScrolls(page, label);
       await tilesReadable(page, label);
     };
-    // Round 1 is dealt, then three of the five leave in the middle of it.
+    // Round 1 is dealt, then nine of the eleven leave in the middle of it.
     await page.getByTestId('place-bet').click();
     await expect.poll(async () => (await screen.getAttribute('data-phase')) !== 'betting', { timeout: 20_000 }).toBe(true);
     for (const b of bots.slice(2)) b.leave();
     await expect(page.getByTestId('seat')).toHaveCount(2);
-    // The round goes on as it was dealt: five seats' worth of room, the cards where and as big as they were.
-    await expect(table).toHaveAttribute('data-seats', '5');
-    await same('round 1, three seats gone');
+    // The round goes on as it was dealt: eleven seats' worth of room, the cards where and as big as they were.
+    await expect(table).toHaveAttribute('data-seats', '11');
+    await same('round 1, nine seats gone');
     for (const b of bots) b.setHold(false);
     await playOut(page, 1);
     await same('round 1 settled');
-    // Round 2 is dealt to the two seats left (one row of full tiles): the cards take the room the three seats gave back, up to
+    // Round 2 is dealt to the two seats left (one row of full tiles): the cards take the room the nine seats gave back, up to
     // where the dealer's four and a shoe their own size still fit beside each other (60.6px to 61.9px; the room would take them
     // past 70px).
     await expect(page.getByTestId('place-bet')).toBeEnabled({ timeout: 20_000 });
     await page.getByTestId('place-bet').click();
     await expect(table).toHaveAttribute('data-seats', '2', { timeout: 20_000 });
     await expect(page.getByTestId('seats')).toHaveAttribute('data-tier', 'full');
-    await expect.poll(() => cardWidth(page), { message: 'round 2: the cards for two seats' }).toBeGreaterThan(five);
+    await expect.poll(() => cardWidth(page), { message: 'round 2: the cards for two seats' }).toBeGreaterThan(eleven);
     await expect.poll(() => cardWidth(page), { message: 'round 2: the cards up to the shoe’s room' }).toBeGreaterThanOrEqual(61.5);
     const three = await cardWidth(page);
     const ref2 = await places(page);
@@ -805,6 +805,49 @@ test.describe('many hands (the harness)', () => {
     });
   }
 
+  // Every opponent's tile shows its cards (a hand with its big total), its bet and its stack, whole and apart, in every phase
+  // of a round, at every phone and desktop size, for every count the room holds at the cards' floor (24px on a phone, 32px on
+  // a desktop). An iPhone in Safari (393x688) once showed three opponents as a name, a total and a pill: no cards, no bet, no
+  // stack. Past these counts the room has no height for even the narrow tiles at the floor, and the tiles are the crowd's chips.
+  for (const [size, most] of [
+    [{ width: 393, height: 688 }, 9],
+    [{ width: 375, height: 548 }, 3],
+    [{ width: 390, height: 664 }, 6],
+    [{ width: 430, height: 740 }, 9],
+    [{ width: 360, height: 640 }, 6],
+    [{ width: 320, height: 568 }, 3],
+    [{ width: 390, height: 844 }, 12],
+    [{ width: 1024, height: 700 }, 10],
+    [{ width: 1440, height: 900 }, 21],
+  ] as const) {
+    test(`${size.width}x${size.height}: every opponent's tile shows its cards, bet and stack, up to ${most} others`, async ({ browser }) => {
+      test.setTimeout(240_000);
+      const pages = harnessPages(browser, size);
+      const floor = size.width > 760 ? 32 : 24;
+      try {
+        for (const others of [1, 2, 3, 4, 5, 6, 7, 9, 10, 12, 16, 21].filter((n) => n <= most)) {
+          for (const phase of ['betting', 'mine', 'other', 'results']) {
+            const query = `phase=${phase}&others=${others}&turn=0&start=100000&chips=1250000&bet=50000&stake=12000`;
+            const page = await pages.go(query);
+            await seatFloors(page, query, floor);
+            await tilesReadable(page, query);
+            await nothingScrolls(page, query);
+          }
+        }
+        // Split hands on the table's busiest tiles: each hand's cards, the hand in play whole in view.
+        const query = `phase=other&others=${most}&otherHands=2&otherActive=1&start=100000&chips=1250000&bet=50000`;
+        const page = await pages.go(query);
+        await seatFloors(page, query, floor);
+        // One more than the room holds: the crowd's chips (what the room cannot hold whole).
+        const over = await pages.go(`phase=mine&others=${most + 1}`);
+        await expect(over.getByTestId('seats')).toHaveAttribute('data-tier', /^(small|dense)$/);
+        expect(pages.errors).toEqual([]);
+      } finally {
+        await pages.close();
+      }
+    });
+  }
+
   // A short phone (360x640, 375x667) has no room for even compact tiles' least height under one to four others: the seats take
   // compact tiles (no cards), never full ones squashed under their cards, which cut the cards off at the tile's bottom edge.
   for (const size of [{ width: 360, height: 640 }, { width: 375, height: 667 }, { width: 390, height: 700 }]) {
@@ -988,12 +1031,12 @@ test.describe('many hands (the harness)', () => {
     });
   }
 
-  // Narrow total-only tiles (five to nine players on a 320px phone, ten on a 390px or 414px one), or a crowd's where they have no
+  // Narrow compact tiles (four to eight others on a 320px phone, twelve on a 390px or 414px one), or a crowd's where they have no
   // room: every seat's stack, total and bet that shows reads in full and apart.
   for (const [size, tables] of [
     [{ width: 320, height: 568 }, [4, 5, 6, 7, 8]],
-    [{ width: 390, height: 844 }, [9]],
-    [{ width: 414, height: 896 }, [9]],
+    [{ width: 390, height: 844 }, [12]],
+    [{ width: 414, height: 896 }, [12]],
   ] as const) {
     test(`${size.width}x${size.height}: a narrow compact tile keeps its stack, total and bet apart`, async ({ browser }) => {
       const ctx = await browser.newContext({ viewport: size });
@@ -1003,8 +1046,8 @@ test.describe('many hands (the harness)', () => {
           for (const [bet, chips] of [[10, 990], [200, 800], [1300, 9800]]) {
             const query = `phase=other&others=${others}&start=1000&bet=${bet}&chips=${chips}&otherHands=2`;
             await open(page, query);
-            // Total-only tiles, or a crowd's where two rows of them have no height (a 320px phone): every total shows.
-            await expect(page.getByTestId('seats')).toHaveAttribute('data-tier', /^(compact|small)$/);
+            // Compact tiles, or a crowd's where their rows have no height: every total shows.
+            await expect(page.getByTestId('seats')).toHaveAttribute('data-tier', /^(full|compact|small)$/);
             await expect(page.getByTestId('seat-total')).toHaveCount(others);
             await stakesShown(page, query);
             await tilesReadable(page, query);
@@ -1013,7 +1056,7 @@ test.describe('many hands (the harness)', () => {
         // The bets going down, no total yet: a six-figure stack ("150k chips") has the whole line and keeps whole.
         const query = `phase=betting&others=${tables[tables.length - 1]}&start=100000&bet=9000&chips=150000`;
         await open(page, query);
-        await expect(page.getByTestId('seats')).toHaveAttribute('data-tier', /^(compact|small)$/);
+        await expect(page.getByTestId('seats')).toHaveAttribute('data-tier', /^(full|compact|small)$/);
         await expect(page.getByTestId('seat-total')).toHaveCount(0);
         await stakesShown(page, query);
         await tilesReadable(page, query);
@@ -1023,49 +1066,43 @@ test.describe('many hands (the harness)', () => {
     });
   }
 
-  // The cards on a phone take the room the seats leave (room.ts useSeatRoom), as many seats as the round was dealt with: a small
-  // table on the owner's 390x844 phone gets big cards (55.5px when they went by the table's height alone, 60px for a watcher),
-  // up to where the dealer's four and a shoe their own size still fit beside each other (61.9px; 69.6px at 430 wide); three
-  // others there take two rows of full tiles, two across, so their cards read, and leave mine the least card,
-  // a table of twelve or more keeps the tiles it had (small at 390x844, compact at 430x932), and where it needs all its room
-  // the least card. Twelve at 390x844 leave the cards 1px (`spare`): their small tiles take their 158px and the 8px kept over
-  // them, and the two rows, at the least card a pill's height and 1.67 card widths tall each, leave 167.95px, just under the
-  // 168px compact tiles would need, so 0.3px of card (3.34px of the rows a card pixel) over the least. A watcher's table is
-  // taller by the bet controls: its seats have that room first, the cards what they leave.
-  // Every stack is four digits ("1,250 chips"), as a table's are from the default 1,000. On the narrowest phone three full tiles
-  // across were 93px and cut it to "1,250 chip": three others there sit on compact tiles (or, for a watcher with the height, two
-  // rows of full ones), every stack whole, in every phase.
+  // The cards on a phone take the room the seats leave (room.ts useSeatRoom), as many seats as the round was dealt with, once
+  // every opponent's tile has the height for its cards, bet and stack: a table of up to seven on the owner's 390x844 phone gets big
+  // cards, up to where the dealer's four and a shoe their own size still fit beside each other (61.9px; 69.6px at 430 wide); a
+  // bigger one takes what its tiles need, down to the least card (28px), and where even narrow tiles have no room (24 others),
+  // the crowd's chips leave the cards big again. A watcher's table is taller by the bet controls: its seats have that room first,
+  // the cards what they leave. Three others on the narrowest phone sit on compact tiles three across, each stack over its bet.
   for (const [size, cases] of [
     [
       { width: 320, height: 568 },
       [
-        { others: 3, watch: false, phase: 'betting', tier: 'compact', least: 45 },
-        { others: 3, watch: false, phase: 'mine', tier: 'compact', least: 45 },
-        { others: 3, watch: false, phase: 'results', tier: 'compact', least: 45 },
-        { others: 3, watch: true, phase: 'other', tier: 'full', least: 0 },
-        { others: 5, watch: true, phase: 'other', tier: 'compact', least: 45 },
-        { others: 5, watch: true, phase: 'results', tier: 'compact', least: 45 },
+        { others: 3, watch: false, phase: 'betting', tier: 'compact', least: 33 },
+        { others: 3, watch: false, phase: 'mine', tier: 'compact', least: 33 },
+        { others: 3, watch: false, phase: 'results', tier: 'compact', least: 33 },
+        { others: 3, watch: true, phase: 'other', tier: 'compact', least: 45 },
+        { others: 5, watch: true, phase: 'other', tier: 'compact', least: 0 },
+        { others: 5, watch: true, phase: 'results', tier: 'compact', least: 0 },
       ],
     ],
     [
       { width: 390, height: 844 },
       [
         { others: 1, watch: false, tier: 'full', least: 61.5 },
-        { others: 3, watch: false, tier: 'full', least: 0 },
-        { others: 5, watch: false, tier: 'compact', least: 60 },
-        { others: 11, watch: false, tier: 'small', least: 0, spare: 1 },
-        { others: 23, watch: false, tier: 'small', least: 0 },
-        { others: 49, watch: false, tier: 'dense', least: 0 },
+        { others: 3, watch: false, tier: 'full', least: 61.5 },
+        { others: 5, watch: false, tier: 'full', least: 61.5 },
+        { others: 11, watch: false, tier: 'compact', least: 40 },
+        { others: 23, watch: false, tier: 'small', least: 61.5 },
+        { others: 49, watch: false, tier: 'small', least: 0 },
         { others: 2, watch: true, tier: 'full', least: 61.5 },
-        { others: 12, watch: true, tier: 'compact', least: 60 },
+        { others: 12, watch: true, tier: 'full', least: 0 },
       ],
     ],
     [
       { width: 430, height: 932 },
       [
         { others: 1, watch: false, tier: 'full', least: 69 },
-        { others: 11, watch: false, tier: 'compact', least: 60 },
-        { others: 49, watch: false, tier: 'dense', least: 60 },
+        { others: 11, watch: false, tier: 'full', least: 0 },
+        { others: 49, watch: false, tier: 'small', least: 0, spare: 1 },
       ],
     ],
   ] as const) {
@@ -1155,7 +1192,7 @@ test.describe('many hands (the harness)', () => {
     [{ width: 1024, height: 768 }, 3],
     [{ width: 1280, height: 800 }, 4],
   ] as const) {
-    test(`${size.width}x${size.height}: a full tile keeps a big stake on the stack’s line, clear of the name`, async ({ browser }) => {
+    test(`${size.width}x${size.height}: a full tile keeps a big stake by its stack, clear of the name`, async ({ browser }) => {
       const ctx = await browser.newContext({ viewport: size });
       const page = await ctx.newPage();
       try {
@@ -1166,15 +1203,18 @@ test.describe('many hands (the harness)', () => {
             await expect(page.getByTestId('seats')).toHaveAttribute('data-tier', 'full');
             await stakesShown(page, query);
             await tilesReadable(page, query);
+            await seatFloors(page, query, size.width > 760 ? 32 : 24);
+            // Before the deal the stack and the bet share a line; with the cards out, the stack sits over the bet, their right edges one.
             const apart = await page.evaluate(() =>
               Array.from(document.querySelectorAll('[data-testid="seat"]')).flatMap((tile) => {
                 const stack = tile.querySelector('[data-testid="seat-chips"]')?.getBoundingClientRect();
-                const pill = tile.querySelector('[data-testid="seat-bet"]')?.getBoundingClientRect();
-                return stack && pill ? [Math.abs(stack.top + stack.height / 2 - (pill.top + pill.height / 2))] : [];
+                const bet = tile.querySelector('[data-testid="seat-bet"]')?.getBoundingClientRect();
+                if (!stack || !bet || bet.width === 0) return [];
+                return [tile.querySelector('[data-testid="seat-cards"]') ? Math.abs(stack.right - bet.right) + (stack.bottom <= bet.top + 0.5 ? 0 : 99) : Math.abs(stack.top + stack.height / 2 - (bet.top + bet.height / 2))];
               }),
             );
-            expect(apart.length, `${query}: a pill to measure`).toBeGreaterThan(0);
-            for (const d of apart) expect(d, `${query}: the stack and the pill on one line`).toBeLessThan(3);
+            expect(apart.length, `${query}: a bet to measure`).toBeGreaterThan(0);
+            for (const d of apart) expect(d, `${query}: the stack and the bet together`).toBeLessThan(3);
           }
         }
       } finally {
@@ -1246,19 +1286,19 @@ test.describe('many hands (the harness)', () => {
     }
   });
 
-  // Split hands' totals on a compact tile: joined ("18/17") on a desktop's tiles and a phone's three across alike.
+  // Split hands' totals on a busy table's tiles: joined ("18/17") on a desktop's and a phone's alike.
   for (const [size, others, joined] of [
     [{ width: 1440, height: 900 }, 8, true],
     [{ width: 1024, height: 768 }, 8, true],
-    [{ width: 390, height: 844 }, 6, true],
+    [{ width: 390, height: 844 }, 11, true],
   ] as const) {
-    test(`${size.width}x${size.height}: a compact tile ${joined ? 'joins split hands\' totals' : 'shows the hand in play\'s total'}`, async ({ browser }) => {
+    test(`${size.width}x${size.height}: a busy table's tile ${joined ? 'joins split hands\' totals' : 'shows the hand in play\'s total'}`, async ({ browser }) => {
       const ctx = await browser.newContext({ viewport: size });
       const page = await ctx.newPage();
       try {
         const query = `phase=other&others=${others}&otherHands=2`;
         await open(page, query);
-        await expect(page.getByTestId('seats')).toHaveAttribute('data-tier', 'compact');
+        await expect(page.getByTestId('seats')).toHaveAttribute('data-tier', /^(full|compact)$/);
         const [total] = await shownText(page, '[data-testid="seat"][data-turn="true"] [data-testid="seat-total"]');
         expect(total, query).toMatch(joined ? /^\d+\/\d+$/ : /^\d+$/);
         await tilesReadable(page, query);

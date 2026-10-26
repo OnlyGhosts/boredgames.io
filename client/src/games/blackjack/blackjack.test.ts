@@ -1194,8 +1194,9 @@ describe("the table’s focus and the stage", () => {
     expect(css).not.toMatch(/pill-h\) \* 0\.7|\* 1\.77|3\.54/);
     // The cards go by the room the table has (cq units), worked out once on the table.
     expect(css).toMatch(/@property --bj-card-w \{\s*syntax: '<length>';\s*inherits: true;/);
-    expect(css).toMatch(/\.bj-table \{\s*--bj-card-w: clamp\(64px, 13cqh, 132px\);/);
-    // On a phone the least card is 11% of the table's height, up to 60px (the shortest phones pin it at 30px: their seats need
+    // A desktop's cards take the room the seats leave too: from their least (6% of the table's height, 36px to 64px) up to 13%.
+    expect(css).toMatch(/\.bj-table \{\s*\/\*[^*]*(\*(?!\/)[^*]*)*\*\/\s*--bj-card-top: clamp\(64px, 13cqh, 132px\);\s*--bj-card-base: min\(var\(--bj-card-top\), clamp\(36px, 6cqh, 64px\)\);\s*--bj-card-w: clamp\(var\(--bj-card-base\), calc\(var\(--bj-card-base\) \+ var\(--tbl-spare\) \/ \(2 \* var\(--hand-k\)\)\), var\(--bj-card-top\)\);/);
+    // On a phone the least card is 11% of the table's height, up to 60px (every phone pins it at 30px: their seats need
     // every pixel). Over it the cards take the room the seats leave (--tbl-spare, worked out by the table from the seats the
     // round was dealt with: room.ts useSeatRoom), shared by the dealer's hand and mine, 1.67 card widths each (table.css --hand-k:
     // 3.34px a card pixel), up to 76px and the widest card whose four in the dealer's row (1.6 card widths right of the middle)
@@ -1207,15 +1208,15 @@ describe("the table’s focus and the stage", () => {
     expect(phone).toMatch(
       /\.bj-table \{\s*(\/\*[^*]*(\*(?!\/)[^*]*)*\*\/\s*)?--bj-card-base: clamp\(30px, 11cqh, 60px\);\s*--bj-card-w: clamp\(var\(--bj-card-base\), calc\(var\(--bj-card-base\) \+ var\(--tbl-spare\) \/ \(2 \* var\(--hand-k\)\)\), max\(var\(--bj-card-base\), min\(76px, calc\(\(50cqw - var\(--tbl-pad\) - 18px\) \/ 2\.6\)\)\)\);\s*--tbl-grow: calc\(\(var\(--bj-card-w\) - var\(--bj-card-base\)\) \* 2 \* var\(--hand-k\)\);/,
     );
-    expect(css.slice(css.indexOf('@media (max-width: 760px) and (max-height: 620px)'))).toMatch(/\.bj-table \{\s*--bj-card-base: 30px;/);
+    expect(css.slice(css.lastIndexOf('@media (max-width: 760px), (min-aspect-ratio: 3/2) and (max-height: 520px)'))).toMatch(/\.bj-table \{\s*--bj-card-base: 30px;/);
     // The shoe is the size of the cards it deals wherever the dealer's four cards leave it the room (always on a phone, whose
     // cards stop where they would not), never under its least: a crowded phone's 34px (28px on the shortest), a desktop's old size.
     expect(css).toMatch(/\.bj-table \{[^}]*--bj-deck-least: clamp\(44px, 6cqh, 60px\);\s*--tbl-deck-w: max\(var\(--bj-deck-least\), min\(calc\(var\(--bj-card-w\) \* 0\.7\), calc\(50cqw - var\(--tbl-pad\) - 18px - var\(--bj-card-w\) \* 1\.6\)\)\);/);
     expect(phone).toMatch(/\.bj-table \{[^}]*--bj-deck-least: 34px;/);
-    expect(css.slice(css.indexOf('@media (max-width: 760px) and (max-height: 620px)'))).toMatch(/\.bj-table \{[^}]*--bj-deck-least: 28px;/);
+    expect(css.slice(css.lastIndexOf('@media (max-width: 760px), (min-aspect-ratio: 3/2) and (max-height: 520px)'))).toMatch(/\.bj-table \{[^}]*--bj-deck-least: 28px;/);
     expect(css.slice(css.indexOf('/* ---------- Dealer'))).not.toMatch(/--tbl-deck-w:/);
-    // Only the phone's rule takes the seats' room: a desktop's cards go by the table alone.
-    expect(css.slice(0, css.indexOf('@media (max-width: 760px), (min-aspect-ratio: 3/2) and (max-height: 520px)'))).not.toMatch(/var\(--tbl-spare\)/);
+    // A desktop's cards take the seats' room as a phone's do, and tell the table how much taller its two rows are for it.
+    expect(css).toMatch(/\.bj-table \{[^}]*--tbl-grow: calc\(\(var\(--bj-card-w\) - var\(--bj-card-base\)\) \* 2 \* var\(--hand-k\)\);/);
     // The banner goes on every phone (table.css hides it under 761px tall already): its 30px go to the cards or the seats.
     expect(phone).toMatch(/\.bj-table\.tbl-felt--calm \.tbl-ribbon__band \{\s*display: none;/);
     // A watcher's table is taller by the bet controls their one-line panel has not got: the seats have that room first, the cards
@@ -1257,7 +1258,7 @@ describe("the table’s focus and the stage", () => {
     expect(html).toMatch(/data-testid="seat-hand"[^>]*data-index="1"[^>]*data-active="true"/);
     expect(html.slice(html.indexOf('data-testid="seat-hands-row"'), html.indexOf('data-testid="seat-open"')).match(/data-testid="hand-total"/g)).toHaveLength(2);
     // The tile sizes the cards for its longest hand and keeps room for the next hand to peek in (table.css).
-    expect(html).toContain('<span class="tbl-tile__cards" style="--tile-fan:3;--tile-hands:2">');
+    expect(html).toContain('<span class="tbl-tile__cards" style="--tile-fan:3;--tile-hands:2" data-testid="seat-cards">');
     const css = readFileSync(fileURLToPath(new URL('./blackjack.css', import.meta.url)), 'utf8');
     expect(css).toMatch(/\.bj-hands--seat > \.bj-slot \{\s*display: flex;\s*flex: none;\s*\}/);
   });
@@ -1392,7 +1393,7 @@ describe('the players grid', () => {
     const cases: [number, string, boolean][] = [
       [2, 'full', true],
       [7, 'full', true],
-      [9, 'compact', false],
+      [9, 'compact', true],
       [12, 'small', false],
       [24, 'small', false],
       [25, 'dense', false],
@@ -1410,7 +1411,7 @@ describe('the players grid', () => {
       expect(attr(turn[0], 'aria-current')).toBe('true');
       expect(turn[0]).toContain('tbl-tile--turn');
       expect(tagsWith(html, 'seat-hand').length > 0, `${n} seats: cards on the tiles`).toBe(cards);
-      // Every tile shows the total, the stack and the bet; my own hands keep the stage.
+      // Every tile shows the total, the stack and the bet (the crowd's chips too); my own hands keep the stage.
       expect(tagsWith(html, 'seat-total')).toHaveLength(n - 1);
       expect(tagsWith(html, 'seat-chips')).toHaveLength(n - 1);
       expect(tagsWith(html, 'seat-bet')).toHaveLength(n - 1);
@@ -1423,7 +1424,7 @@ describe('the players grid', () => {
     const marks = drawn.slice(drawn.indexOf('data-testid="seats"'), drawn.indexOf('</ul>')).match(/class="tbl-chipmark"/g) ?? [];
     expect(marks.length).toBeGreaterThanOrEqual(2);
     const full = drawn.replace(/<span class="tbl-chipmark" aria-hidden="true">(?:<svg.*?<\/svg>)+<\/span>/g, '');
-    expect(full).toContain('<span class="tbl-tile__chips" data-testid="seat-chips" data-chips="1000">1,000</span><span class="tbl-tile__bet" data-testid="seat-bet" data-bet="10">bet 10</span>');
+    expect(full).toContain('<span class="tbl-tile__chips" data-testid="seat-chips" data-chips="1000"><span class="tbl-tile__chips-text" data-fit="0">1,000</span></span><span class="tbl-tile__bet" data-testid="seat-bet" data-bet="10"><span class="tbl-tile__bet-text" data-fit="0">bet 10</span></span>');
     const tiles = full.slice(full.indexOf('data-testid="seats"'), full.indexOf('</ul>'));
     expect(tiles).not.toContain('tbl-stake');
     // The panel's line says my stack in words.

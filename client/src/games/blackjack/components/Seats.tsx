@@ -198,6 +198,7 @@ export function Seats({ room, view, ids, staged, table, timeline, now, leaving, 
                     ) : undefined
                   }
                   fan={{ cards: Math.max(2, ...hands.map((h) => h.cards.length)), hands: hands.length }}
+                  held={id === staged ? 0 : hands.reduce((sum, h) => sum + h.cards.length, 0)}
                 />
               );
             });

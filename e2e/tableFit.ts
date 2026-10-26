@@ -139,34 +139,92 @@ export async function stakesShown(page: Page, label: string): Promise<void> {
 }
 
 /**
- * The floors a seat tile keeps: every card on a full tile at least `card` px wide (24 on a phone,
- * 32 on a desktop; under it the tile shows the total alone), the big total at least 22px, and the
- * status pill wholly inside the tile's header row.
+ * What every opponent's tile shows, whatever the table's size: its cards (every card it holds, a
+ * Blackjack hand with its total, a folded Poker seat's empty places), its bet when it has one and
+ * its stack, each wholly inside the tile, never cut, never under or over another of them; the cards
+ * at least `card` px wide (24 on a phone, 32 on a desktop), the big total at least 22px, the status
+ * pill inside the tile (on a full tile, in its header). A row of split hands too wide for its tile
+ * slides to the hand in play: that hand is wholly in view.
  */
 export async function seatFloors(page: Page, label: string, card: number): Promise<void> {
   const read = () =>
     page.evaluate((floor) => {
       const bad: string[] = [];
-      for (const tile of Array.from(document.querySelectorAll<HTMLElement>('.tbl-tile--full[data-testid="seat"], .tbl-tile--compact[data-testid="seat"]'))) {
+      const inside = (r: DOMRect, b: DOMRect) => r.left >= b.left - 0.5 && r.right <= b.right + 0.5 && r.top >= b.top - 0.5 && r.bottom <= b.bottom + 0.5;
+      const meet = (a: DOMRect, b: DOMRect) => Math.min(a.right, b.right) - Math.max(a.left, b.left) > 0.5 && Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 0.5;
+      const shown = (el: Element | null): DOMRect | null => {
+        const r = el?.getBoundingClientRect();
+        return r && r.width > 0 && r.height > 0 ? r : null;
+      };
+      for (const tile of Array.from(document.querySelectorAll<HTMLElement>('[data-testid="seat"]'))) {
         const name = tile.dataset.name;
-        for (const c of Array.from(tile.querySelectorAll('.tbl-tile__cards .playing-card'))) {
-          const w = c.getBoundingClientRect().width;
-          if (w > 0 && w < floor - 0.5) bad.push(`${name}: a ${w.toFixed(1)}px card`);
-        }
-        const total = tile.querySelector<HTMLElement>('[data-testid="seat-total"]');
-        if (total && total.getBoundingClientRect().width > 0 && !total.hasAttribute('data-long')) {
-          const size = parseFloat(getComputedStyle(total).fontSize);
-          if (size < 22) bad.push(`${name}: a ${size}px total`);
-        }
-        const pill = tile.querySelector('[data-testid="seat-pill"]')?.getBoundingClientRect();
-        const head = tile.querySelector('.tbl-tile__head')?.getBoundingClientRect();
         const t = tile.getBoundingClientRect();
-        if (pill && pill.width > 0) {
-          if (pill.left < t.left - 0.5 || pill.right > t.right + 0.5 || pill.top < t.top - 0.5 || pill.bottom > t.bottom + 0.5) bad.push(`${name}: the pill off the tile`);
-          if (tile.classList.contains('tbl-tile--full') && head && (pill.top < head.top - 0.5 || pill.bottom > head.bottom + 0.5)) bad.push(`${name}: the pill off the header`);
+        if (!tile.matches('.tbl-tile--full, .tbl-tile--compact')) {
+          bad.push(`${name}: a crowd's chip, not a seat tile`);
+          continue;
         }
+        // The stack, and the bet when there is one: shown, inside the tile, never cut.
+        const parts: [string, DOMRect][] = [];
+        const chips = tile.querySelector<HTMLElement>('[data-testid="seat-chips"]');
+        const c = shown(chips);
+        if (!c) bad.push(`${name}: no stack`);
+        else if (!inside(c, t)) bad.push(`${name}: the stack off the tile`);
+        else parts.push(['stack', c]);
+        const stake = tile.querySelector<HTMLElement>('[data-testid="seat-bet"]');
+        if (stake && Number(stake.dataset.bet) > 0) {
+          const b = shown(stake);
+          const text = stake.querySelector<HTMLElement>('.tbl-tile__bet-text');
+          if (!b || !text?.textContent) bad.push(`${name}: no bet`);
+          else if (!inside(b, t)) bad.push(`${name}: the bet off the tile`);
+          else if (text.scrollWidth > text.clientWidth + 1) bad.push(`${name}: the bet cut`);
+          else parts.push(['bet', b]);
+        }
+        // The cards: every one it holds, at least the floor wide, inside the tile and the box that clips them.
+        const held = Number(tile.dataset.cards ?? 0);
+        const box = tile.querySelector<HTMLElement>('[data-testid="seat-cards"]');
+        const bx = shown(box);
+        if ((held > 0 || tile.dataset.status === 'folded') && !bx) bad.push(`${name}: no cards`);
+        if (bx && box) {
+          if (!inside(bx, t)) bad.push(`${name}: the cards off the tile`);
+          parts.push(['cards', bx]);
+          const row = box.querySelector<HTMLElement>('.scroll-fade--x');
+          const slides = row !== null && row.scrollWidth > row.clientWidth + 1;
+          const cards = Array.from(box.querySelectorAll<HTMLElement>('.playing-card')).filter((el) => shown(el) && !el.closest('.tbl-flip__back'));
+          if (held > 0 && cards.length === 0) bad.push(`${name}: no card drawn`);
+          for (const el of cards) {
+            const r = el.getBoundingClientRect();
+            if (r.width < floor - 0.5) bad.push(`${name}: a ${r.width.toFixed(1)}px card`);
+            if (r.top < t.top - 0.5 || r.bottom > t.bottom + 0.5 || r.top < bx.top - 0.5 || r.bottom > bx.bottom + 0.5) bad.push(`${name}: a card cut top or bottom`);
+            // In a row that slides, the hand in play is in view; elsewhere every card is.
+            const lit = el.closest('.bj-hand[data-active="true"]');
+            if ((!slides || lit) && (r.left < bx.left - 0.5 || r.right > bx.right + 0.5)) bad.push(`${name}: a card cut at the side`);
+          }
+          // A Blackjack hand says its total beside it, big.
+          if (box.querySelector('[data-testid="seat-hand"]')) {
+            const total = tile.querySelector<HTMLElement>('[data-testid="seat-total"]');
+            const r = shown(total);
+            if (!r || !total) bad.push(`${name}: no total`);
+            else {
+              if (!inside(r, t)) bad.push(`${name}: the total off the tile`);
+              const text = total.querySelector<HTMLElement>('.tbl-tile__total-text');
+              if (text && text.scrollWidth > text.clientWidth + 1) bad.push(`${name}: the total cut`);
+              if (!total.hasAttribute('data-long') && parseFloat(getComputedStyle(total).fontSize) < 22) bad.push(`${name}: a ${getComputedStyle(total).fontSize} total`);
+              parts.push(['total', r]);
+            }
+          }
+        }
+        const head = tile.querySelector('.tbl-tile__head')?.getBoundingClientRect();
+        const pill = shown(tile.querySelector('[data-testid="seat-pill"]'));
+        if (pill) {
+          if (!inside(pill, t)) bad.push(`${name}: the pill off the tile`);
+          if (tile.classList.contains('tbl-tile--full') && head && (pill.top < head.top - 0.5 || pill.bottom > head.bottom + 0.5)) bad.push(`${name}: the pill off the header`);
+          parts.push(['pill', pill]);
+        }
+        const nameBox = shown(tile.querySelector('.tbl-tile__name'));
+        if (nameBox) parts.push(['name', nameBox]);
+        for (let i = 0; i < parts.length; i++) for (let j = i + 1; j < parts.length; j++) if (meet(parts[i][1], parts[j][1])) bad.push(`${name}: the ${parts[i][0]} over the ${parts[j][0]}`);
       }
       return bad;
     }, card);
-  await expect.poll(read, { message: `${label}: every card at ${card}px or more, every total 22px or more, the pill in the header` }).toEqual([]);
+  await expect.poll(read, { message: `${label}: every seat's cards (at ${card}px or more, a hand with its 22px total), bet and stack whole inside its tile` }).toEqual([]);
 }

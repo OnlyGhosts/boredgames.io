@@ -1,7 +1,7 @@
 import { expect, test, type Browser, type BrowserContext, type Locator, type Page } from '@playwright/test';
 import { closeResults, createParty, expectReadyCount, joinByCode, readyAll } from './party';
 import { tableBots, type TableBot } from './tableBots';
-import { cornersClear, myAreaOnScreen, tilesReadable } from './tableFit';
+import { cornersClear, myAreaOnScreen, seatFloors, tilesReadable } from './tableFit';
 
 /**
  * Texas Hold'em on the Stake-style table, between a desktop host and two phones (390x844, touch):
@@ -428,6 +428,9 @@ test('hand one: a raise through the panel, a call and a fold, the board street b
     await expect(p.page.locator(`[data-testid="seat"][data-name="${folder.name}"]`)).toHaveAttribute('data-status', 'folded');
     // The folded hand went to the muck.
     await expect(p.page.locator(`[data-testid="seat"][data-name="${folder.name}"] [data-testid="seat-card"]`)).toHaveCount(0);
+    // Its tile says so where the cards were: two empty places, beside its stack (and its bet, if it had one this street).
+    await expect(p.page.locator(`[data-testid="seat"][data-name="${folder.name}"] [data-testid="seat-cards"].tbl-tile__cards--folded .tbl-tile__slot`)).toHaveCount(2);
+    await expect(p.page.locator(`[data-testid="seat"][data-name="${folder.name}"] [data-testid="seat-chips"]`)).toBeVisible();
   }
   for (const p of players) await expect(p.page.locator('[data-testid="community-card"][data-face="up"]')).toHaveCount(3);
   await chipsConserved();
@@ -575,18 +578,40 @@ test('a second game: the desktop shortcuts, the panel at 320x568, and the host e
   for (const p of players) await closeResults(p.page);
 });
 
-const PHONES = [PORTRAIT, { width: 360, height: 740 }, SMALL];
+const PHONES = [PORTRAIT, { width: 360, height: 740 }, SMALL, { width: 393, height: 688 }, { width: 375, height: 548 }, { width: 390, height: 664 }, { width: 430, height: 740 }, { width: 360, height: 640 }];
 const DESKTOPS = [
+  { width: 1024, height: 700 },
   { width: 1024, height: 768 },
   { width: 1280, height: 800 },
   { width: 1440, height: 900 },
 ];
 
 /**
+ * The most other players whose tiles each show their cards, their bet and their stack whole at the
+ * cards' floor, by screen (an iPhone in Safari, an SE in Safari, and the rest): past it the room has
+ * no height for even the narrow tiles, and the tiles are the crowd's chips.
+ */
+const SEATS_WHOLE: Record<string, number> = {
+  '393x688': 6,
+  '375x548': 3,
+  '390x664': 6,
+  '430x740': 7,
+  '360x640': 6,
+  '320x568': 3,
+  '390x844': 9,
+  '360x740': 9,
+  '1024x700': 10,
+  '1024x768': 10,
+  '1280x800': 12,
+  '1440x900': 21,
+};
+
+/**
  * A Poker table of `size` players (a desktop host, a phone and bots on their own sockets that hold
- * their turns): at every phone size and both desktops nothing scrolls, my hand is on screen, every
- * tile's stack is inside its tile, and a desktop's tiles are never squeezed under 28px (a 1280x800
- * table once pushed my cards off the bottom and its tiles down to 8px).
+ * their turns): at every phone size and every desktop nothing scrolls, my hand is on screen, every
+ * tile reads, every opponent's cards, bet and stack show whole wherever the room holds them
+ * (SEATS_WHOLE), and a desktop's tiles are never squeezed under 28px (a 1280x800 table once pushed
+ * my cards off the bottom and its tiles down to 8px).
  */
 async function bigTable(browser: Browser, base: string, size: number): Promise<void> {
   const hostCtx = await browser.newContext({ viewport: DESKTOPS[1] });
@@ -623,13 +648,14 @@ async function bigTable(browser: Browser, base: string, size: number): Promise<v
         await expect.poll(scrolls, { message: `${label}: nothing scrolls` }).toEqual([]);
         await myAreaOnScreen(page, 'my-area', label);
         await tilesReadable(page, label, s.width > 760 ? 28 : 0);
+        if (size - 1 <= (SEATS_WHOLE[`${s.width}x${s.height}`] ?? 0)) await seatFloors(page, label, s.width > 760 ? 32 : 24);
         await cornersClear(page, label);
       }
       if (own) await page.setViewportSize(own);
     };
     if (size === 12) {
-      // Twelve players on a 390x844 phone: four rows of total-only tiles have no room, so the crowd's tiles (small), which leave
-      // my cards at least the board's size.
+      // Twelve players on a 390x844 phone: four rows of compact tiles have no room under the pot and the board, so the crowd's
+      // chips, which leave my cards at least the board's size.
       await expect(phone.getByTestId('seats')).toHaveAttribute('data-tier', 'small');
       const w = await cardWidths(phone);
       expect(w.mine, '12 players: my cards at least as wide as the board’s').toBeGreaterThanOrEqual(w.board - 0.5);
@@ -654,9 +680,9 @@ async function bigTable(browser: Browser, base: string, size: number): Promise<v
   }
 }
 
-for (const size of [2, 6, 12, 23]) {
+for (const size of [2, 4, 7, 10, 12, 23]) {
   test(`${size} players: the table never scrolls on a phone or a desktop, my hand stays on screen and every tile reads`, async ({ browser, baseURL }) => {
-    test.setTimeout(120_000);
+    test.setTimeout(180_000);
     await bigTable(browser, baseURL ?? 'http://localhost:4173', size);
   });
 }
@@ -703,7 +729,7 @@ test('a 100,000 table of three on a 320px phone: a seat’s call reads in full o
     const screen = page.getByTestId('poker-screen');
     const board = page.getByTestId('board');
     await expect(screen).toHaveAttribute('data-phase', 'acting');
-    await expect(page.getByTestId('seats')).toHaveAttribute('data-tier', 'full');
+    await expect(page.getByTestId('seats')).toHaveAttribute('data-tier', /^(full|compact)$/);
     const myId = await page.getByTestId('my-area').getAttribute('data-player-id');
     const turn = async () => (await screen.getAttribute('data-turn-player')) ?? '';
     const botOn = (id: string): TableBot => {

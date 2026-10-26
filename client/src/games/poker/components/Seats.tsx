@@ -129,6 +129,7 @@ export function Seats({ room, view, ids, meId, staged, table, timeline, live, no
             const stack = chipsOnScreen(live, id, seat.chips, now);
             const status = seat.busted ? 'out' : seat.status;
             const line = seatLine(view, table, id, timeline, now);
+            const hole = id === staged ? [] : holeOnScreen(table, timeline, id, meId, now);
             return (
               <PlayerTile
                 key={id}
@@ -152,7 +153,9 @@ export function Seats({ room, view, ids, meId, staged, table, timeline, live, no
                 tag={seat.status === 'allIn' && !seat.busted ? 'All in' : null}
                 onOpen={() => openSeat(id)}
                 data={{ 'data-chips': stack, 'data-bet': seat.bet, 'data-status': status, 'data-dealer': seat.isDealer, 'data-outcome': won > 0 ? 'win' : undefined, 'data-payout': won > 0 ? won : undefined }}
-                cards={(id === staged ? [] : holeOnScreen(table, timeline, id, meId, now)).map((c) => (
+                held={hole.length}
+                folded={seat.status === 'folded' && view.order.includes(id)}
+                cards={hole.map((c) => (
                   <TableCard key={`${timeline.id}:${c.key}`} card={c.card} size="sm" motion={c.motion} leaving={leaving || c.leaving} flipping={c.flipping} highlight={c.card !== null && best.some((b) => c.card !== null && sameCard(b, c.card))} testId="seat-card" />
                 ))}
                 extra={won > 0 && paidOut(timeline, now) ? <PayoutFloat text={payoutText(won)} /> : undefined}

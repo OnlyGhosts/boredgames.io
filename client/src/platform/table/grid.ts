@@ -42,6 +42,8 @@ export interface TierShape {
    * past them, the tiles get shorter instead.
    */
   minWidth: number;
+  /** Narrower than `below` px, the tile puts its stack over its bet: `extra` px taller (table.css). */
+  narrow?: { below: number; extra: number };
 }
 
 /**
@@ -51,41 +53,40 @@ export interface TierShape {
  * their floor (table.css: 70px).
  */
 export const TIER_SHAPES: Record<TileTier, TierShape> = {
-  full: { width: 140, height: 104, minHeight: 70, cols: [1, 4], maxCols: 4, minWidth: 140 },
-  compact: { width: 150, height: 68, minHeight: 52, cols: [2, 3], maxCols: 3, minWidth: 88 },
+  full: { width: 160, height: 77, minHeight: 68, cols: [1, 4], maxCols: 4, minWidth: 150 },
+  compact: { width: 120, height: 85, minHeight: 79, cols: [2, 3], maxCols: 4, minWidth: 92, narrow: { below: 100, extra: 15 } },
   small: { width: 70, height: 50, minHeight: 36, cols: [4, 6], maxCols: 10, minWidth: 44 },
   dense: { width: 46, height: 30, minHeight: 26, cols: [6, 8], maxCols: 14, minWidth: 24 },
 };
 
 /** A desktop's: up to five across a row (capped at 320px wide, table.css), the cards 32px to 40px. */
 export const WIDE_TIER_SHAPES: Record<TileTier, TierShape> = {
-  full: { width: 200, height: 126, minHeight: 100, cols: [1, 5], maxCols: 5, minWidth: 150 },
-  compact: { width: 150, height: 84, minHeight: 56, cols: [3, 5], maxCols: 9, minWidth: 110 },
+  full: { width: 210, height: 101, minHeight: 89, cols: [1, 6], maxCols: 8, minWidth: 170 },
+  compact: { width: 130, height: 105, minHeight: 99, cols: [3, 6], maxCols: 10, minWidth: 116 },
   small: { width: 84, height: 84, minHeight: 40, cols: [4, 8], maxCols: 9, minWidth: 64 },
   dense: { width: 52, height: 34, minHeight: 28, cols: [6, 10], maxCols: 12, minWidth: 48 },
 };
 
 /** The gap between tiles, in px (table.css reads it from the grid). */
-export const GRID_GAP: Record<TileTier, number> = { full: 5, compact: 6, small: 4, dense: 4 };
+export const GRID_GAP: Record<TileTier, number> = { full: 5, compact: 5, small: 4, dense: 4 };
 
-/** The narrowest a seat's card is drawn: under it the tile shows the total alone (cardsFit). */
+/** The narrowest a seat's card is drawn, in px. */
 export const CARD_FLOOR = { phone: 24, wide: 32 } as const;
 
-/** How far each card of a fan steps right, in card widths (table.css --fan-step). */
-const FAN_STEP = 0.44;
-
-/** What a full tile's hero row keeps beside its fan: the padding, the border, the gap and the big total. */
-const HERO_SIDE = { phone: 72, wide: 88 } as const;
+/** How far each card of a fan steps right, in card widths (table.css --fan-step), and the least it may step: the rank and suit of a "10" still in view. */
+export const FAN_STEP = 0.44;
+export const FAN_STEP_LEAST = 0.3;
 
 /**
- * Whether a fan of `cards` fits a full tile `width` px wide at the card floor beside the total.
- * Unmeasured (null): yes. Never a fan cut at the tile's edge: below the floor, the total alone.
+ * The step a fan of `cards` takes in a box `width` px wide with its cards at the `floor`: the
+ * usual step where the fan fits, a closer one where it would not (a long hand on a narrow tile),
+ * never closer than FAN_STEP_LEAST. In hundredths, so a box a hair wider never moves the cards.
  */
-export function cardsFit(width: number | null, cards: number, wide: boolean): boolean {
-  if (width === null) return true;
-  const floor = wide ? CARD_FLOOR.wide : CARD_FLOOR.phone;
-  const fan = floor * (1 + FAN_STEP * (Math.max(2, cards) - 1));
-  return width - (wide ? HERO_SIDE.wide : HERO_SIDE.phone) >= fan;
+export function fanStep(width: number, cards: number, floor: number): number {
+  const n = Math.max(2, cards);
+  if (width <= 0 || floor * (1 + FAN_STEP * (n - 1)) <= width) return FAN_STEP;
+  const step = Math.floor(((width / floor - 1) / (n - 1)) * 100) / 100;
+  return Math.max(FAN_STEP_LEAST, Math.min(FAN_STEP, step));
 }
 
 /** The widest a tile is drawn (table.css caps its column at the same). */
@@ -101,13 +102,28 @@ export interface GridOptions {
  * tall empty boxes. The avatar's row, the 5px under it (clear of the avatar's badge) and the stake
  * pill's line (a wide tile's side layout, table.css) take 54.3px, the tile's padding and border 13px.
  */
-export const BARE_FULL_HEIGHT = 58;
-export const WIDE_BARE_FULL_HEIGHT = 72;
+export const BARE_FULL_HEIGHT = 50;
+export const WIDE_BARE_FULL_HEIGHT = 58;
 
-/** The height a tile takes: its tier's, or a full tile's bare height while no seat has cards. */
-export function tileHeight(tier: TileTier, wide: boolean, bare: boolean): number {
+/** A compact tile before the deal: its header, then its stack over its bet (table.css), however narrow. */
+export const BARE_COMPACT_HEIGHT = 57;
+export const WIDE_BARE_COMPACT_HEIGHT = 66;
+
+/** How much taller a tile `tileWidth` px wide is for its narrow layout (TierShape.narrow): 0 where it has the width. */
+export function narrowExtra(shape: TierShape, tileWidth: number | null): number {
+  return shape.narrow && tileWidth !== null && tileWidth < shape.narrow.below ? shape.narrow.extra : 0;
+}
+
+/** The height a tile takes: its tier's, or a full tile's bare height while no seat has cards; taller where it is narrow (`tileWidth`). */
+export function tileHeight(tier: TileTier, wide: boolean, bare: boolean, tileWidth: number | null = null): number {
   if (bare && tier === 'full') return wide ? WIDE_BARE_FULL_HEIGHT : BARE_FULL_HEIGHT;
-  return shapeOf(tier, wide).height;
+  if (bare && tier === 'compact') return wide ? WIDE_BARE_COMPACT_HEIGHT : BARE_COMPACT_HEIGHT;
+  return shapeOf(tier, wide).height + narrowExtra(shapeOf(tier, wide), tileWidth);
+}
+
+/** The width of each of `cols` columns `gap` apart in a row `width` wide. */
+export function columnWidth(width: number, cols: number, gap: number): number {
+  return (width - (cols - 1) * gap) / cols;
 }
 
 export function shapeOf(tier: TileTier, wide: boolean): TierShape {
@@ -149,9 +165,9 @@ export function defaultColumns(count: number, tier: TileTier = tileTier(count)):
 /** How large a tile can be with `cols` columns in a `width` x `height` box: 1 is its natural size (never more). */
 export function tileScale(count: number, cols: number, box: { width: number; height: number }, shape: TierShape, gap: number, rowGap: number = gap): number {
   const rows = Math.ceil(count / cols);
-  const w = (box.width - (cols - 1) * gap) / cols;
+  const w = columnWidth(box.width, cols, gap);
   const h = (box.height - (rows - 1) * rowGap) / rows;
-  return Math.min(1, w / shape.width, h / shape.height);
+  return Math.min(1, w / shape.width, h / (shape.height + narrowExtra(shape, w)));
 }
 
 /** The most columns whose tiles are still wide enough to read (always at least one). */
@@ -173,7 +189,7 @@ export function fitGrid(count: number, box: { width: number; height: number } | 
   if (!box || box.width <= 0 || box.height <= 0) return { cols: usualCols, rows: Math.ceil(n / usualCols) };
   const tall = (cols: number): boolean => {
     const rows = Math.ceil(n / cols);
-    return (box.height - (rows - 1) * rowGap) / rows >= shape.minHeight;
+    return (box.height - (rows - 1) * rowGap) / rows >= shape.minHeight + narrowExtra(shape, columnWidth(box.width, cols, gap));
   };
   const best = (lo: number, hi: number): { cols: number; scale: number; tall: boolean } => {
     let pick = { cols: usualCols, scale: -1, tall: false };
@@ -205,7 +221,7 @@ export function naturalHeight(count: number, width: number, { wide = false, tier
   const shape = shapeOf(tier, wide);
   const cols = Math.min(count, defaultColumns(count, tier), widestColumns(shape, width, GRID_GAP[tier]));
   const rows = Math.ceil(count / cols);
-  return rows * tileHeight(tier, wide, bare) + (rows - 1) * rowGapOf(tier, wide) + paddingOf(tier, wide);
+  return rows * tileHeight(tier, wide, bare, columnWidth(width, cols, GRID_GAP[tier])) + (rows - 1) * rowGapOf(tier, wide) + paddingOf(tier, wide);
 }
 
 /**
@@ -218,7 +234,7 @@ export function leastHeight(count: number, width: number, { wide = false, tier =
   const shape = shapeOf(tier, wide);
   const cols = Math.max(1, Math.min(count, shape.maxCols, widestColumns(shape, width, GRID_GAP[tier])));
   const rows = Math.ceil(count / cols);
-  return rows * shape.minHeight + (rows - 1) * rowGapOf(tier, wide) + paddingOf(tier, wide);
+  return rows * (shape.minHeight + narrowExtra(shape, columnWidth(width, cols, GRID_GAP[tier]))) + (rows - 1) * rowGapOf(tier, wide) + paddingOf(tier, wide);
 }
 
 /** The room the seats have: the width of their row, and the height the table's other rows leave. */
@@ -280,7 +296,9 @@ export function seatsNeed(count: number, room: Room, { wide = false, growth = 0 
   // grid showing total-only tiles wants to spare before it takes them): planned otherwise, the seats kept the room for
   // cards the grid never showed. The crowd tiers go by the room as it is.
   const plain = tierFor(count, room, { wide });
-  const tier = plain === 'full' ? tierFor(count, { width: room.width, height: room.height - growth }, { wide }) : plain;
+  const guarded = plain === 'full' ? tierFor(count, { width: room.width, height: room.height - growth }, { wide }) : plain;
+  // Never planned down to the crowd's chips for it: a seat tile shows its cards, bet and stack wherever its least height fits.
+  const tier = guarded === 'full' || guarded === 'compact' ? guarded : plain;
   const natural = naturalHeight(count, room.width, { wide, tier }) + SPARE;
   const least = leastHeight(count, room.width, { wide, tier }) + growth;
   return Math.min(room.height, Math.max(natural, least));
