@@ -1342,13 +1342,15 @@
 
 .tbl-tile__head .tbl-tile__name {
   flex: 1 1 0;
+  min-width: min-content;
   font-size: 0.8125em;
 }
 
 /*
- * The status pill: the mark and the word, coloured by what it says. The name gives way first; past
- * 70% of the header the word steps to a shorter form ("Win +81k", then "Win": FitText), then to the
- * mark alone, never cut.
+ * The status pill: the mark and the word, coloured by what it says. The name keeps its first six
+ * characters (PlayersGrid's name floor); the pill gives way first: past 70% of the header, or where
+ * the name needs the room, the word steps to a shorter form ("Win +81k", then "Win": FitText), then
+ * to the mark alone (on turn, to nothing: the lime ring says it), never cut.
  */
 .tbl-tile__pill {
   display: inline-flex;
@@ -1399,6 +1401,10 @@
 }
 
 .tbl-tile__pill:has(.tbl-tile__line:empty):has(.tbl-tile__pill-mark:empty) {
+  display: none;
+}
+
+.tbl-tile__pill--turn:has(.tbl-tile__line:empty) {
   display: none;
 }
 

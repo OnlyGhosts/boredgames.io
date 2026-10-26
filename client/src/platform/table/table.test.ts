@@ -436,6 +436,16 @@ describe('the components', () => {
     expect(html(createElement(PlayerTile, { ...props, tier: 'dense' }))).toContain('tbl-tile--dense');
   });
 
+  it('gives the name the room before the pill: its first six characters (all of a shorter one), the pill stepping to its mark or, on turn, to the ring alone', async () => {
+    const { NAME_FLOOR } = await import('./PlayersGrid');
+    expect(NAME_FLOOR).toBe(6);
+    const css = readFileSync(join(import.meta.dirname, '../styles/table.css'), 'utf8');
+    // The name never shrinks under the floor PlayersGrid measures for it (its first six characters and the ellipsis).
+    expect(css).toMatch(/\.tbl-tile__head \.tbl-tile__name \{\s*flex: 1 1 0;\s*min-width: min-content;/);
+    // A pill on turn with no room for its word goes: the lime ring says it.
+    expect(css).toMatch(/\.tbl-tile__pill--turn:has\(\.tbl-tile__line:empty\) \{\s*display: none;/);
+  });
+
   it('keeps the floors in the stylesheet: cards 24px to 30px on a phone and 32px to 40px on a desktop, the total over 22px', () => {
     const css = readFileSync(join(import.meta.dirname, '../styles/table.css'), 'utf8');
     expect(css).toMatch(/\.tbl-grid \{\s*--card-min: 24px;\s*--card-max: 30px;/);

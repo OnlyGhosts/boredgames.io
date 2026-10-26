@@ -143,7 +143,8 @@ export async function stakesShown(page: Page, label: string): Promise<void> {
  * Blackjack hand with its total, a folded Poker seat's empty places), its bet when it has one and
  * its stack, each wholly inside the tile, never cut, never under or over another of them; the cards
  * at least `card` px wide (24 on a phone, 32 on a desktop), the big total at least 22px, the status
- * pill inside the tile (on a full tile, in its header). A row of split hands too wide for its tile
+ * pill inside the tile (on a full tile, in its header), and the name before the pill: all of it, or
+ * of a long one its first six characters before the ellipsis (a name cut to "B…" looked broken). A row of split hands too wide for its tile
  * slides to the hand in play: that hand is wholly in view.
  */
 export async function seatFloors(page: Page, label: string, card: number): Promise<void> {
@@ -222,9 +223,33 @@ export async function seatFloors(page: Page, label: string, card: number): Promi
         }
         const nameBox = shown(tile.querySelector('.tbl-tile__name'));
         if (nameBox) parts.push(['name', nameBox]);
+        // The name before the pill: cut (an ellipsis) only past its first six characters, all of a shorter one shown.
+        const nameText = tile.querySelector<HTMLElement>('.tbl-tile__name-text');
+        const text = nameText?.firstChild;
+        if (nameText && text instanceof Text && nameText.scrollWidth > nameText.clientWidth + 0.5) {
+          const range = document.createRange();
+          const widthOf = (k: number) => {
+            range.setStart(text, 0);
+            range.setEnd(text, k);
+            return range.getBoundingClientRect().width;
+          };
+          const ellipsis = (() => {
+            const probe = document.createElement('span');
+            probe.textContent = '\u2026';
+            probe.style.cssText = 'position:absolute;visibility:hidden;white-space:nowrap';
+            nameText.appendChild(probe);
+            const w = probe.getBoundingClientRect().width;
+            probe.remove();
+            return w;
+          })();
+          const length = text.data.length;
+          let seen = 0;
+          while (seen < length && widthOf(seen + 1) + ellipsis <= nameText.clientWidth + 0.5) seen += 1;
+          if (seen < Math.min(length, 6)) bad.push(`${name}: the name cut to ${seen} characters`);
+        }
         for (let i = 0; i < parts.length; i++) for (let j = i + 1; j < parts.length; j++) if (meet(parts[i][1], parts[j][1])) bad.push(`${name}: the ${parts[i][0]} over the ${parts[j][0]}`);
       }
       return bad;
     }, card);
-  await expect.poll(read, { message: `${label}: every seat's cards (at ${card}px or more, a hand with its 22px total), bet and stack whole inside its tile` }).toEqual([]);
+  await expect.poll(read, { message: `${label}: every seat's cards (at ${card}px or more, a hand with its 22px total), bet, stack and name (its first six characters at least) whole inside its tile` }).toEqual([]);
 }

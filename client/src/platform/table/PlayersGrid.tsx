@@ -272,6 +272,50 @@ function useFanStep(ref: RefObject<HTMLElement | null>, cards: number, floor: nu
   return step;
 }
 
+/** The characters of a name a tile always shows: all of a shorter one; a longer one is cut (an ellipsis) only past them. */
+export const NAME_FLOOR = 6;
+
+/**
+ * Holds a tile's name at least as wide as its first NAME_FLOOR characters (and the ellipsis after
+ * them where it is longer), measured in its own font as it lays out and again when that changes
+ * (the fonts arriving, a bigger text size): the status pill beside it gives way first.
+ */
+function useNameFloor(ref: RefObject<HTMLSpanElement | null>, name: string): void {
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const read = () => {
+      const text = el.firstChild;
+      if (!(text instanceof Text) || text.data.length === 0) return;
+      const range = document.createRange();
+      range.setStart(text, 0);
+      range.setEnd(text, Math.min(text.data.length, NAME_FLOOR));
+      let width = range.getBoundingClientRect().width;
+      if (text.data.length > NAME_FLOOR) {
+        const probe = document.createElement('span');
+        probe.textContent = '\u2026';
+        probe.style.cssText = 'position:absolute;visibility:hidden;white-space:nowrap';
+        el.appendChild(probe);
+        width += probe.getBoundingClientRect().width;
+        probe.remove();
+      }
+      const next = `${Math.ceil(width) + 1}px`;
+      if (el.style.minWidth !== next) el.style.minWidth = next;
+    };
+    read();
+    const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(read) : null;
+    observer?.observe(el);
+    let live = true;
+    void document.fonts?.ready.then(() => {
+      if (live) read();
+    });
+    return () => {
+      live = false;
+      observer?.disconnect();
+    };
+  }, [ref, name]);
+}
+
 /**
  * A seat's tile (full or compact), everything a player looks for at once (table.css): a header
  * (avatar, name, the status pill with its mark); then the hand as a fan of readable cards, the big
@@ -282,6 +326,8 @@ function useFanStep(ref: RefObject<HTMLElement | null>, cards: number, floor: nu
 function SeatTile({ playerId, name, avatar, connected, tier, turn, line, mark, outcome = null, chips, bet, start, betData, total, dimmed = false, badge, cards, held = 0, folded = false, fan, extra, onOpen, shortBadge = false, data }: TileProps) {
   const room = useContext(TileRoom);
   const cardsRef = useRef<HTMLSpanElement>(null);
+  const nameRef = useRef<HTMLSpanElement>(null);
+  useNameFloor(nameRef, name);
   const fanCards = Math.max(2, fan?.cards ?? 2);
   const step = useFanStep(cardsRef, fanCards, room.wide ? CARD_FLOOR.wide : CARD_FLOOR.phone);
   const fanStyle = { '--tile-fan': fanCards, '--tile-hands': Math.max(1, fan?.hands ?? 1), ...(step === null ? {} : { '--fan-step': step }) } as CSSProperties;
@@ -307,7 +353,9 @@ function SeatTile({ playerId, name, avatar, connected, tier, turn, line, mark, o
           <Avatar avatar={avatar} size="sm" dimmed={!connected} />
         </span>
         <span className="tbl-tile__name">
-          <span className="tbl-tile__name-text">{name}</span>
+          <span ref={nameRef} className="tbl-tile__name-text">
+            {name}
+          </span>
           {badge}
         </span>
         {(line.text || mark === 'bet') && (
