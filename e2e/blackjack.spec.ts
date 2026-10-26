@@ -2,7 +2,7 @@ import { expect, test, type Browser, type BrowserContext, type Locator, type Pag
 import { BLACKJACK_FINAL_HOLD_MS } from '../shared/games/blackjack/deal';
 import { closeResults, createParty, expectReadyCount, joinByCode, readyAll } from './party';
 import { tableBots, type TableBot } from './tableBots';
-import { cornersClear, seatFloors, tilesReadable } from './tableFit';
+import { cornersClear, seatFloors, stripShown, tilesReadable } from './tableFit';
 
 /**
  * Blackjack the Stake way, between a desktop host and two phones (390x844, touch): no rounds, no
@@ -759,22 +759,23 @@ async function bigTable(browser: Browser, base: string, size: number): Promise<v
     await expect(phone.getByTestId('table-turn')).toHaveAttribute('data-state', 'result');
     await expect(phone.getByTestId('place-bet')).toBeEnabled();
     await fitsEverySize(phone, PHONES, `${size} players, settled`);
-    // The tiles step down with the table (and the room a 390x844 phone leaves the seats: grid.ts tierFor): every opponent's cards,
-    // bet and stack on full tiles, then on compact ones three across; past what the room holds, the crowd's chips.
-    const tiers: Record<number, RegExp> = { 2: /^full$/, 6: /^full$/, 12: /^compact$/, 24: /^small$/, 50: /^(small|dense)$/ };
+    // The tiles step down with the table (and the room a 390x844 phone leaves the seats: grid.ts seatPlan): every opponent's cards,
+    // bet and stack on full tiles, then on compact ones three across; past what a grid holds, full tiles in a strip that scrolls sideways.
+    const tiers: Record<number, RegExp> = { 2: /^full$/, 6: /^full$/, 12: /^compact$/, 24: /^full$/, 50: /^full$/ };
     await expect(phone.getByTestId('seats')).toHaveAttribute('data-tier', tiers[size]);
-    if (size <= 12) await seatFloors(phone, `${size} players, settled`, 24);
+    if (size >= 24) await stripShown(phone, `${size} players, settled`, 24);
+    else await seatFloors(phone, `${size} players, settled`, 24);
     // The cards take the room the seats leave (room.ts useSeatRoom): a table of two or six leaves the dealer's row and my hand big;
-    // a table of twelve leaves them what its three rows of compact tiles do not need; a table of twenty-four, on the crowd's
-    // chips, leaves them big again; fifty need all the room, so the cards keep their least size.
+    // a table of twelve leaves them what its three rows of compact tiles do not need; twenty-four and fifty, in a strip as many
+    // rows deep as the room holds, need all of it, so the cards keep their least size.
     const cards = await phone.getByTestId('bj-table').evaluate((el) => {
       const style = getComputedStyle(el);
       return { w: parseFloat(style.getPropertyValue('--bj-card-w')), base: parseFloat(style.getPropertyValue('--bj-card-base')), spare: style.getPropertyValue('--tbl-spare') };
     });
     // A small table stops where the dealer's four and a shoe the cards' own size still fit beside each other: 61.9px.
-    if (size <= 6 || size === 24) expect(cards.w, `${size} players: the cards`).toBeGreaterThanOrEqual(61.5);
+    if (size <= 6) expect(cards.w, `${size} players: the cards`).toBeGreaterThanOrEqual(61.5);
     if (size === 12) expect(cards.w, '12 players: the cards over their least size').toBeGreaterThan(cards.base + 5);
-    if (size >= 50) expect(Math.abs(cards.w - cards.base), `${size} players: the cards at their least size`).toBeLessThanOrEqual(0.1);
+    if (size >= 24) expect(Math.abs(cards.w - cards.base), `${size} players: the cards at their least size`).toBeLessThanOrEqual(0.1);
     expect(errors).toEqual([]);
   } finally {
     for (const b of bots) b.close();

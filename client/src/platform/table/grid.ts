@@ -1,7 +1,8 @@
 /**
  * How the other players' tiles fill the space the table leaves them: the tier (how much each tile
- * shows) goes by the room the seats have, and the columns by the space the grid has, so a table
- * of any size fits without scrolling. Pure, for the grid component and the tests.
+ * shows) goes by the room the seats have, and the columns by the space the grid has. Past what a
+ * grid holds with every tile whole, the seats are full tiles in a strip that scrolls sideways
+ * (seatPlan), and the rest of the table stays put. Pure, for the grid component and the tests.
  */
 
 /**
@@ -255,22 +256,107 @@ export const SPARE = 8;
 const LOWEST: Record<TileTier, TileTier> = { full: 'small', compact: 'small', small: 'small', dense: 'dense' };
 
 /**
- * The tier the room allows: the richest, down to the count's own or one step under it, whose
- * least height fits the room, so the cards in miniature stay wherever the table has the height
- * for them (seven seats across a desktop) and the tiles step down where it has not (four seats
- * on a phone). When nothing fits, the poorest of those, overflowing a little: a full tile squashed
- * under its least height would cut its cards off at its bottom edge; a compact one shows none.
- * Before the room is measured, and on the server render, the count's usual tier. The tier on
- * show stays while it still fits.
+ * How the seats are laid out: the tier of their tiles, and whether they are a grid that holds
+ * them all (`strip` false) or a strip of full tiles that scrolls sideways, as many rows of them as
+ * the room holds (PlayersGrid; table.css .tbl-strip).
  */
-export function tierFor(count: number, room: Room | null, { wide = false, current = null }: { wide?: boolean; current?: TileTier | null } = {}): TileTier {
+export interface SeatPlan {
+  tier: TileTier;
+  strip: boolean;
+}
+
+/** The plans a table may take, richest first: a grid of full tiles, of compact ones, the strip of full tiles, the crowd's chips. */
+const PLANS: readonly SeatPlan[] = [
+  { tier: 'full', strip: false },
+  { tier: 'compact', strip: false },
+  { tier: 'full', strip: true },
+  { tier: 'small', strip: false },
+  { tier: 'dense', strip: false },
+];
+
+const rankOf = (plan: SeatPlan): number => PLANS.findIndex((p) => p.tier === plan.tier && p.strip === plan.strip);
+
+/**
+ * The plan the room allows: the richest, down to the count's own tier or one step under it, whose
+ * least height fits the room. A grid while every tile in it keeps its cards, its bet and its stack
+ * at their floors (full tiles, then compact ones: seven seats across a desktop, three on an SE);
+ * past that, the strip, whose least height is one row of full tiles, so every seat still shows
+ * everything at any count; the crowd's chips only where not even that row fits. When nothing
+ * fits, the poorest of those, overflowing a little: a full tile squashed under its least height
+ * would cut its cards off at its bottom edge. Before the room is measured, and on the server
+ * render, the count's usual tier in a grid. The plan on show stays while it still fits: a richer
+ * one takes over only with SPARE to spare.
+ */
+export function seatPlan(count: number, room: Room | null, { wide = false, current = null }: { wide?: boolean; current?: SeatPlan | null } = {}): SeatPlan {
   const usual = tileTier(count);
-  if (room === null || count <= 0) return usual;
-  const richer = (tier: TileTier): boolean => current !== null && TIERS.indexOf(tier) < TIERS.indexOf(current);
-  for (const tier of TIERS.slice(0, TIERS.indexOf(LOWEST[usual]) + 1)) {
-    if (leastHeight(count, room.width, { wide, tier }) + (richer(tier) ? SPARE : 0) <= room.height) return tier;
+  const lowest: SeatPlan = { tier: LOWEST[usual], strip: false };
+  if (room === null || count <= 0) return { tier: usual, strip: false };
+  const now = current === null ? -1 : rankOf(current);
+  for (const plan of PLANS.slice(0, rankOf(lowest) + 1)) {
+    const least = plan.strip ? stripLeast(1, wide) : leastHeight(count, room.width, { wide, tier: plan.tier });
+    if (least + (now >= 0 && rankOf(plan) < now ? SPARE : 0) <= room.height) return plan;
   }
-  return LOWEST[usual];
+  return lowest;
+}
+
+/** The tier of the seats' tiles the room allows (seatPlan): a strip's are full. */
+export function tierFor(count: number, room: Room | null, { wide = false, current = null }: { wide?: boolean; current?: TileTier | null } = {}): TileTier {
+  return seatPlan(count, room, { wide, current: current === null ? null : { tier: current, strip: false } }).tier;
+}
+
+/** The height of `rows` rows of a strip's full tiles at their least, with the gaps between them. */
+export function stripLeast(rows: number, wide = false): number {
+  return rows * shapeOf('full', wide).minHeight + (rows - 1) * rowGapOf('full', wide);
+}
+
+/** The height of `rows` rows of a strip's full tiles at their natural size (before the deal, their bare height), with the gaps. */
+export function stripHeight(rows: number, wide = false, bare = false): number {
+  return rows * tileHeight('full', wide, bare) + (rows - 1) * rowGapOf('full', wide);
+}
+
+/**
+ * The rows of a strip `height` px tall: as many as hold full tiles at their least height, at least
+ * one and never more than there are seats. The rows on show (`current`) stay while they fit: one
+ * more needs SPARE to spare.
+ */
+export function stripRows(count: number, height: number, wide = false, current: number | null = null): number {
+  const most = (h: number): number => Math.max(1, Math.min(Math.max(1, count), Math.floor((h + rowGapOf('full', wide)) / (shapeOf('full', wide).minHeight + rowGapOf('full', wide)))));
+  const rows = most(height);
+  return current !== null && rows > current ? Math.max(current, most(height - SPARE)) : rows;
+}
+
+/**
+ * Each end of a strip, in px: what shows there of the seat past the last whole one (under the
+ * fade), and where the hint that more seats wait sits. The whole tiles keep between the two ends
+ * wherever the strip stops (it snaps a tile to the left end); the ends are narrower only where
+ * the full width would leave a phone a single tile across.
+ */
+export const STRIP_EDGE = { most: 24, least: 12 } as const;
+
+export interface StripFit {
+  rows: number;
+  /** Columns of tiles in all (the seats run down each column, then on to the next). */
+  cols: number;
+  /** Columns whole in view between the strip's two ends. */
+  view: number;
+  /** A tile's width, in px. */
+  tile: number;
+  /** Each end's width, in px (STRIP_EDGE). */
+  edge: number;
+}
+
+/**
+ * A strip `width` px wide (it runs out over the felt's padding to the table's edges) of `count`
+ * full tiles in `rows` rows: as many columns whole in view as fit at the tile's least width
+ * between the ends, the tiles sharing the rest, never past TILE_MAX_WIDTH.
+ */
+export function fitStrip(count: number, width: number, rows: number, wide = false): StripFit {
+  const shape = shapeOf('full', wide);
+  const gap = GRID_GAP.full;
+  const view = Math.max(1, Math.floor((width - 2 * STRIP_EDGE.least + gap) / (shape.minWidth + gap)));
+  const edge = clamp((width - view * shape.minWidth - (view - 1) * gap) / 2, STRIP_EDGE.least, STRIP_EDGE.most);
+  const tile = Math.min(TILE_MAX_WIDTH, (width - 2 * edge - (view - 1) * gap) / view);
+  return { rows, cols: Math.ceil(Math.max(1, count) / rows), view, tile, edge };
 }
 
 /**
@@ -294,13 +380,18 @@ export function seatsNeed(count: number, room: Room, { wide = false, growth = 0 
   if (count <= 0) return Math.min(room.height, growth);
   // Full tiles only where their least height still fits once the line under the ribbon has grown (and past the few pixels a
   // grid showing total-only tiles wants to spare before it takes them): planned otherwise, the seats kept the room for
-  // cards the grid never showed. The crowd tiers go by the room as it is.
-  const plain = tierFor(count, room, { wide });
-  const guarded = plain === 'full' ? tierFor(count, { width: room.width, height: room.height - growth }, { wide }) : plain;
-  // Never planned down to the crowd's chips for it: a seat tile shows its cards, bet and stack wherever its least height fits.
-  const tier = guarded === 'full' || guarded === 'compact' ? guarded : plain;
-  const natural = naturalHeight(count, room.width, { wide, tier }) + SPARE;
-  const least = leastHeight(count, room.width, { wide, tier }) + growth;
+  // cards the grid never showed. The strip and the crowd tiers go by the room as it is.
+  const plain = seatPlan(count, room, { wide });
+  const guarded = plain.tier === 'full' && !plain.strip ? seatPlan(count, { width: room.width, height: room.height - growth }, { wide }) : plain;
+  // Never planned down to the strip or the crowd's chips for it: a grid's tile shows its cards, bet and stack wherever its least height fits.
+  const plan = !guarded.strip && (guarded.tier === 'full' || guarded.tier === 'compact') ? guarded : plain;
+  if (plan.strip) {
+    // A strip's rows: as many as keep their least height once the line under the ribbon has grown, so they hold through the round.
+    const rows = stripRows(count, room.height - growth, wide);
+    return Math.min(room.height, Math.max(stripHeight(rows, wide) + SPARE, stripLeast(rows, wide) + growth));
+  }
+  const natural = naturalHeight(count, room.width, { wide, tier: plan.tier }) + SPARE;
+  const least = leastHeight(count, room.width, { wide, tier: plan.tier }) + growth;
   return Math.min(room.height, Math.max(natural, least));
 }
 

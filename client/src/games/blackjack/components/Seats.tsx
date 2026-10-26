@@ -143,8 +143,9 @@ function SeatDetail({ room, view, id, table, timeline, now, leaving, chips }: { 
 }
 
 /**
- * The other players as tiles in seat order, never scrolling: the cards in miniature while the
- * table is small, a total and a status mark as it grows. A seat's hands are a row like mine on the
+ * The other players as tiles in seat order: every seat's cards in miniature, its bet and its
+ * stack, in a grid while the room holds them, in a strip that scrolls sideways past that
+ * (PlayersGrid). A seat's hands are a row like mine on the
  * stage (HandRow): every hand its cards at one size with its total, sliding sideways to the hand in
  * play, its ends fading where more hands wait. The seat whose turn it is gets the lime ring and
  * the Playing tag; a settled seat its outcome's colour. Tapping a tile opens its hands. The seat

@@ -253,3 +253,145 @@ export async function seatFloors(page: Page, label: string, card: number): Promi
     }, card);
   await expect.poll(read, { message: `${label}: every seat's cards (at ${card}px or more, a hand with its 22px total), bet, stack and name (its first six characters at least) whole inside its tile` }).toEqual([]);
 }
+
+/**
+ * The seat on turn sits whole in a big table's strip of seats, between its two ends (never under a
+ * fade). True where there is no strip or no other seat on turn.
+ */
+export async function turnInStrip(page: Page): Promise<boolean> {
+  return page.evaluate(() => {
+    const strip = document.querySelector<HTMLElement>('[data-testid="seat-strip"]');
+    const tile = strip?.querySelector<HTMLElement>('[data-testid="seat"][aria-current="true"]');
+    if (!strip || !tile) return true;
+    const box = strip.getBoundingClientRect();
+    const r = tile.getBoundingClientRect();
+    const edge = parseFloat(getComputedStyle(strip).getPropertyValue('--fade-x')) || 0;
+    return r.left >= box.left + edge - 0.5 && r.right <= box.right - edge + 0.5 && r.top >= box.top - 0.5 && r.bottom <= box.bottom + 0.5;
+  });
+}
+
+/**
+ * A big table's seats as a strip of full tiles that scrolls sideways (PlayersGrid's SeatStrip): the
+ * strip scrolls while the page, the table and the seats' own box never do, and it shows no
+ * scrollbar. Stopped with each column of tiles at its left end in turn, the tiles between its two
+ * ends are whole in view (clear of the fades), the ends with more seats past them fade and carry
+ * the hint (and only those), the hint keeps to its end, and every tile passes seatFloors (`card`
+ * px cards, its bet and stack whole). Every seat is whole in view at one of those stops. The
+ * strip is put back where it was.
+ */
+export async function stripShown(page: Page, label: string, card: number): Promise<void> {
+  const strip = page.getByTestId('seat-strip');
+  await expect(page.getByTestId('seats'), `${label}: the seats in a strip`).toHaveAttribute('data-strip', '');
+  const scrolls = await page.evaluate(() => {
+    const over = (el: Element | null) => (el ? el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1 : false);
+    const seats = document.querySelector('[data-testid="seats"]');
+    const felt = seats?.parentElement ?? null;
+    const strip = document.querySelector<HTMLElement>('[data-testid="seat-strip"]');
+    return {
+      page: over(document.documentElement) || window.scrollY !== 0,
+      table: over(felt),
+      seats: over(seats),
+      strip: strip ? strip.scrollWidth > strip.clientWidth + 1 : false,
+      scrollbar: strip ? strip.offsetHeight - strip.clientHeight : -1,
+    };
+  });
+  expect(scrolls, `${label}: only the strip scrolls, with no scrollbar`).toEqual({ page: false, table: false, seats: false, strip: true, scrollbar: 0 });
+  const start = await strip.evaluate((el) => el.scrollLeft);
+  const cols = Number(await page.getByTestId('seats').getAttribute('data-cols'));
+  const rows = Number(await page.getByTestId('seats').getAttribute('data-rows'));
+  const seen = new Set<string>();
+  const ids = await page.locator('[data-testid="seat-strip"] [data-testid="seat"]').evaluateAll((els) => els.map((el) => (el as HTMLElement).dataset.playerId ?? ''));
+  for (let c = 0; c < cols; c++) {
+    const at = `${label}, column ${c + 1} of ${cols} at the left end`;
+    await strip.evaluate((el, i) => {
+      const cell = el.querySelectorAll<HTMLElement>(':scope > .tbl-grid__cell')[i];
+      const edge = parseFloat(getComputedStyle(el).getPropertyValue('--fade-x')) || 0;
+      if (cell) el.scrollTo({ left: cell.offsetLeft - edge, behavior: 'instant' });
+    }, c * rows);
+    const read = () =>
+      strip.evaluate((el) => {
+        const box = el.getBoundingClientRect();
+        const edge = parseFloat(getComputedStyle(el).getPropertyValue('--fade-x')) || 0;
+        const whole = Array.from(el.querySelectorAll<HTMLElement>('[data-testid="seat"]'))
+          .filter((t) => {
+            const r = t.getBoundingClientRect();
+            return r.left >= box.left + edge - 0.5 && r.right <= box.right - edge + 0.5 && r.top >= box.top - 0.5 && r.bottom <= box.bottom + 0.5;
+          })
+          .map((t) => t.dataset.playerId ?? '');
+        const left = el.scrollLeft > 1;
+        const right = el.scrollLeft + el.clientWidth < el.scrollWidth - 1;
+        const hints = Array.from(el.parentElement?.querySelectorAll<HTMLElement>('[data-testid="seat-strip-more"]') ?? []);
+        // Each hint sits over its own end, never over a tile in view.
+        const astray = hints.filter((h) => {
+          const r = h.getBoundingClientRect();
+          return h.dataset.side === 'left' ? r.left < box.left - 0.5 || r.right > box.left + edge + 0.5 : r.right > box.right + 0.5 || r.left < box.right - edge - 0.5;
+        }).length;
+        return {
+          whole,
+          fade: el.dataset.fade ?? '',
+          due: [left ? 'left' : '', right ? 'right' : ''].filter(Boolean).join(' '),
+          hints: hints.map((h) => h.dataset.side).join(' '),
+          astray,
+        };
+      });
+    await expect.poll(async () => {
+      const v = await read();
+      return v.fade === v.due && v.hints === v.due && v.astray === 0;
+    }, { message: `${at}: the ends with seats past them fade and carry the hint` }).toBe(true);
+    const view = await read();
+    expect(view.whole.length, `${at}: whole tiles in view`).toBeGreaterThan(0);
+    for (const id of view.whole) seen.add(id);
+    await seatFloors(page, at, card);
+  }
+  expect(ids.filter((id) => !seen.has(id)), `${label}: every seat whole in view at one of the strip's stops`).toEqual([]);
+  await strip.evaluate((el, left) => el.scrollTo({ left, behavior: 'instant' }), start);
+}
+
+/** A swipe of a finger `dx` px sideways from `from`, in steps, as a phone sends it (the page's context has touch). */
+export async function swipe(page: Page, from: { x: number; y: number }, dx: number): Promise<void> {
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: from.x, y: from.y }] });
+  for (let i = 1; i <= 12; i++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: from.x + (dx * i) / 12, y: from.y }] });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await cdp.detach();
+}
+
+/**
+ * A finger swipes a big table's strip of seats on (towards its far end, the finger moving left
+ * from the last tile in view) or `back` (the finger moving right from the first) on a `width` px
+ * screen, starting on a tile: the strip moves that way, settles, and no seat's sheet opens.
+ * Returns where the strip came to rest.
+ */
+export async function stripSwiped(page: Page, width: number, back = false): Promise<number> {
+  const strip = page.getByTestId('seat-strip');
+  const left = () => strip.evaluate((el) => el.scrollLeft);
+  const t = await strip.evaluate((el, last) => {
+    const box = el.getBoundingClientRect();
+    const shown = Array.from(el.querySelectorAll<HTMLElement>('[data-testid="seat"]'))
+      .map((tile) => tile.getBoundingClientRect())
+      .filter((r) => r.left >= box.left - 0.5 && r.right <= box.right + 0.5)
+      .sort((a, b) => a.left - b.left);
+    const r = last ? shown[shown.length - 1] : shown[0];
+    return r ? { x: r.left + r.width / 2, y: r.top + r.height / 2, width: r.width } : null;
+  }, !back);
+  if (!t) throw new Error('no tile in view in the strip');
+  const before = await left();
+  const dx = back ? Math.min(width - 10 - t.x, t.width + 20) : -Math.min(t.x - 10, t.width + 20);
+  await swipe(page, t, dx);
+  await expect.poll(async () => (back ? before - (await left()) : (await left()) - before), { message: 'the swipe moves the strip' }).toBeGreaterThan(20);
+  // Settled: two reads a quarter of a second apart agree.
+  let last = -1;
+  await expect
+    .poll(
+      async () => {
+        const now = await left();
+        const still = now === last;
+        last = now;
+        return still;
+      },
+      { message: 'the strip settles after the swipe', intervals: [250] },
+    )
+    .toBe(true);
+  await expect(page.getByTestId('seat-sheet'), 'a swipe opens no sheet').toHaveCount(0);
+  return left();
+}

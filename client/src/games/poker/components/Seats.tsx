@@ -102,7 +102,8 @@ function SeatDetail({ view, id, meId, start, table, timeline, now, leaving, chip
 }
 
 /**
- * The other players as compact seats round the table from my left, never scrolling: the stack in
+ * The other players as seats round the table from my left, in a grid while the room holds them
+ * and a strip that scrolls sideways past that (PlayersGrid): the stack in
  * words ("990 chips"), the bet this street as its own pill of chips (read as "Bet 10"), the
  * dealer button, their backs and their last move; folded and busted seats dimmed, all in tagged,
  * the seat to act lit with the lime ring, a winner outlined in lime. A tile too small for the words keeps the stack

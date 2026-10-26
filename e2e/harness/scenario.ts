@@ -32,6 +32,8 @@ export interface Scenario {
   otherHands: number;
   /** On another player's turn: which of the others it is (0 the first), and the hand of theirs in play. */
   turn: number;
+  /** On another player's turn: the turn moving from one of the others to the next, a beat each (`turns=0,12,3` in the query); empty for `turn` alone. */
+  turns: number[];
   otherActive: number;
   /** One of the others (by place, 0 the first) whose hand is a bust (10, 6, K) once they have played; -1 for none. */
   bustOther: number;
@@ -88,6 +90,7 @@ export function parseScenario(params: URLSearchParams): Scenario {
     active: Math.min(hands - 1, Math.max(0, int(params, 'active', 0))),
     otherHands: Math.max(1, int(params, 'otherHands', 1)),
     turn: Math.max(0, int(params, 'turn', 0)),
+    turns: (params.get('turns') ?? '').split(',').filter((n) => /^\d+$/.test(n)).map(Number),
     otherActive: Math.max(0, Math.min(int(params, 'otherHands', 1) - 1, int(params, 'otherActive', 0))),
     bustOther: int(params, 'bustOther', -1),
     cards: Math.max(1, int(params, 'cards', 2)),
@@ -264,6 +267,7 @@ function seatedRooms(s: Scenario): BlackjackRoomState[] {
     case 'deal':
       return [room(betting()), room(acting(firstOther, 0))];
     case 'other':
+      if (s.turns.length > 0) return s.turns.map((t) => room(acting(others[t] ?? firstOther, s.otherActive)));
       return [room(acting(others[s.turn] ?? firstOther, s.otherActive))];
     case 'mine':
       return [room(last === ME ? acting(ME, s.active) : acting(last, 0))];

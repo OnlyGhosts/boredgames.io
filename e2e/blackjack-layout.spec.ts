@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import react from '@vitejs/plugin-react';
 import { build } from 'vite';
 import { createParty, expectReadyCount } from './party';
-import { cornersClear, seatFloors, stakesShown, tilesReadable } from './tableFit';
+import { cornersClear, seatFloors, stakesShown, stripShown, stripSwiped, tilesReadable, turnInStrip } from './tableFit';
 import { tableBots, type TableBot } from './tableBots';
 
 /**
@@ -808,7 +808,7 @@ test.describe('many hands (the harness)', () => {
   // Every opponent's tile shows its cards (a hand with its big total), its bet and its stack, whole and apart, in every phase
   // of a round, at every phone and desktop size, for every count the room holds at the cards' floor (24px on a phone, 32px on
   // a desktop). An iPhone in Safari (393x688) once showed three opponents as a name, a total and a pill: no cards, no bet, no
-  // stack. Past these counts the room has no height for even the narrow tiles at the floor, and the tiles are the crowd's chips.
+  // stack. Past these counts the room has no height for a grid of them at the floor, and the seats are a strip that scrolls sideways.
   for (const [size, most] of [
     [{ width: 393, height: 688 }, 9],
     [{ width: 375, height: 548 }, 3],
@@ -838,15 +838,114 @@ test.describe('many hands (the harness)', () => {
         const query = `phase=other&others=${most}&otherHands=2&otherActive=1&start=100000&chips=1250000&bet=50000`;
         const page = await pages.go(query);
         await seatFloors(page, query, floor);
-        // One more than the room holds: the crowd's chips (what the room cannot hold whole).
+        // One more than the room holds: a strip of full tiles that scrolls sideways (the grid could not hold them whole).
         const over = await pages.go(`phase=mine&others=${most + 1}`);
-        await expect(over.getByTestId('seats')).toHaveAttribute('data-tier', /^(small|dense)$/);
+        await expect(over.getByTestId('seats')).toHaveAttribute('data-strip', '');
+        await expect(over.getByTestId('seats')).toHaveAttribute('data-tier', 'full');
         expect(pages.errors).toEqual([]);
       } finally {
         await pages.close();
       }
     });
   }
+
+  const stripLeft = (page: Page): Promise<number> => page.getByTestId('seat-strip').evaluate((el) => el.scrollLeft);
+
+  // A big table on a phone, past the most whole tiles a grid holds there (nine others at 393x688, three at 375x548): the seats
+  // are a strip of full tiles that scrolls sideways. Only the strip scrolls; every seat's cards, bet and stack show whole once
+  // it is in view, the ends with more seats past them fade with a hint, and the seat on turn is in view as the table opens.
+  for (const size of [{ width: 393, height: 688 }, { width: 375, height: 548 }]) {
+    test(`${size.width}x${size.height}: a big table's seats scroll sideways in a strip, every tile whole with its cards, bet and stack`, async ({ browser }) => {
+      test.setTimeout(300_000);
+      const pages = harnessPages(browser, size);
+      try {
+        for (const others of [15, 30]) {
+          for (const phase of ['betting', 'other', 'results']) {
+            const query = `phase=${phase}&others=${others}&turn=${others - 2}&start=100000&chips=1250000&bet=50000&stake=12000`;
+            const page = await pages.go(query);
+            await expect(page.getByTestId('seats'), query).toHaveAttribute('data-tier', 'full');
+            await expect(page.getByTestId('seat'), query).toHaveCount(others);
+            await expect.poll(() => turnInStrip(page), { message: `${query}: the seat on turn whole in view` }).toBe(true);
+            await nothingScrolls(page, query);
+            await stripShown(page, query, 24);
+            await tilesReadable(page, query);
+            const { tiles } = await tilesShown(page);
+            for (const t of tiles) expect(t, `${query}: ${t.name}: the cards clear of the words and every total whole`).toMatchObject({ clear: true, cut: 0, clipped: 0, spill: 0 });
+            if (phase === 'other') {
+              // A mouse wheel turned down over the strip moves it on sideways; the page stays put.
+              await page.getByTestId('seat-strip').evaluate((el) => el.scrollTo({ left: 0, behavior: 'instant' }));
+              const box = await page.getByTestId('seat-strip').boundingBox();
+              if (!box) throw new Error('no strip');
+              await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+              await page.mouse.wheel(0, 120);
+              await expect.poll(() => stripLeft(page), { message: `${query}: the wheel moves the strip` }).toBeGreaterThan(0);
+              await nothingScrolls(page, `${query}, after the wheel`);
+            }
+          }
+        }
+        expect(pages.errors).toEqual([]);
+      } finally {
+        await pages.close();
+      }
+    });
+
+    // The turn moving round a big table: the strip brings the seat on turn into view each time, but never while a player is
+    // swiping it, waiting a few seconds after their last swipe. A swipe that starts on a tile moves the strip and opens no
+    // sheet; a tap on a tile still does.
+    test(`${size.width}x${size.height}: a big table's strip follows the turn, waits for a player's swipe, and a swipe opens no sheet`, async ({ browser }) => {
+      test.setTimeout(120_000);
+      const ctx = await browser.newContext({ viewport: size, hasTouch: true, isMobile: true });
+      const page = await ctx.newPage();
+      const errors: string[] = [];
+      page.on('pageerror', (err) => errors.push(err.message));
+      const next = () => page.evaluate(() => (window as Window & { harnessNext?: () => void }).harnessNext?.());
+      const turnId = () => page.locator('[data-testid="seat"][aria-current="true"]').getAttribute('data-player-id');
+      try {
+        await open(page, 'phase=other&others=15&turns=1,13,14&stepMs=0&start=100000&chips=1250000&bet=50000');
+        await expect(page.getByTestId('seats')).toHaveAttribute('data-strip', '');
+        await expect.poll(() => turnInStrip(page), { message: 'the first seat on turn in view' }).toBe(true);
+        // A swipe that starts on a tile moves the strip on and opens no sheet.
+        await stripSwiped(page, size.width);
+        await nothingScrolls(page, 'after the swipe');
+        // The turn moves to the 14th seat, near the far end: once the player has let the strip be a few seconds, it follows.
+        await next();
+        await expect.poll(turnId).toBe('p14');
+        await expect.poll(() => turnInStrip(page), { message: 'the 14th seat on turn: in view', timeout: 8000 }).toBe(true);
+        // A swipe back towards the start, then the turn moves on to the last seat while the player has just swiped: the strip
+        // stays where they left it for a few seconds, then follows.
+        const left = await stripSwiped(page, size.width, true);
+        await next();
+        await expect.poll(turnId).toBe('p15');
+        await page.waitForTimeout(1000);
+        expect(await stripLeft(page), 'the strip waits for the player who swiped').toBe(left);
+        expect(await turnInStrip(page), 'the last seat on turn, past where the player swiped to').toBe(false);
+        await expect.poll(() => turnInStrip(page), { message: 'the last seat on turn: in view once the player has let the strip be', timeout: 8000 }).toBe(true);
+        // A tap on a tile still opens its sheet.
+        await page.locator('[data-testid="seat"][aria-current="true"] [data-testid="seat-open"]').tap();
+        await expect(page.getByTestId('seat-sheet')).toBeVisible();
+        expect(errors).toEqual([]);
+      } finally {
+        await ctx.close();
+      }
+    });
+  }
+
+  // The screen changing size (a phone turned, a window resized) lays a big table's strip out afresh, its rows and columns new:
+  // the seat on turn stays in view. Fifteen others at 360x740 sit four rows deep; on a 320x568 phone, one.
+  test('a big table’s strip keeps the seat on turn in view when the screen changes size', async ({ browser }) => {
+    const ctx = await browser.newContext({ viewport: { width: 360, height: 740 } });
+    const page = await ctx.newPage();
+    try {
+      await open(page, 'phase=other&others=15&turn=13&start=100000&chips=1250000&bet=50000');
+      for (const size of [{ width: 360, height: 740 }, { width: 320, height: 568 }, { width: 393, height: 688 }, { width: 1024, height: 700 }, { width: 375, height: 548 }]) {
+        await page.setViewportSize(size);
+        await expect(page.getByTestId('seats')).toHaveAttribute('data-strip', '');
+        await expect.poll(() => turnInStrip(page), { message: `${size.width}x${size.height}: the seat on turn in view` }).toBe(true);
+      }
+    } finally {
+      await ctx.close();
+    }
+  });
 
   // A short phone (360x640, 375x667) has no room for even compact tiles' least height under one to four others: the seats take
   // compact tiles (no cards), never full ones squashed under their cards, which cut the cards off at the tile's bottom edge.
@@ -1069,8 +1168,8 @@ test.describe('many hands (the harness)', () => {
   // The cards on a phone take the room the seats leave (room.ts useSeatRoom), as many seats as the round was dealt with, once
   // every opponent's tile has the height for its cards, bet and stack: a table of up to seven on the owner's 390x844 phone gets big
   // cards, up to where the dealer's four and a shoe their own size still fit beside each other (61.9px; 69.6px at 430 wide); a
-  // bigger one takes what its tiles need, down to the least card (28px), and where even narrow tiles have no room (24 others),
-  // the crowd's chips leave the cards big again. A watcher's table is taller by the bet controls: its seats have that room first,
+  // bigger one takes what its tiles need, down to the least card (28px), and past what a grid holds (23 others) the seats are a
+  // strip of full tiles that scrolls sideways, as many rows as the room holds, the cards at their least. A watcher's table is taller by the bet controls: its seats have that room first,
   // the cards what they leave. Three others on the narrowest phone sit on compact tiles three across, each stack over its bet.
   for (const [size, cases] of [
     [
@@ -1091,8 +1190,8 @@ test.describe('many hands (the harness)', () => {
         { others: 3, watch: false, tier: 'full', least: 61.5 },
         { others: 5, watch: false, tier: 'full', least: 61.5 },
         { others: 11, watch: false, tier: 'compact', least: 40 },
-        { others: 23, watch: false, tier: 'small', least: 61.5 },
-        { others: 49, watch: false, tier: 'small', least: 0 },
+        { others: 23, watch: false, tier: 'full', least: 0 },
+        { others: 49, watch: false, tier: 'full', least: 0 },
         { others: 2, watch: true, tier: 'full', least: 61.5 },
         { others: 12, watch: true, tier: 'full', least: 0 },
       ],
@@ -1102,7 +1201,7 @@ test.describe('many hands (the harness)', () => {
       [
         { others: 1, watch: false, tier: 'full', least: 69 },
         { others: 11, watch: false, tier: 'full', least: 0 },
-        { others: 49, watch: false, tier: 'small', least: 0, spare: 1 },
+        { others: 49, watch: false, tier: 'full', least: 0 },
       ],
     ],
   ] as const) {
@@ -1112,17 +1211,16 @@ test.describe('many hands (the harness)', () => {
       try {
         for (const { others, watch, tier, least, ...rest } of cases) {
           const phase = 'phase' in rest ? rest.phase : watch ? 'other' : 'mine';
-          const spare = 'spare' in rest ? rest.spare : 0;
           const query = `phase=${phase}&others=${others}&hands=1&active=0${watch ? '&watch=1' : ''}&stake=100&bet=50&chips=1250`;
           await open(page, query);
           await expect(page.getByTestId('bj-table'), query).toHaveAttribute('data-seats', String(others));
           await expect(page.getByTestId('seats'), query).toHaveAttribute('data-tier', tier);
           if (least > 0) await expect.poll(() => cardWidth(page), { message: `${query}: the cards` }).toBeGreaterThanOrEqual(least);
           else {
-            // The least card, but for the whole pixels the seats leave (blackjack.css: 3.34px of the two rows a card pixel).
-            await expect.poll(() => page.getByTestId('bj-table').evaluate((el) => getComputedStyle(el).getPropertyValue('--tbl-spare')), { message: `${query}: the room the seats leave` }).toBe(`${spare}px`);
+            // The least card: the seats leave the cards no room.
+            await expect.poll(() => page.getByTestId('bj-table').evaluate((el) => getComputedStyle(el).getPropertyValue('--tbl-spare')), { message: `${query}: the room the seats leave` }).toBe('0px');
             const base = await page.getByTestId('bj-table').evaluate((el) => parseFloat(getComputedStyle(el).getPropertyValue('--bj-card-base')));
-            await expect.poll(() => cardWidth(page), { message: `${query}: the least card` }).toBe(Math.round((base + spare / 3.34) * 10) / 10);
+            await expect.poll(() => cardWidth(page), { message: `${query}: the least card` }).toBe(Math.round(base * 10) / 10);
           }
           await nothingScrolls(page, query);
           // A phone's full and compact tiles show every stack and bet; the small and dense ones never did.
@@ -1447,16 +1545,22 @@ test.describe('many hands (the harness)', () => {
     await expect(page.getByTestId('seat')).toHaveAttribute('data-chips', '920');
   });
 
-  test('320x568: two split hands on the least cards keep their stakes on the stage through the deal', async ({ browser }) => {
+  // A big table on the narrowest phone: the seats a strip one row deep, the cards the room it leaves, one size in every phase.
+  test('320x568: two split hands at a big table keep their stakes on the stage through the deal', async ({ browser }) => {
     const pages = harnessPages(browser, { width: 320, height: 568 });
     try {
       for (const others of [24, 49]) {
+        let size = 0;
         for (const phase of ['deal', 'mine', 'other', 'results']) {
           const query = `phase=${phase}&others=${others}&hands=2&cards=2&stake=12000&start=100000&bet=12000&chips=88000&hand=10H,6H&stepMs=300`;
           const page = await pages.go(query);
           if (phase === 'deal') await expect(page.locator('html')).toHaveAttribute('data-harness-step', '1');
           await expect.poll(async () => (await rowShown(page, 'my-hands-row'))?.sideways, { message: `${query}: both hands in view` }).toBe(false);
-          await expect.poll(() => cardWidth(page), { message: `${query}: the least card` }).toBe(30);
+          await expect(page.getByTestId('seats'), query).toHaveAttribute('data-rows', '1');
+          // The strip's one row leaves the cards more than their least size (30px), the same in every phase.
+          await expect.poll(() => cardWidth(page), { message: `${query}: the cards over their least size` }).toBeGreaterThan(30);
+          if (size === 0) size = await cardWidth(page);
+          await expect.poll(() => cardWidth(page), { message: `${query}: the cards at the round's size` }).toBe(size);
           await expect.poll(() => allInside(page, 'hand-stage', '.tbl-hand__head > *, .tbl-hand__head .tbl-stake', 0.5), { message: `${query}: the words over each hand on the stage` }).toMatchObject({ outside: 0 });
           await cornersClear(page, query);
         }

@@ -1025,6 +1025,90 @@
   grid-column-end: span 2;
 }
 
+/*
+ * A big table (grid.ts seatPlan): full tiles in a strip that scrolls sideways, as many rows as the
+ * room holds, the seats running down each column and on to the next. It runs out over the felt's
+ * padding to the table's edges; each end (--strip-edge) shows a sliver of the next seat under the
+ * fade (.scroll-fade--x) and the hint over it, and a tile snaps to the left end. Only the strip
+ * scrolls, with no scrollbar: the box round it, the table and the page never do.
+ */
+.tbl-felt--calm > .tbl-grid--strip {
+  display: flex;
+  position: relative;
+  margin-inline: calc(-1 * var(--tbl-pad));
+}
+
+.tbl-strip {
+  --fade-x: var(--strip-edge, 24px);
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(var(--rows, 1), minmax(0, var(--tile-h, 77px)));
+  grid-auto-columns: var(--strip-w, 160px);
+  align-content: center;
+  justify-content: start;
+  gap: var(--grid-gap, 5px);
+  margin: 0;
+  padding: 0 var(--strip-edge, 24px);
+  list-style: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scroll-padding-inline: var(--strip-edge, 24px);
+  scrollbar-width: none;
+}
+
+.tbl-strip::-webkit-scrollbar {
+  display: none;
+}
+
+.tbl-grid--strip .tbl-strip > .tbl-grid__cell {
+  grid-column-end: auto;
+  scroll-snap-align: start;
+}
+
+/* The hint at an end with more seats past it: a small tab with a chevron over the faded sliver, a tap moving the strip on a page. */
+.tbl-strip__more {
+  position: absolute;
+  top: 50%;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: min(20px, calc(var(--strip-edge, 24px) - 4px));
+  height: min(36px, calc(100% - 4px));
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface-2);
+  color: var(--color-text);
+  box-shadow: var(--shadow-piece);
+  transform: translateY(-50%);
+  cursor: pointer;
+}
+
+.tbl-strip__more--left {
+  left: calc((var(--strip-edge, 24px) - min(20px, calc(var(--strip-edge, 24px) - 4px))) / 2);
+}
+
+.tbl-strip__more--right {
+  right: calc((var(--strip-edge, 24px) - min(20px, calc(var(--strip-edge, 24px) - 4px))) / 2);
+}
+
+.tbl-strip__more svg {
+  flex: none;
+}
+
+.tbl-strip__more--left svg {
+  transform: rotate(90deg);
+}
+
+.tbl-strip__more--right svg {
+  transform: rotate(-90deg);
+}
+
 /* ---------- A tile ---------- */
 .tbl-tile {
   --face: 28px;

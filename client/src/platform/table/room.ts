@@ -59,6 +59,15 @@ export function roomLeft(table: HTMLElement, seats: Element | null): number {
   return Math.max(0, inner - height - Math.max(0, all - 1) * (parseFloat(style.rowGap) || 0));
 }
 
+/**
+ * The width of the seats' row: the seats' own box, less the felt's padding a strip of seats runs
+ * out over to the table's edges (its negative side margins, table.css .tbl-grid--strip).
+ */
+export function seatsWidth(seats: Element): number {
+  const style = getComputedStyle(seats);
+  return seats.clientWidth + (parseFloat(style.marginLeft) || 0) + (parseFloat(style.marginRight) || 0);
+}
+
 /** The count of other seats a round is laid out for, and the round it was read in. */
 export interface SeatLatch<K> {
   round: K;
@@ -111,7 +120,7 @@ export function useSeatRoom<K>(felt: RefObject<HTMLElement | null>, { round, cou
     const write = () => {
       const grid = el.querySelector(':scope > .tbl-grid');
       const style = getComputedStyle(el);
-      const width = grid ? grid.clientWidth : el.clientWidth - (parseFloat(style.paddingLeft) || 0) - (parseFloat(style.paddingRight) || 0);
+      const width = grid ? seatsWidth(grid) : el.clientWidth - (parseFloat(style.paddingLeft) || 0) - (parseFloat(style.paddingRight) || 0);
       const height = roomLeft(el, grid) + (parseFloat(style.getPropertyValue(GROW_VAR)) || 0);
       const value = `${seatsSpare(seats, { width, height }, { wide, growth })}px`;
       if (el.style.getPropertyValue(SPARE_VAR) !== value) el.style.setProperty(SPARE_VAR, value);

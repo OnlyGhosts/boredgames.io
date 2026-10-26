@@ -1,7 +1,7 @@
 import { expect, test, type Browser, type BrowserContext, type Locator, type Page } from '@playwright/test';
 import { closeResults, createParty, expectReadyCount, joinByCode, readyAll } from './party';
 import { tableBots, type TableBot } from './tableBots';
-import { cornersClear, myAreaOnScreen, seatFloors, tilesReadable } from './tableFit';
+import { cornersClear, myAreaOnScreen, seatFloors, stripShown, stripSwiped, tilesReadable, turnInStrip } from './tableFit';
 
 /**
  * Texas Hold'em on the Stake-style table, between a desktop host and two phones (390x844, touch):
@@ -587,31 +587,12 @@ const DESKTOPS = [
 ];
 
 /**
- * The most other players whose tiles each show their cards, their bet and their stack whole at the
- * cards' floor, by screen (an iPhone in Safari, an SE in Safari, and the rest): past it the room has
- * no height for even the narrow tiles, and the tiles are the crowd's chips.
- */
-const SEATS_WHOLE: Record<string, number> = {
-  '393x688': 6,
-  '375x548': 3,
-  '390x664': 6,
-  '430x740': 7,
-  '360x640': 6,
-  '320x568': 3,
-  '390x844': 9,
-  '360x740': 9,
-  '1024x700': 10,
-  '1024x768': 10,
-  '1280x800': 12,
-  '1440x900': 21,
-};
-
-/**
  * A Poker table of `size` players (a desktop host, a phone and bots on their own sockets that hold
- * their turns): at every phone size and every desktop nothing scrolls, my hand is on screen, every
- * tile reads, every opponent's cards, bet and stack show whole wherever the room holds them
- * (SEATS_WHOLE), and a desktop's tiles are never squeezed under 28px (a 1280x800 table once pushed
- * my cards off the bottom and its tiles down to 8px).
+ * their turns): at every phone size and every desktop nothing scrolls but a big table's strip of
+ * seats, my hand is on screen, every tile reads, every opponent's cards, bet and stack show whole
+ * (in a grid while the room holds them, past that in the strip once scrolled into view, the seat
+ * on turn in view: never the crowd's chips), and a desktop's tiles are never squeezed under 28px (a 1280x800 table once pushed my cards
+ * off the bottom and its tiles down to 8px). On an iPhone a swipe along the strip opens no sheet.
  */
 async function bigTable(browser: Browser, base: string, size: number): Promise<void> {
   const hostCtx = await browser.newContext({ viewport: DESKTOPS[1] });
@@ -648,20 +629,33 @@ async function bigTable(browser: Browser, base: string, size: number): Promise<v
         await expect.poll(scrolls, { message: `${label}: nothing scrolls` }).toEqual([]);
         await myAreaOnScreen(page, 'my-area', label);
         await tilesReadable(page, label, s.width > 760 ? 28 : 0);
-        if (size - 1 <= (SEATS_WHOLE[`${s.width}x${s.height}`] ?? 0)) await seatFloors(page, label, s.width > 760 ? 32 : 24);
+        if ((await page.getByTestId('seats').getAttribute('data-strip')) !== null) {
+          // Past what a grid holds: the strip, the seat on turn in view, every tile whole with its cards, bet and stack once in view.
+          await expect.poll(() => turnInStrip(page), { message: `${label}: the seat on turn in view` }).toBe(true);
+          await stripShown(page, label, s.width > 760 ? 32 : 24);
+        } else await seatFloors(page, label, s.width > 760 ? 32 : 24);
         await cornersClear(page, label);
       }
       if (own) await page.setViewportSize(own);
     };
     if (size === 12) {
-      // Twelve players on a 390x844 phone: four rows of compact tiles have no room under the pot and the board, so the crowd's
-      // chips, which leave my cards at least the board's size.
-      await expect(phone.getByTestId('seats')).toHaveAttribute('data-tier', 'small');
+      // Twelve players on a 390x844 phone: four rows of compact tiles have no room under the pot and the board, so a strip of
+      // full tiles that scrolls sideways, which leaves my cards at least the board's size.
+      await expect(phone.getByTestId('seats')).toHaveAttribute('data-strip', '');
+      await expect(phone.getByTestId('seats')).toHaveAttribute('data-tier', 'full');
       const w = await cardWidths(phone);
       expect(w.mine, '12 players: my cards at least as wide as the board’s').toBeGreaterThanOrEqual(w.board - 0.5);
     }
     await fits(phone, PHONES);
     await fits(desk, DESKTOPS);
+    if (size === 16) {
+      // Fifteen others on an iPhone in Safari: a swipe along the strip of seats moves it on and opens no sheet (last: for a few
+      // seconds after it, the strip keeps the player's place whatever happens).
+      await phone.setViewportSize({ width: 393, height: 688 });
+      await expect(phone.getByTestId('seats')).toHaveAttribute('data-strip', '');
+      await stripSwiped(phone, 393);
+      await phone.setViewportSize(PORTRAIT);
+    }
     // The seat to act is lit on both pages (its tile, unless it is the page's own seat) and named under the ribbon.
     const turn = (await desk.getByTestId('poker-screen').getAttribute('data-turn-player')) ?? '';
     for (const p of [desk, phone]) {
@@ -680,7 +674,7 @@ async function bigTable(browser: Browser, base: string, size: number): Promise<v
   }
 }
 
-for (const size of [2, 4, 7, 10, 12, 23]) {
+for (const size of [2, 4, 7, 10, 12, 16, 23]) {
   test(`${size} players: the table never scrolls on a phone or a desktop, my hand stays on screen and every tile reads`, async ({ browser, baseURL }) => {
     test.setTimeout(180_000);
     await bigTable(browser, baseURL ?? 'http://localhost:4173', size);

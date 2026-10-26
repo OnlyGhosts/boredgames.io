@@ -371,7 +371,13 @@ the top left corner), `TurnLine`, `TableStage`, `PlayersGrid` / `PlayerTile` / `
 in a grid that fits its space: [`grid.ts`](../client/src/platform/table/grid.ts) picks the tier
 (full, compact, small, dense) from the room the table leaves the seats, the richest whose fewest
 rows keep the tile's least height (`tierFor`: a desktop keeps the cards in miniature in the seats
-for seven others across, a phone steps down to compact for four), fits the columns to the room
+for seven others across, a phone steps down to compact for four; past what a grid of full or
+compact tiles holds, `seatPlan` makes the seats a strip of full tiles that scrolls sideways,
+`SeatStrip`: as many rows as the room holds, the seats down each column and on to the next, a tile
+snapped to the left end, each end with more seats past it fading over the next seat with a small
+hint, the seat on turn brought into view as the turn moves unless a player swiped the strip in
+the last `STRIP_HOLD_MS`, a swipe never opening a sheet; the crowd's small and dense chips show
+only where not even one row of full tiles fits), fits the columns to the room
 left, never narrower than the tier's `minWidth` so names, totals and a full tile's stack in words
 stay whole (104px on a phone: three full tiles across a 360px phone, two across a 320px one, where
 three others take a row of compact tiles instead; a full tile 270px or wider, which a lone one on

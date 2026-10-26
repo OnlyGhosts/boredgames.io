@@ -174,8 +174,9 @@ describe('the players grid', () => {
     // An SE (375x548): three others in one row of compact tiles.
     expect(G.tierFor(3, { width: 343, height: 110 })).toBe('compact');
     expect(G.leastHeight(3, 343, { tier: 'compact' })).toBe(79);
-    // Past what the room holds even at the least: the crowd's chips (the case the owner decides).
-    expect(G.tierFor(12, { width: 361, height: 256 })).toBe('small');
+    // Past what the room holds even at the least: full tiles in a strip that scrolls sideways (seatPlan), never the crowd's chips.
+    expect(G.tierFor(12, { width: 361, height: 256 })).toBe('full');
+    expect(G.seatPlan(12, { width: 361, height: 256 })).toEqual({ tier: 'full', strip: true });
     expect(G.tierFor(3, { width: 1000, height: 140 }, { wide: true })).toBe('full');
     expect(G.tierFor(6, null)).toBe('full');
   });
@@ -223,6 +224,65 @@ describe('the players grid', () => {
   });
 });
 
+describe('a big table’s strip', () => {
+  // A 393x688 iPhone in Safari: the seats 361px across, 256px tall.
+  it('turns on only where neither full nor compact tiles fit in a grid, and one row of full tiles does', () => {
+    // Nine others: three rows of compact tiles fit 256px, a grid as before.
+    expect(G.seatPlan(9, { width: 361, height: 256 })).toEqual({ tier: 'compact', strip: false });
+    expect(G.seatPlan(3, { width: 361, height: 250 })).toEqual({ tier: 'full', strip: false });
+    // Ten, fifteen, thirty, forty-nine: a strip of full tiles, however many.
+    for (const count of [10, 15, 22, 30, 49]) expect(G.seatPlan(count, { width: 361, height: 256 }), `${count} others`).toEqual({ tier: 'full', strip: true });
+    // An SE (375x548): three others in one row of compact tiles; four, a strip.
+    expect(G.seatPlan(3, { width: 343, height: 110 })).toEqual({ tier: 'compact', strip: false });
+    expect(G.seatPlan(4, { width: 343, height: 110 })).toEqual({ tier: 'full', strip: true });
+    // A desktop: a full tile's least height (89px) is the strip's.
+    expect(G.seatPlan(30, { width: 1300, height: 89 }, { wide: true })).toEqual({ tier: 'full', strip: true });
+    expect(G.seatPlan(30, { width: 1300, height: 88 }, { wide: true })).toEqual({ tier: 'dense', strip: false });
+    // Not measured yet (the server render): the count's usual tier, in a grid.
+    expect(G.seatPlan(30, null)).toEqual({ tier: 'dense', strip: false });
+  });
+
+  it('keeps the strip while it is on until a grid fits with a few pixels to spare', () => {
+    const least = G.leastHeight(9, 361, { tier: 'compact' });
+    const strip = { tier: 'full', strip: true } as const;
+    expect(G.seatPlan(9, { width: 361, height: least }, { current: strip })).toEqual(strip);
+    expect(G.seatPlan(9, { width: 361, height: least + G.SPARE }, { current: strip })).toEqual({ tier: 'compact', strip: false });
+    expect(G.seatPlan(9, { width: 361, height: least }, { current: { tier: 'compact', strip: false } })).toEqual({ tier: 'compact', strip: false });
+  });
+
+  it('stacks as many rows of full tiles as the room holds at their least height, a new row only with a few pixels to spare', () => {
+    expect(G.stripRows(15, 256)).toBe(3);
+    expect(G.stripRows(15, 110)).toBe(1);
+    expect(G.stripRows(15, 60)).toBe(1);
+    expect(G.stripRows(2, 400)).toBe(2);
+    expect(G.stripRows(30, 3 * 89 + 2 * 5, true)).toBe(3);
+    expect(G.stripRows(15, 2 * 68 + 5)).toBe(2);
+    expect(G.stripRows(15, 3 * 68 + 10, false, 2)).toBe(2);
+    expect(G.stripRows(15, 3 * 68 + 10 + G.SPARE, false, 2)).toBe(3);
+    expect(G.stripRows(15, 2 * 68 + 5, false, 3)).toBe(2);
+    expect(G.stripHeight(3)).toBe(3 * 77 + 2 * 5);
+    expect(G.stripHeight(2, true)).toBe(2 * 101 + 5);
+  });
+
+  it('shows whole tiles between the ends, never under a tile’s least width, the next seat peeking under the fade', () => {
+    // The strips of a 393x688, 375x548, 360x640 and 320x568 phone (the felt's 6px sides included), and a 1024x700 and 1440x900 desktop's (16px).
+    for (const [width, view] of [[375, 2], [357, 2], [342, 2], [302, 1], [694, 3], [930, 5]] as const) {
+      const wide = width > 600;
+      const fit = G.fitStrip(15, width, 3, wide);
+      const shape = G.shapeOf('full', wide);
+      expect(fit.view, `${width}px`).toBe(view);
+      expect(fit.cols).toBe(5);
+      expect(fit.tile, `${width}px`).toBeGreaterThanOrEqual(shape.minWidth);
+      expect(fit.edge).toBeGreaterThanOrEqual(G.STRIP_EDGE.least);
+      expect(fit.edge).toBeLessThanOrEqual(G.STRIP_EDGE.most);
+      // The tiles in view and the gaps between them fill the strip between its two ends.
+      expect(fit.edge * 2 + fit.view * fit.tile + (fit.view - 1) * G.GRID_GAP.full).toBeCloseTo(width, 5);
+    }
+    // A 393px phone: two tiles 161px wide, the strip's ends 24px.
+    expect(G.fitStrip(15, 375, 3)).toEqual({ rows: 3, cols: 5, view: 2, tile: 161, edge: 24 });
+  });
+});
+
 describe('the room a phone’s cards take', () => {
   // A 393x688 iPhone's seats in Safari: 361px across, 256px tall with the cards at their least size (Blackjack).
   const phone = (height: number) => ({ width: 361, height });
@@ -251,11 +311,16 @@ describe('the room a phone’s cards take', () => {
     expect(G.seatsNeed(1, phone(80), { growth: G.TURN_WRAP + G.TURN_CLOCK })).toBe(80);
   });
 
-  it('gives a crowd only what is left over its tiles at their natural size', () => {
-    for (const count of [23, 24, 49]) expect(G.seatsSpare(count, { width: 356, height: 171 }, { growth: G.TURN_WRAP }), `${count} others`).toBe(0);
-    expect(G.seatsNeed(49, phone(171))).toBe(171);
-    // Too short for even one row of compact tiles: the crowd's chips (50px and 8px over them), the cards the rest.
-    expect(G.seatsSpare(3, phone(70), { growth: G.TURN_WRAP })).toBe(70 - (50 + G.SPARE));
+  it('gives a big table’s strip the rows of full tiles its room holds once the line under the ribbon has grown, the cards the rest', () => {
+    // 171px less the 21px a wrapped turn line may take: two rows (68px least, 5px apart), at their natural 77px and 8px over them.
+    for (const count of [23, 24, 49]) expect(G.seatsSpare(count, { width: 356, height: 171 }, { growth: G.TURN_WRAP }), `${count} others`).toBe(171 - (2 * 77 + 5 + G.SPARE));
+    expect(G.seatsNeed(49, phone(171))).toBe(2 * 77 + 5 + G.SPARE);
+    // Too short for even one row of compact tiles: one row of full tiles in the strip at its least height, nothing left for the cards.
+    expect(G.seatPlan(3, phone(70))).toEqual({ tier: 'full', strip: true });
+    expect(G.seatsSpare(3, phone(70), { growth: G.TURN_WRAP })).toBe(0);
+    // Too short for even that: the crowd's chips (50px and 8px over them), the cards the rest.
+    expect(G.seatPlan(3, phone(60))).toEqual({ tier: 'small', strip: false });
+    expect(G.seatsSpare(3, phone(60), { growth: G.TURN_WRAP })).toBe(60 - (50 + G.SPARE));
   });
 
   it('reads the table’s rows once each: the pieces side by side in a row (the line beside the dealer on the shortest phones) count as that row', () => {

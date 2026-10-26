@@ -1,18 +1,19 @@
-import { Children, createContext, isValidElement, useContext, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
+import { Children, createContext, isValidElement, useContext, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from 'react';
 import type { Avatar as AvatarData } from '@shared/platform/avatar';
 import { Avatar } from '../components/Avatar';
 import { BottomSheet } from '../components/BottomSheet';
 import { ChipIcon } from '../components/Chips';
-import { CheckIcon, CloseIcon, SparkIcon } from '../components/Icons';
+import { CheckIcon, ChevronIcon, CloseIcon, SparkIcon } from '../components/Icons';
+import { useScrollFade } from '../lib/useScrollFade';
 import { CardsIcon, OutIcon, StarIcon } from './Icons';
 import { TotalPill, type Tone } from './Outcome';
 import { FitText, TILE_FIT } from './fit';
 import { ChipMark, STACK_CHIP, StackCount, StakePill } from './Stakes';
 import type { StakeFormat } from './stakes';
-import { CARD_FLOOR, GRID_GAP, columnWidth, fanStep, fitGrid, fitsRoom, naturalHeight, shapeOf, tierFor, tileHeight, type Room, type TileTier } from './grid';
+import { CARD_FLOOR, GRID_GAP, columnWidth, fanStep, fitGrid, fitStrip, fitsRoom, naturalHeight, seatPlan, shapeOf, stripHeight, stripRows, tileHeight, type Room, type SeatPlan, type TileTier } from './grid';
 import { betChips, chipFigure } from './stakes';
 import { shortChips } from '../lib/format';
-import { roomLeft } from './room';
+import { roomLeft, seatsWidth } from './room';
 
 interface GridProps {
   /** How many tiles there are (the columns go by it, and the tier by the room they have). */
@@ -27,7 +28,7 @@ interface GridProps {
 }
 
 interface Measured {
-  /** The grid's own box, inside its padding. */
+  /** The grid's own box, inside its padding (a strip's, out over the felt's padding). */
   box: { width: number; height: number };
   room: Room;
 }
@@ -35,26 +36,29 @@ interface Measured {
 /**
  * The grid's own size, and the room the table leaves it (room.ts roomLeft: its parent's height
  * less the rows beside it and the gaps between them, as the table reads it to size a phone's
- * cards). The grid itself is capped to what the tiles need, so the room, not the box, says which
- * tier fits.
+ * cards; its width, the row's, a strip's run over the felt's padding left out). The grid itself
+ * is capped to what the tiles need, so the room, not the box, says which tier fits.
  */
 function measure(el: HTMLElement): Measured {
   const style = getComputedStyle(el);
   const padY = (parseFloat(style.paddingTop) || 0) + (parseFloat(style.paddingBottom) || 0);
   const box = { width: el.clientWidth, height: el.clientHeight - padY };
+  const width = seatsWidth(el);
   const parent = el.parentElement;
-  if (!parent) return { box, room: { width: box.width, height: box.height } };
-  return { box, room: { width: box.width, height: roomLeft(parent, el) } };
+  if (!parent) return { box, room: { width, height: box.height } };
+  return { box, room: { width, height: roomLeft(parent, el) } };
 }
 
 const sameSize = (a: { width: number; height: number }, b: { width: number; height: number }): boolean => a.width === b.width && a.height === b.height;
 
-/** The grid's size and room, read as it lays out and again whenever it or a row beside it changes. */
-function useMeasured(): [RefObject<HTMLUListElement | null>, Measured | null] {
-  const ref = useRef<HTMLUListElement | null>(null);
+/**
+ * The grid's size and room, read as it lays out and again whenever it or a row beside it changes,
+ * and when the seats change between a grid and a strip (a new box to read: the ref is a setter).
+ */
+function useMeasured(): [(el: HTMLElement | null) => void, Measured | null] {
+  const [el, setEl] = useState<HTMLElement | null>(null);
   const [measured, setMeasured] = useState<Measured | null>(null);
   useLayoutEffect(() => {
-    const el = ref.current;
     if (!el) return;
     const read = () => {
       const next = measure(el);
@@ -65,8 +69,8 @@ function useMeasured(): [RefObject<HTMLUListElement | null>, Measured | null] {
     observer?.observe(el);
     for (const sibling of Array.from(el.parentElement?.children ?? [])) if (sibling !== el) observer?.observe(sibling);
     return () => observer?.disconnect();
-  }, []);
-  return [ref, measured];
+  }, [el]);
+  return [setEl, measured];
 }
 
 /** Whether the grid is a desktop's: a tile's cards keep that floor (grid.ts CARD_FLOOR). */
@@ -75,16 +79,31 @@ const TileRoom = createContext<{ wide: boolean }>({ wide: false });
 /**
  * Every other seated player as a tile, in seat order (left to right, top to bottom, the order of
  * play). The grid never scrolls: it takes the space it is given, and the tiles step down in size
- * and detail as the table grows and the room shrinks (grid.ts). A desktop row is flat.
+ * as the table grows and the room shrinks (grid.ts). Past what the room holds with every tile
+ * whole, the seats are a strip of full tiles that scrolls sideways (SeatStrip), and the rest of
+ * the table stays put. A desktop row is flat.
  */
 export function PlayersGrid({ count, label, wide = false, bare = false, children }: GridProps) {
   const [ref, measured] = useMeasured();
-  // The tier on show stays while it fits (tierFor): remembered across renders, never flipped by a pixel.
-  const shown = useRef<TileTier | null>(null);
-  const tier = tierFor(count, measured?.room ?? null, { wide, current: shown.current });
+  // The plan on show, and a strip's rows, stay while they fit (seatPlan, stripRows): remembered across renders, never flipped by a pixel.
+  const shown = useRef<SeatPlan | null>(null);
+  const shownRows = useRef<number | null>(null);
+  const plan = seatPlan(count, measured?.room ?? null, { wide, current: shown.current });
+  const stripped = plan.strip && measured ? stripRows(count, measured.room.height, wide, shownRows.current) : null;
   useLayoutEffect(() => {
-    shown.current = tier;
+    shown.current = plan;
+    shownRows.current = stripped;
   });
+  const tier = plan.tier;
+  if (measured && stripped !== null) {
+    return (
+      <TileRoom.Provider value={{ wide }}>
+        <SeatStrip outer={ref} count={count} label={label} wide={wide} bare={bare} rows={stripped} measured={measured}>
+          {children(tier)}
+        </SeatStrip>
+      </TileRoom.Provider>
+    );
+  }
   const shape = shapeOf(tier, wide);
   const { cols, rows } = fitGrid(count, measured?.box ?? null, { wide, tier });
   // The height the grid asks for: what its tiles need at their natural size in this width, within the room where the tier fits it.
@@ -102,6 +121,183 @@ export function PlayersGrid({ count, label, wide = false, bare = false, children
       ))}
     </ul>
     </TileRoom.Provider>
+  );
+}
+
+/** How long the strip waits after a player last moved it before it brings the seat on turn into view, in ms. */
+export const STRIP_HOLD_MS = 4000;
+
+/** How far a mouse wheel turns (in px of its delta) to move the strip one column sideways. */
+const WHEEL_STEP = 30;
+
+/** The seat on turn in the strip (its tile carries aria-current), and the cell it sits in. */
+function turnCell(strip: HTMLElement): { id: string; cell: HTMLElement } | null {
+  const tile = strip.querySelector<HTMLElement>('[data-testid="seat"][aria-current="true"]');
+  const cell = tile?.closest<HTMLElement>('.tbl-grid__cell');
+  return tile && cell ? { id: tile.dataset.playerId ?? '', cell } : null;
+}
+
+/** Scrolls `strip` so `cell` sits whole between its ends (`edge` px each, under the fades), snapped to the left end; nothing where it already does. */
+function bringIntoView(strip: HTMLElement, cell: HTMLElement, edge: number, smooth: boolean): void {
+  const box = strip.getBoundingClientRect();
+  const r = cell.getBoundingClientRect();
+  if (r.left >= box.left + edge - 1 && r.right <= box.right - edge + 1) return;
+  const left = Math.max(0, Math.min(strip.scrollWidth - strip.clientWidth, strip.scrollLeft + r.left - box.left - edge));
+  const still = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  strip.scrollTo({ left, behavior: smooth && !still ? 'smooth' : 'auto' });
+}
+
+/**
+ * The strip's moves: the seat on turn brought into view when the turn moves to it (at once when
+ * the strip first shows), never while a player is moving the strip themselves (a swipe, the
+ * wheel, a key, the hint) or for STRIP_HOLD_MS after; brought back at once when the strip is laid
+ * out afresh (`layout`: its rows, columns or tile width, a phone turned), unless a player has just
+ * moved it; and a mouse wheel turned up or down moves it sideways a column at a time (a trackpad's
+ * sideways swipe scrolls it as it is). Returns the hook to call when the player moves it some
+ * other way.
+ */
+function useStripMoves(ref: RefObject<HTMLElement | null>, edge: number, step: number, layout: string): () => void {
+  const touched = useRef(Number.NEGATIVE_INFINITY);
+  const shownTurn = useRef<string | null | undefined>(undefined);
+  const shownLayout = useRef(layout);
+  const timer = useRef<number | undefined>(undefined);
+  const ends = useRef({ edge, step });
+  useLayoutEffect(() => {
+    ends.current = { edge, step };
+  });
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return undefined;
+    const mark = () => {
+      touched.current = performance.now();
+    };
+    let pending = 0;
+    let quiet = 0;
+    const wheel = (e: WheelEvent) => {
+      mark();
+      if (Math.abs(e.deltaY) <= Math.abs(e.deltaX) || el.scrollWidth <= el.clientWidth + 1) return;
+      e.preventDefault();
+      pending += e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? el.clientWidth : 1);
+      const now = performance.now();
+      if (now < quiet || Math.abs(pending) < WHEEL_STEP) return;
+      el.scrollBy({ left: Math.sign(pending) * ends.current.step, behavior: 'smooth' });
+      pending = 0;
+      quiet = now + 200;
+    };
+    const moves = ['pointerdown', 'touchstart', 'touchmove', 'keydown'] as const;
+    for (const type of moves) el.addEventListener(type, mark, { passive: true });
+    el.addEventListener('wheel', wheel, { passive: false });
+    return () => {
+      for (const type of moves) el.removeEventListener(type, mark);
+      el.removeEventListener('wheel', wheel);
+      window.clearTimeout(timer.current);
+    };
+  }, [ref]);
+  // After every render: has the turn moved to another seat, or the strip been laid out afresh?
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const turn = turnCell(el);
+    const id = turn?.id ?? null;
+    if (layout !== shownLayout.current) {
+      shownLayout.current = layout;
+      // The browser keeps the tile it had at the left end there, which may now leave the seat on turn out of view.
+      if (turn && id === shownTurn.current && performance.now() - touched.current >= STRIP_HOLD_MS) bringIntoView(el, turn.cell, ends.current.edge, false);
+    }
+    if (id === shownTurn.current) return;
+    const first = shownTurn.current === undefined;
+    shownTurn.current = id;
+    window.clearTimeout(timer.current);
+    if (id === null) return;
+    const bring = () => {
+      const since = performance.now() - touched.current;
+      if (since < STRIP_HOLD_MS) {
+        timer.current = window.setTimeout(bring, STRIP_HOLD_MS - since + 50);
+        return;
+      }
+      // The turn may have moved on while the strip waited: the seat on turn now.
+      const now = turnCell(el);
+      if (now) bringIntoView(el, now.cell, ends.current.edge, !first);
+    };
+    bring();
+  });
+  return () => {
+    touched.current = performance.now();
+  };
+}
+
+interface StripProps {
+  outer(el: HTMLElement | null): void;
+  count: number;
+  label: string;
+  wide: boolean;
+  bare: boolean;
+  rows: number;
+  measured: Measured;
+  children: ReactNode;
+}
+
+/**
+ * A big table's seats: full tiles (every seat's cards, bet and stack) in a strip that scrolls
+ * sideways, in seat order down each column and on to the next, as many rows as the room holds.
+ * Only the strip scrolls (a swipe, a trackpad, the wheel), snapping a tile to its left end; it runs
+ * out over the felt's padding, and where more seats wait past an end, the next one peeks out under
+ * a fade with a small hint over it (a tap on it moves the strip on a page). The seat on turn comes
+ * into view as the turn moves (useStripMoves). A tap on a tile opens its sheet; a swipe never does.
+ */
+function SeatStrip({ outer, count, label, wide, bare, rows, measured, children }: StripProps) {
+  const fit = fitStrip(count, measured.box.width, rows, wide);
+  const gap = GRID_GAP.full;
+  const strip = useRef<HTMLUListElement | null>(null);
+  const [fade] = useScrollFade(strip, true, 'x');
+  const moved = useStripMoves(strip, fit.edge, fit.tile + gap, `${rows}:${fit.view}:${fit.tile}`);
+  // Where a press began: a click after the strip or the pointer has moved since is the end of a swipe, not a tap.
+  const press = useRef<{ x: number; y: number; left: number } | null>(null);
+  const onPointerDown = (e: ReactPointerEvent<HTMLUListElement>) => {
+    press.current = { x: e.clientX, y: e.clientY, left: e.currentTarget.scrollLeft };
+  };
+  const onClickCapture = (e: ReactMouseEvent<HTMLUListElement>) => {
+    const p = press.current;
+    press.current = null;
+    // A key's click (detail 0) is never a swipe.
+    if (!p || e.detail === 0) return;
+    if (Math.abs(e.currentTarget.scrollLeft - p.left) > 2 || Math.hypot(e.clientX - p.x, e.clientY - p.y) > 10) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  };
+  const page = (dir: 1 | -1) => {
+    moved();
+    strip.current?.scrollBy({ left: dir * fit.view * (fit.tile + gap), behavior: 'smooth' });
+  };
+  const style = {
+    '--rows': rows,
+    '--tile-h': `${tileHeight('full', wide, bare)}px`,
+    '--grid-gap': `${gap}px`,
+    '--grid-natural': `${Math.min(stripHeight(rows, wide, bare), measured.room.height)}px`,
+    '--strip-w': `${fit.tile}px`,
+    '--strip-edge': `${fit.edge}px`,
+  } as CSSProperties;
+  return (
+    <div ref={outer} className={`tbl-grid tbl-grid--full tbl-grid--strip${wide ? ' tbl-grid--arc' : ''}`} style={style} data-testid="seats" data-tier="full" data-strip="" data-cols={fit.cols} data-rows={rows} data-view={fit.view} data-count={count}>
+      <ul ref={strip} className="tbl-strip scroll-fade scroll-fade--x" aria-label={label} data-testid="seat-strip" data-fade={fade} onPointerDown={onPointerDown} onPointerCancel={() => (press.current = null)} onClickCapture={onClickCapture}>
+        {Children.toArray(children).map((child, i) => (
+          <li key={isValidElement(child) && child.key !== null ? child.key : i} className="tbl-grid__cell">
+            {child}
+          </li>
+        ))}
+      </ul>
+      {fade?.includes('left') && (
+        <button type="button" className="tbl-strip__more tbl-strip__more--left" onClick={() => page(-1)} aria-label="Earlier players" data-testid="seat-strip-more" data-side="left">
+          <ChevronIcon size={14} strokeWidth={2.6} />
+        </button>
+      )}
+      {fade?.includes('right') && (
+        <button type="button" className="tbl-strip__more tbl-strip__more--right" onClick={() => page(1)} aria-label="More players" data-testid="seat-strip-more" data-side="right">
+          <ChevronIcon size={14} strokeWidth={2.6} />
+        </button>
+      )}
+    </div>
   );
 }
 
