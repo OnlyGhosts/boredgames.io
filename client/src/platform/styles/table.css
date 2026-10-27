@@ -2461,8 +2461,8 @@
 
 /*
  * Every phone (an iPhone in Safari, 393x688; an SE, 375x548; a phone on its side): a tighter felt
- * and panel (the table's own buttons beside the main one), so the seats have the height for every
- * opponent's cards, bet and stack. Every control stays.
+ * and panel, so the seats have the height for every opponent's cards, bet and stack. The table's
+ * own buttons (Sit out, Skip, Deal now) keep their full-width row under the main one.
  */
 @media (max-width: 760px), (min-aspect-ratio: 3/2) and (max-height: 520px) {
   .tbl-felt {
@@ -2481,29 +2481,6 @@
 
   .tbl-panel .btn {
     min-height: 44px;
-  }
-
-  /* The table's own buttons share the main button's row: the seats keep the height. */
-  .tbl-panel:has(> .tbl-panel__actions) {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-
-  .tbl-panel:has(> .tbl-panel__actions) > * {
-    grid-column: 1 / -1;
-  }
-
-  .tbl-panel:has(> .tbl-panel__actions) > .tbl-panel__primary {
-    grid-column: 1;
-  }
-
-  .tbl-panel:has(> .tbl-panel__actions) > .tbl-panel__actions {
-    grid-column: 2;
-    gap: 5px;
-  }
-
-  .tbl-panel__act {
-    padding: 0 12px;
   }
 
   .tbl-amount__input {
