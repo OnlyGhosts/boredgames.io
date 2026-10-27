@@ -813,7 +813,6 @@ test.describe('many hands (the harness)', () => {
   // buttons a row of their own), and the seats are a strip that scrolls sideways.
   for (const [size, most] of [
     [{ width: 393, height: 688 }, 6],
-    [{ width: 375, height: 548 }, 3],
     [{ width: 390, height: 664 }, 6],
     [{ width: 430, height: 740 }, 8],
     [{ width: 360, height: 640 }, 4],
@@ -851,12 +850,34 @@ test.describe('many hands (the harness)', () => {
     });
   }
 
+  // An iPhone SE in Safari (375x548): with Bet and the table's own buttons on rows of their own, Blackjack's felt leaves the seats
+  // no height for even one full tile, so the seats are crowd chips (a face, a name, a total), the owner's call over a tighter
+  // panel. Whatever the count, they read whole and nothing scrolls.
+  test('375x548: the seats are crowd chips, read whole, and nothing scrolls', async ({ browser }) => {
+    test.setTimeout(120_000);
+    const pages = harnessPages(browser, { width: 375, height: 548 });
+    try {
+      for (const others of [1, 3, 15]) {
+        for (const phase of ['betting', 'mine', 'other']) {
+          const query = `phase=${phase}&others=${others}&turn=0&start=100000&chips=1250000&bet=50000`;
+          const page = await pages.go(query);
+          await expect(page.getByTestId('seats'), query).not.toHaveAttribute('data-tier', /^(full|compact)$/);
+          await tilesReadable(page, query);
+          await nothingScrolls(page, query);
+        }
+      }
+      expect(pages.errors).toEqual([]);
+    } finally {
+      await pages.close();
+    }
+  });
+
   const stripLeft = (page: Page): Promise<number> => page.getByTestId('seat-strip').evaluate((el) => el.scrollLeft);
 
-  // A big table on a phone, past the most whole tiles a grid holds there (nine others at 393x688, three at 375x548): the seats
+  // A big table on a phone, past the most whole tiles a grid holds there (six others at 393x688): the seats
   // are a strip of full tiles that scrolls sideways. Only the strip scrolls; every seat's cards, bet and stack show whole once
   // it is in view, the ends with more seats past them fade with a hint, and the seat on turn is in view as the table opens.
-  for (const size of [{ width: 393, height: 688 }, { width: 375, height: 548 }]) {
+  for (const size of [{ width: 393, height: 688 }]) {
     test(`${size.width}x${size.height}: a big table's seats scroll sideways in a strip, every tile whole with its cards, bet and stack`, async ({ browser }) => {
       test.setTimeout(300_000);
       const pages = harnessPages(browser, size);
@@ -939,7 +960,7 @@ test.describe('many hands (the harness)', () => {
     const page = await ctx.newPage();
     try {
       await open(page, 'phase=other&others=15&turn=13&start=100000&chips=1250000&bet=50000');
-      for (const size of [{ width: 360, height: 740 }, { width: 320, height: 568 }, { width: 393, height: 688 }, { width: 1024, height: 700 }, { width: 375, height: 548 }]) {
+      for (const size of [{ width: 360, height: 740 }, { width: 320, height: 568 }, { width: 393, height: 688 }, { width: 1024, height: 700 }]) {
         await page.setViewportSize(size);
         await expect(page.getByTestId('seats')).toHaveAttribute('data-strip', '');
         await expect.poll(() => turnInStrip(page), { message: `${size.width}x${size.height}: the seat on turn in view` }).toBe(true);
