@@ -39,6 +39,9 @@ describe('PlayingCard', () => {
     expect(ten).not.toContain('playing-card__pip');
     expect(ten).not.toContain('corner--flip');
     const css = readFileSync(fileURLToPath(new URL('../styles/cards.css', import.meta.url)), 'utf8');
+    // The "10", drawn at four fifths of its width, takes only the room it is drawn in (a fifth of its 0.977em less): its suit sits
+    // where every other card's does, centred under it, never pushed right under the next card of a fan (half a pixel at 34px).
+    expect(css).toMatch(/\.playing-card__rank--wide \{[^}]*transform: scaleX\(0\.8\);[^}]*margin-inline-end: -0\.195em;/);
     // Sized from the card's width, so they read at every size a table uses.
     expect(css).toMatch(/\.playing-card__rank \{\s*font-size: calc\(var\(--card-w\) \* 0\.4\);/);
     expect(css).toMatch(/\.playing-card__suit \{[^}]*font-size: calc\(var\(--card-w\) \* 0\.38\);/);

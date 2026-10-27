@@ -766,16 +766,25 @@ async function bigTable(browser: Browser, base: string, size: number): Promise<v
     if (size >= 24) await stripShown(phone, `${size} players, settled`, 24);
     else await seatFloors(phone, `${size} players, settled`, 24);
     // The cards take the room the seats leave (room.ts useSeatRoom): a table of two or six leaves the dealer's row and my hand big;
-    // a table of twelve leaves them what its three rows of compact tiles do not need; twenty-four and fifty, in a strip as many
-    // rows deep as the room holds, need all of it, so the cards keep their least size.
+    // twelve, on compact tiles (the table's own buttons on a row of their own under the panel's main one), need all of it, so the
+    // cards keep their least size; twenty-four and fifty, in a strip as many rows deep as the room holds once the line under the
+    // ribbon has grown, leave the cards the rest.
     const cards = await phone.getByTestId('bj-table').evaluate((el) => {
       const style = getComputedStyle(el);
       return { w: parseFloat(style.getPropertyValue('--bj-card-w')), base: parseFloat(style.getPropertyValue('--bj-card-base')), spare: style.getPropertyValue('--tbl-spare') };
     });
-    // A small table stops where the dealer's four and a shoe the cards' own size still fit beside each other: 61.9px.
-    if (size <= 6) expect(cards.w, `${size} players: the cards`).toBeGreaterThanOrEqual(61.5);
-    if (size === 12) expect(cards.w, '12 players: the cards over their least size').toBeGreaterThan(cards.base + 5);
-    if (size >= 24) expect(Math.abs(cards.w - cards.base), `${size} players: the cards at their least size`).toBeLessThanOrEqual(0.1);
+    // A small table stops where the dealer's four and a shoe the cards' own size still fit beside each other: 61.9px. A table of six
+    // takes what three rows of full tiles leave it (the table's own buttons on a row of their own under the panel's main one): 61.4px.
+    if (size <= 2) expect(cards.w, `${size} players: the cards`).toBeGreaterThanOrEqual(61.5);
+    if (size === 6) {
+      expect(Math.abs(cards.w - (cards.base + parseFloat(cards.spare) / 3.34)), '6 players: the cards take all the room the seats leave').toBeLessThanOrEqual(0.05);
+      expect(cards.w, '6 players: the cards').toBeGreaterThanOrEqual(61.4);
+    }
+    if (size === 12) expect(Math.abs(cards.w - cards.base), '12 players: the cards at their least size').toBeLessThanOrEqual(0.1);
+    if (size >= 24) {
+      expect(parseFloat(cards.spare), `${size} players: the room the strip leaves`).toBeGreaterThan(0);
+      expect(Math.abs(cards.w - (cards.base + parseFloat(cards.spare) / 3.34)), `${size} players: the cards take all of it`).toBeLessThanOrEqual(0.05);
+    }
     expect(errors).toEqual([]);
   } finally {
     for (const b of bots) b.close();

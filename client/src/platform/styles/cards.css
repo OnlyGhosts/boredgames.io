@@ -84,12 +84,18 @@
   letter-spacing: -0.04em;
 }
 
-/* "10" is two figures: narrower, so it keeps to the part of a fanned card left in view. */
+/*
+ * "10" is two figures: narrower, so it keeps to the part of a fanned card left in view. A transform
+ * leaves its box at full width (0.977em of Space Grotesk's "10"), so it gives back the fifth it is
+ * not drawn in: the suit sits where every other card's does, centred under the "10", never pushed
+ * right under the next card of a fan.
+ */
 .playing-card__rank--wide {
   font-size: calc(var(--card-w) * 0.36);
   letter-spacing: -0.08em;
   transform: scaleX(0.8);
   transform-origin: left center;
+  margin-inline-end: -0.195em;
 }
 
 .playing-card__suit {
