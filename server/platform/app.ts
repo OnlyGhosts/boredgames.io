@@ -10,6 +10,7 @@ import { NEARBY_PATH, type NearbyResponse } from '../../shared/platform/nearby.j
 import { DailySalt } from './admin/analytics.js';
 import { BEACON_MAX_BYTES, BEACON_PATH, BEACON_PER_MINUTE, handleBeacon, readCappedBody } from './admin/beacon.js';
 import { NOTICE_PATH, NoticeCache } from './admin/notice.js';
+import { adminRouter } from './admin/router.js';
 import type { AnalyticsStore } from './admin/store.js';
 import { asSocketLike, handleConnection } from './connection.js';
 import { listNearby } from './nearby/list.js';
@@ -38,6 +39,10 @@ export interface AppOptions {
   countHeadless?: boolean;
   /** The clock for the analytics and the notice (tests). */
   now?: () => number;
+  /** ADMIN_HOST, ADMIN_PASSWORD and ADMIN_SESSION_KEY come from here; defaults to process.env. */
+  env?: NodeJS.ProcessEnv;
+  /** Where the admin dashboard's build lives; defaults to dist/admin under the working directory. */
+  adminDir?: string;
 }
 
 export interface App {
@@ -66,10 +71,31 @@ export function createApp(options: AppOptions): App {
   const visitorSalt = new DailySalt(now);
   const beaconLimiter = new KeyedRateLimiter(BEACON_PER_MINUTE, 60_000, 10_000);
   const notices = analytics ? new NoticeCache(analytics, now) : null;
+  const env = options.env ?? process.env;
+  const adminHost = (env.ADMIN_HOST || 'admin.boredgames.io').toLowerCase();
 
   const app = express();
   app.disable('x-powered-by');
   app.set('etag', false);
+
+  // The admin dashboard answers on its own host only (and only where the analytics live); on any
+  // other host its paths do not exist, so no admin page or cookie ever comes from the site.
+  const admin =
+    analytics && notices
+      ? adminRouter({ store: analytics, driver, env, now, notices, dir: options.adminDir ?? path.resolve(process.cwd(), 'dist/admin'), networkOf: (req) => networkOf(req), log })
+      : null;
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    if (req.hostname === adminHost) {
+      if (admin) return admin(req, res, next);
+      res.status(404).type('text/plain').send('Not found');
+      return;
+    }
+    if (/^\/(api\/)?admin/i.test(req.path)) {
+      res.status(404).type('text/plain').send('Not found');
+      return;
+    }
+    next();
+  });
 
   // The site can be served from another host than this server (Vercel's CDN in front of one Fly.io
   // machine), so the read-only /api endpoints answer any origin, and the visit beacon takes a POST
