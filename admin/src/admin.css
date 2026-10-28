@@ -425,11 +425,13 @@ details > summary.section__title {
 
 /* The home page's banner (client home.css .site-notice), for the preview. */
 .site-notice {
-  padding: 10px 14px;
+  padding: 8px 14px;
   border-radius: var(--radius-item);
   background: var(--color-primary-soft);
   color: var(--color-primary-text);
+  font-size: 0.9375rem;
   font-weight: 600;
+  line-height: 1.35;
   text-align: center;
   text-wrap: pretty;
   overflow-wrap: anywhere;

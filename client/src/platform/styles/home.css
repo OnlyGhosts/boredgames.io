@@ -195,6 +195,21 @@
   align-self: center;
 }
 
+/* The owner's notice (the admin dashboard's Notice tab): one slim line above the code boxes, wrapping without a word left alone. */
+.site-notice {
+  margin: 0;
+  padding: 8px 14px;
+  border-radius: var(--radius-item);
+  background: var(--color-primary-soft);
+  color: var(--color-primary-text);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.35;
+  text-align: center;
+  text-wrap: pretty;
+  overflow-wrap: anywhere;
+}
+
 /* ---------- Breakpoints: the column stays the same, only the air around it grows ---------- */
 @media (min-width: 768px) {
   /* On larger screens the air above the column matches the air below it. */

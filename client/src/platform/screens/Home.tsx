@@ -8,8 +8,10 @@ import { AvatarPicker } from '../components/AvatarPicker';
 import { CodeInput, type CodeInputHandle } from '../components/CodeInput';
 import { AlertIcon, LinkIcon } from '../components/Icons';
 import { NearbyRooms } from '../components/NearbyRooms';
+import { NoticeBanner, useSiteNotice } from '../components/NoticeBanner';
 import { SiteHeader } from '../components/SiteHeader';
 import { enteredLength, padCode } from '../lib/codeInput';
+import { sendNearbyJoin } from '../lib/beacon';
 import type { JoinErrorCode } from '../lib/format';
 import { useNearbyRooms } from '../lib/nearby';
 import { loadAvatar, loadName, saveAvatar, saveName } from '../lib/storage';
@@ -161,13 +163,20 @@ export function Home({ code: linkedCode, game: linkedGame }: Props) {
     if (step === 'name') nameRef.current?.focus();
   }, [step]);
 
+  /** The code the same-Wi-Fi list put in, until it is joined or changed (counted for the admin dashboard). */
+  const nearbyCode = useRef<string | null>(null);
+
   const submit = (which: Intent, clean: string, joinCode = code) => {
     const chosen = avatar ?? randomAvatar();
     saveName(clean);
     saveAvatar(chosen);
     setIntent(which);
     if (which === 'create') createRoom(initialGame(linkedGame).id, clean, chosen);
-    else joinRoom(joinCode, clean, chosen);
+    else {
+      if (nearbyCode.current !== null && nearbyCode.current === joinCode) sendNearbyJoin();
+      nearbyCode.current = null;
+      joinRoom(joinCode, clean, chosen);
+    }
   };
 
   /** Join: the code must be complete and well-formed before anything is sent; then the name, then the request. */
@@ -192,6 +201,7 @@ export function Home({ code: linkedCode, game: linkedGame }: Props) {
   /** A room on the list: exactly as if its code had been typed and Join pressed. */
   const onJoinNearby = (roomCode: string) => {
     if (joinPending) return;
+    nearbyCode.current = roomCode;
     setCode(roomCode);
     setCodeHint(null);
     if (joinError) clearJoinError();
@@ -229,6 +239,7 @@ export function Home({ code: linkedCode, game: linkedGame }: Props) {
   };
 
   const onCodeChange = (next: string) => {
+    nearbyCode.current = null;
     setCode(next);
     setCodeHint(null);
     if (joinError) clearJoinError();
@@ -241,6 +252,7 @@ export function Home({ code: linkedCode, game: linkedGame }: Props) {
   const busy = (which: Intent) => joinPending && intent === which;
 
   const nearby = useNearbyRooms(formShown && step === 'home');
+  const notice = useSiteNotice();
 
   if (view === 'quiet') return <QuietHome />;
 
@@ -264,6 +276,7 @@ export function Home({ code: linkedCode, game: linkedGame }: Props) {
 
         {formShown && step === 'home' && (
           <div className="home__start">
+            <NoticeBanner notice={notice} />
             <NearbyRooms rooms={nearby} disabled={joinPending} onJoin={onJoinNearby} />
             <section className="home__join" aria-labelledby="join-heading" data-testid="join-panel">
               {/* Named for screen readers only: the boxes and Join say it on screen. */}
