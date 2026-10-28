@@ -30,7 +30,7 @@ const isSource = (name: string) => /\.tsx?$/.test(name) && !/\.test\.tsx?$/.test
 
 describe('copy', () => {
   it('ships no em dash in any string or JSX text', () => {
-    const files = ['client/src', 'server', 'shared', 'api'].flatMap((dir) => walk(join(ROOT, dir), isSource));
+    const files = ['client/src', 'admin/src', 'server', 'shared', 'api'].flatMap((dir) => walk(join(ROOT, dir), isSource));
     expect(files.length).toBeGreaterThan(100);
     const offenders = files.flatMap((file) => copyIn(file).filter((text) => text.includes(EM_DASH)).map((text) => `${relative(ROOT, file)}: ${text}`));
     expect(offenders).toEqual([]);
@@ -39,9 +39,11 @@ describe('copy', () => {
   it('ships no em dash in the page shell, public files, stylesheets or README', () => {
     const files = [
       join(ROOT, 'client/index.html'),
+      join(ROOT, 'admin/index.html'),
       join(ROOT, 'README.md'),
       ...walk(join(ROOT, 'client/public'), (name) => /\.(webmanifest|json|svg|html|txt|md)$/.test(name)),
       ...walk(join(ROOT, 'client/src'), (name) => name.endsWith('.css')),
+      ...walk(join(ROOT, 'admin/src'), (name) => name.endsWith('.css')),
     ];
     const offenders = files.filter((file) => readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').includes(EM_DASH));
     expect(offenders.map((file) => relative(ROOT, file))).toEqual([]);
