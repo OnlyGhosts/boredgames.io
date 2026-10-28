@@ -6,9 +6,10 @@ set -e
 if [ "$(id -u)" = "0" ]; then
   if [ -n "$ANALYTICS_DB" ]; then
     dir=$(dirname "$ANALYTICS_DB")
-    mkdir -p "$dir"
-    chown -R node:node "$dir"
+    # Never in the way of the games: without the volume the server counts in memory instead.
+    mkdir -p "$dir" && chown -R node:node "$dir" || echo "start.sh: could not hand $dir to the node user" >&2
   fi
-  exec su-exec node "$@"
+  if command -v su-exec > /dev/null; then exec su-exec node "$@"; fi
+  echo "start.sh: su-exec is missing, running as root" >&2
 fi
 exec "$@"

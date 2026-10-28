@@ -21,4 +21,4 @@ ENV PORT=3001
 EXPOSE 3001
 # The server serves dist/client and dist/admin (resolved from the working directory) and the /ws
 # endpoint on $PORT, as the node user.
-CMD ["./start.sh", "node", "dist/server/index.js"]
+CMD ["sh", "./start.sh", "node", "dist/server/index.js"]
