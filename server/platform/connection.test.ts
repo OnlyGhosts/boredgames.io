@@ -437,6 +437,9 @@ class SlowDriver implements GameDriver {
   roomData(): null {
     return null;
   }
+  liveRooms(): [] {
+    return [];
+  }
   preview(): never {
     throw new Error('not used');
   }

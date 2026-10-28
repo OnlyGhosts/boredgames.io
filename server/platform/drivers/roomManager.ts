@@ -22,6 +22,11 @@ export interface RoomManagerDeps {
   checkpointKey?: Buffer | null;
   /** Fired when a room deleted itself (empty for its TTL), with the time it happened. */
   onRoomDeleted?: (code: string, at: number) => void;
+  /**
+   * Fired after an action changed a room (the admin analytics). `before` is null for a room's
+   * first change after it was created; a room brought back from a checkpoint never has one.
+   */
+  onRoomChange?: (after: PlatformRoomData, before: PlatformRoomData | null) => void;
 }
 
 export type CreateResult =
@@ -55,6 +60,9 @@ export class RoomManager {
   private readonly log: ((msg: string) => void) | undefined;
   private readonly checkpoints: Checkpointer | null;
   private readonly onRoomDeleted: ((code: string, at: number) => void) | undefined;
+  private readonly onRoomChange: ((after: PlatformRoomData, before: PlatformRoomData | null) => void) | undefined;
+  /** Rooms created here whose first change (the host taking the first seat) has not been reported yet. */
+  private readonly fresh = new WeakSet<Room>();
 
   constructor(deps: RoomManagerDeps) {
     this.transport = deps.transport;
@@ -64,6 +72,7 @@ export class RoomManager {
     this.maxRooms = deps.maxRooms ?? MAX_ROOMS;
     this.log = deps.log;
     this.onRoomDeleted = deps.onRoomDeleted;
+    this.onRoomChange = deps.onRoomChange;
     this.checkpoints = deps.checkpointKey
       ? new Checkpointer({ key: deps.checkpointKey, transport: this.transport, clock: this.clock, log: this.log })
       : null;
@@ -81,6 +90,7 @@ export class RoomManager {
     const code = this.uniqueCode();
     const room = new Room(code, gameId, this.roomDeps());
     this.rooms.set(code, room);
+    this.fresh.add(room);
     const joined = room.create(name, avatar, connectionId);
     if (!joined.ok) {
       // Cannot happen for a brand-new room, but never leave an orphan behind.
@@ -131,6 +141,11 @@ export class RoomManager {
     return [...this.rooms.keys()];
   }
 
+  /** Every room's data as it stands (read-only): the admin's live rooms. */
+  liveRooms(): PlatformRoomData[] {
+    return [...this.rooms.values()].map((r) => r.state);
+  }
+
   /** Tears down every room and timer (server shutdown). */
   destroy(): void {
     this.checkpoints?.stop();
@@ -153,8 +168,22 @@ export class RoomManager {
         checkpoints?.forget(r.code);
         this.onRoomDeleted?.(r.code, this.clock.now());
       },
-      onChange: checkpoints ? (r, before) => checkpoints.changed(r, before) : undefined,
+      onChange: (r, before) => {
+        checkpoints?.changed(r, before);
+        this.reportChange(r, before);
+      },
     };
+  }
+
+  /** Hands the change to the analytics hook, which must never break a room. */
+  private reportChange(room: Room, before: PlatformRoomData): void {
+    const isNew = this.fresh.delete(room);
+    if (!this.onRoomChange) return;
+    try {
+      this.onRoomChange(room.state, isNew ? null : before);
+    } catch (err) {
+      this.log?.(`room change hook: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 
   private uniqueCode(): string {

@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EMPTY_ROOM_TTL_MS, RECONNECT_GRACE_MS } from '../../../shared/platform/constants.js';
 import type { GameId } from '../../../shared/platform/games.js';
 import { ROOM_CODE_LENGTH, isValidRoomCode } from '../../../shared/platform/roomCode.js';
+import { roomEvents } from '../admin/analytics.js';
+import type { PlatformRoomData } from '../engine/state.js';
 import type { Room } from './room.js';
 import { MAX_ROOMS, RoomManager } from './roomManager.js';
 import { AVATAR, FakeTransport } from './testUtils.js';
@@ -130,5 +132,69 @@ describe('RoomManager', () => {
     rooms.destroy();
     expect(rooms.stats()).toEqual({ rooms: 0, players: 0 });
     expect(vi.getTimerCount()).toBe(0);
+  });
+});
+
+describe('RoomManager room changes (the admin analytics)', () => {
+  function watched(): { rooms: RoomManager; changes: Array<{ after: PlatformRoomData; before: PlatformRoomData | null }> } {
+    const changes: Array<{ after: PlatformRoomData; before: PlatformRoomData | null }> = [];
+    const rooms = new RoomManager({ transport: new FakeTransport(), clock: { now: () => Date.now() }, onRoomChange: (after, before) => changes.push({ after, before }) });
+    return { rooms, changes };
+  }
+  const eventsOf = (c: { after: PlatformRoomData; before: PlatformRoomData | null }) => roomEvents(c.before, c.after);
+
+  it('reports a created room as new (no before), then each later change with its before', () => {
+    const { rooms, changes } = watched();
+    const { room } = create(rooms, 'Ann', 'a');
+    expect(changes).toHaveLength(1);
+    expect(changes[0]!.before).toBeNull();
+    expect(eventsOf(changes[0]!)).toEqual([
+      { kind: 'room_created', gameId: 'scribble' },
+      { kind: 'player_joined', gameId: 'scribble' },
+    ]);
+    room.join('Bob', AVATAR, 'b');
+    expect(changes).toHaveLength(2);
+    expect(changes[1]!.before).not.toBeNull();
+    expect(eventsOf(changes[1]!)).toEqual([{ kind: 'player_joined', gameId: 'scribble' }]);
+  });
+
+  it('never reports a room brought back from a checkpoint as created', () => {
+    const source = manager().rooms;
+    const { room } = create(source, 'Ann', 'a');
+    room.join('Bob', AVATAR, 'b');
+    const stored = JSON.parse(JSON.stringify(room.state)) as PlatformRoomData;
+    source.destroy();
+
+    const { rooms, changes } = watched();
+    const restored = rooms.restoreRoom(stored, Date.now());
+    expect(restored).not.toBeNull();
+    for (const p of stored.players) restored!.rejoin(p.token, `again-${p.id}`);
+    expect(changes.length).toBeGreaterThan(0);
+    expect(changes.every((c) => c.before !== null)).toBe(true);
+    expect(changes.flatMap(eventsOf)).toEqual([]);
+  });
+
+  it('lists the live rooms', () => {
+    const { rooms } = watched();
+    const a = create(rooms, 'Ann', 'a').room;
+    const b = create(rooms, 'Bob', 'b', 'template').room;
+    expect(rooms.liveRooms().map((r) => r.code).sort()).toEqual([a.code, b.code].sort());
+    expect(rooms.liveRooms().find((r) => r.code === b.code)?.gameId).toBe('template');
+  });
+
+  it('keeps the room working when the analytics hook throws', () => {
+    const logs: string[] = [];
+    const rooms = new RoomManager({
+      transport: new FakeTransport(),
+      clock: { now: () => Date.now() },
+      log: (m) => logs.push(m),
+      onRoomChange: () => {
+        throw new Error('analytics down');
+      },
+    });
+    const { room } = create(rooms, 'Ann', 'a');
+    expect(room.join('Bob', AVATAR, 'b').ok).toBe(true);
+    expect(rooms.stats()).toEqual({ rooms: 1, players: 2 });
+    expect(logs.join('\n')).toContain('analytics down');
   });
 });

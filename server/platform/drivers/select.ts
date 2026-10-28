@@ -1,5 +1,6 @@
 import { checkpointKeyFromEnv } from '../checkpoint/key.js';
 import { MemoryDriver } from './memory.js';
+import type { RoomManagerDeps } from './roomManager.js';
 import { SNAPSHOT_INTERVAL_MS } from './outbound.js';
 import { RedisDriver } from './redis.js';
 import type { GameDriver } from './types.js';
@@ -14,6 +15,8 @@ export interface SelectDriverOptions {
   /** Warn loudly when falling back to memory (multi-instance hosts lose rooms between instances). */
   expectRedis?: boolean;
   env?: NodeJS.ProcessEnv;
+  /** The admin analytics' room-change hook (in-memory rooms only; see RoomManagerDeps.onRoomChange). */
+  onRoomChange?: RoomManagerDeps['onRoomChange'];
 }
 
 /** RedisDriver when REDIS_URL/KV_URL is set, MemoryDriver otherwise. Redis connects lazily, on first use. */
@@ -30,7 +33,12 @@ export function createDriverFromEnv(options: SelectDriverOptions): GameDriver {
     options.log('driver: memory');
   }
   // Rooms in memory end with the process unless the phones bring them back from checkpoints.
-  return new MemoryDriver({ snapshotIntervalMs: SNAPSHOT_INTERVAL_MS, checkpointKey: checkpointKeyFromEnv(options.env ?? process.env, options.log), log: options.log });
+  return new MemoryDriver({
+    snapshotIntervalMs: SNAPSHOT_INTERVAL_MS,
+    checkpointKey: checkpointKeyFromEnv(options.env ?? process.env, options.log),
+    log: options.log,
+    onRoomChange: options.onRoomChange,
+  });
 }
 
 /** Host and scheme only; never the credentials. */

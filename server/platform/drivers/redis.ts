@@ -228,6 +228,11 @@ export class RedisDriver implements GameDriver {
     return stored ? applyAction(stored, { type: 'tick' }, productionCtx(this.clock, this.rng)).data : null;
   }
 
+  /** Only the rooms this instance holds sockets for: each instance lists its own. */
+  liveRooms(): PlatformRoomData[] {
+    return [...this.locals.values()].flatMap((local) => (local.data ? [local.data] : []));
+  }
+
   async health(): Promise<DriverHealth> {
     const { rooms, approximate } = await this.rooms.countRooms();
     return { driver: this.name, rooms, approximate };

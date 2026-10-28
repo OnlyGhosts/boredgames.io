@@ -122,6 +122,8 @@ export interface GameDriver {
   preview(code: string): MaybePromise<RoomPreview>;
   /** The room as it stands (overdue deadlines applied), or null; read-only, for the nearby list. */
   roomData(code: string): MaybePromise<PlatformRoomData | null>;
+  /** The rooms open in this process (read-only), for the admin's live rooms. */
+  liveRooms(): MaybePromise<PlatformRoomData[]>;
   /** Which rooms were created on which network, shared by every instance this driver's rooms are. */
   readonly nearby: NearbyStore;
   health(): MaybePromise<DriverHealth>;

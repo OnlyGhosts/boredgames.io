@@ -3,6 +3,7 @@ import { request as httpRequest, type IncomingHttpHeaders } from 'node:http';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { MemoryAnalyticsStore } from './admin/store.js';
 import { createApp, type App } from './app.js';
 import { MemoryDriver } from './drivers/memory.js';
 
@@ -131,5 +132,106 @@ describe('crawlers', () => {
     expect((await asHost('boredgames.io', '/')).headers['x-robots-tag']).toBeUndefined();
     expect((await asHost('boredgames.io', '/app.js')).headers['x-robots-tag']).toBeUndefined();
     expect((await asHost('boredgames.io', '/nope/path')).status).toBe(404);
+  });
+});
+
+describe('visit beacons and the public notice', () => {
+  const PHONE_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1';
+  const store = new MemoryAnalyticsStore();
+  let now = Date.UTC(2026, 9, 28, 12, 0);
+  let counted: App;
+  let url = '';
+
+  beforeAll(async () => {
+    counted = createApp({ driver: new MemoryDriver(), serveStatic: false, analytics: store, now: () => now });
+    await new Promise<void>((resolve) => counted.server.listen(0, '127.0.0.1', resolve));
+    const address = counted.server.address();
+    if (address === null || typeof address === 'string') throw new Error('no port');
+    url = `http://127.0.0.1:${address.port}`;
+  });
+
+  afterAll(async () => {
+    await counted.shutdown();
+  });
+
+  const beacon = (body: string, from: string, ua = PHONE_UA) =>
+    fetch(`${url}/api/v`, { method: 'POST', headers: { 'content-type': 'text/plain;charset=UTF-8', 'user-agent': ua, 'x-forwarded-for': from }, body });
+  const view = (extra: Record<string, unknown> = {}) => JSON.stringify({ k: 'view', path: '/', ref: null, game: null, w: 390, referrer: null, ...extra });
+  const views = async () => (await store.summary('today', now)).totals.views;
+
+  it('records a page view from Reddit and answers 204', async () => {
+    const res = await beacon(view({ referrer: 'https://www.reddit.com/r/WebGames/comments/x/y/', game: 'scribble' }), '198.51.100.20');
+    expect(res.status).toBe(204);
+    const s = await store.summary('today', now);
+    expect(s.sources).toContainEqual({ source: 'reddit.com', subreddit: 'r/WebGames', visitors: 1 });
+    expect(s.deepLinks).toEqual([{ game: 'scribble', visitors: 1 }]);
+  });
+
+  it('answers 204 and records nothing for 3 KB, malformed JSON or a crawler', async () => {
+    const before = await views();
+    const big = await beacon(view({ path: `/${'x'.repeat(3000)}` }), '198.51.100.21');
+    expect(big.status).toBe(204);
+    expect((await beacon('{"k":"view"', '198.51.100.21')).status).toBe(204);
+    expect((await beacon(view(), '198.51.100.21', 'Googlebot/2.1')).status).toBe(204);
+    expect(await views()).toBe(before);
+  });
+
+  it('answers 204 to a flood and stops recording past 30 a minute from one network', async () => {
+    const before = await views();
+    for (let i = 0; i < 31; i++) expect((await beacon(view(), '198.51.100.22')).status).toBe(204);
+    expect(await views()).toBe(before + 30);
+    now += 60_000;
+    await beacon(view(), '198.51.100.22');
+    expect(await views()).toBe(before + 31);
+  });
+
+  it('counts a join from the Wi-Fi list', async () => {
+    const before = (await store.summary('today', now)).joinsNearby;
+    expect((await beacon(JSON.stringify({ k: 'join', via: 'nearby' }), '198.51.100.23')).status).toBe(204);
+    expect((await store.summary('today', now)).joinsNearby).toBe(before + 1);
+  });
+
+  it('never stores the address or the user agent', async () => {
+    await beacon(view({ referrer: 'https://news.ycombinator.com/' }), '203.0.113.7', 'TestAgent/1.0');
+    const held: string[] = [];
+    const walk = (v: unknown, seen = new Set<unknown>()): void => {
+      if (typeof v === 'string') held.push(v);
+      if (v === null || typeof v !== 'object' || seen.has(v)) return;
+      seen.add(v);
+      const items = v instanceof Map ? [...v.keys(), ...v.values()] : v instanceof Set || Array.isArray(v) ? [...v] : Object.values(v);
+      for (const item of items) walk(item, seen);
+    };
+    walk(store);
+    expect(held.some((x) => x.includes('news.ycombinator.com'))).toBe(true);
+    expect(held.join('\n')).not.toMatch(/203\.0\.113\.7|TestAgent/);
+  });
+
+  it('lets the site post a beacon from another origin, and only to /api/v', async () => {
+    const origin = 'https://boredgames.io';
+    const ask = (route: string) => fetch(`${url}${route}`, { method: 'OPTIONS', headers: { origin, 'access-control-request-method': 'POST' } });
+    expect((await ask('/api/v')).headers.get('access-control-allow-methods')).toContain('POST');
+    expect((await ask('/api/rooms/AB2K')).headers.get('access-control-allow-methods')).not.toContain('POST');
+  });
+
+  it('serves the notice only while it is on and unexpired, refreshed within 30 seconds', async () => {
+    const notice = async () => (await fetch(`${url}/api/notice`)).json();
+    await store.setNotice({ text: 'Quick restart at 9pm', on: true, expiresAt: now + 120_000, updatedAt: now });
+    now += 30_000;
+    expect(await notice()).toEqual({ text: 'Quick restart at 9pm' });
+    await store.setNotice({ text: 'Quick restart at 9pm', on: false, expiresAt: null, updatedAt: now });
+    expect(await notice()).toEqual({ text: 'Quick restart at 9pm' });
+    now += 30_000;
+    expect(await notice()).toEqual({});
+    await store.setNotice({ text: 'Back at 10pm', on: true, expiresAt: now + 31_000, updatedAt: now });
+    now += 30_000;
+    expect(await notice()).toEqual({ text: 'Back at 10pm' });
+    now += 1_000;
+    expect(await notice()).toEqual({});
+  });
+
+  it('answers both without an analytics store (the Vercel function)', async () => {
+    const res = await fetch(`${baseUrl}/api/v`, { method: 'POST', headers: { 'content-type': 'text/plain' }, body: view() });
+    expect(res.status).toBe(204);
+    expect(await (await fetch(`${baseUrl}/api/notice`)).json()).toEqual({});
   });
 });

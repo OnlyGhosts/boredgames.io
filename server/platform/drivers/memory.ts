@@ -135,6 +135,10 @@ export class MemoryDriver implements GameDriver {
     return this.rooms.get(code)?.state ?? null;
   }
 
+  liveRooms(): PlatformRoomData[] {
+    return this.rooms.liveRooms();
+  }
+
   health(): DriverHealth {
     return { driver: this.name, ...this.rooms.stats() };
   }

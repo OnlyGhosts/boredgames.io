@@ -7,10 +7,15 @@ import { MAX_WS_MESSAGE_BYTES } from '../../shared/platform/constants.js';
 import { CLOSE_RESTARTING, ROOM_PREVIEW_PATH, WS_PATH } from '../../shared/platform/protocol.js';
 import { isGameSlugPath, isRoomPath } from '../../shared/platform/roomCode.js';
 import { NEARBY_PATH, type NearbyResponse } from '../../shared/platform/nearby.js';
+import { DailySalt } from './admin/analytics.js';
+import { BEACON_MAX_BYTES, BEACON_PATH, BEACON_PER_MINUTE, handleBeacon, readCappedBody } from './admin/beacon.js';
+import { NOTICE_PATH, NoticeCache } from './admin/notice.js';
+import type { AnalyticsStore } from './admin/store.js';
 import { asSocketLike, handleConnection } from './connection.js';
 import { listNearby } from './nearby/list.js';
 import { clientAddress, networkKey } from './nearby/network.js';
 import { after, type GameDriver } from './drivers/types.js';
+import { KeyedRateLimiter } from './rateLimiter.js';
 
 export interface AppOptions {
   driver: GameDriver;
@@ -27,6 +32,12 @@ export interface AppOptions {
    * so search engines never take that copy for the site.
    */
   canonicalHost?: string;
+  /** Where visits, room events and the site notice are kept; without one the beacon is ignored and there is no notice. */
+  analytics?: AnalyticsStore;
+  /** Count headless browsers' visits (the e2e suite); defaults to ANALYTICS_COUNT_HEADLESS=1. */
+  countHeadless?: boolean;
+  /** The clock for the analytics and the notice (tests). */
+  now?: () => number;
 }
 
 export interface App {
@@ -49,17 +60,24 @@ export function createApp(options: AppOptions): App {
   const log = options.log ?? (() => undefined);
   const wsPaths = options.wsPaths ?? [WS_PATH];
   const canonicalHost = options.canonicalHost ?? process.env.CANONICAL_HOST ?? 'boredgames.io';
+  const now = options.now ?? (() => Date.now());
+  const analytics = options.analytics ?? null;
+  const countHeadless = options.countHeadless ?? process.env.ANALYTICS_COUNT_HEADLESS === '1';
+  const visitorSalt = new DailySalt(now);
+  const beaconLimiter = new KeyedRateLimiter(BEACON_PER_MINUTE, 60_000, 10_000);
+  const notices = analytics ? new NoticeCache(analytics, now) : null;
 
   const app = express();
   app.disable('x-powered-by');
   app.set('etag', false);
 
   // The site can be served from another host than this server (Vercel's CDN in front of one Fly.io
-  // machine), so the read-only /api endpoints answer any origin. WebSocket upgrades need no CORS.
+  // machine), so the read-only /api endpoints answer any origin, and the visit beacon takes a POST
+  // from it. WebSocket upgrades need no CORS.
   app.use('/api', (req: Request, res: Response, next: NextFunction) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     if (req.method !== 'OPTIONS') return next();
-    res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+    res.setHeader('Access-Control-Allow-Methods', `${req.baseUrl}${req.path}` === BEACON_PATH ? 'POST, OPTIONS' : 'GET, HEAD, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'accept, content-type');
     res.setHeader('Access-Control-Max-Age', '86400');
     res.status(204).end();
@@ -91,6 +109,31 @@ export function createApp(options: AppOptions): App {
     const body: NearbyResponse = { rooms: network ? await listNearby(driver, driver.nearby, network) : [], now };
     res.setHeader('Cache-Control', 'no-store');
     res.json(body);
+  });
+
+  // One per page load: always 204, whatever was sent (see admin/beacon.ts).
+  app.post(BEACON_PATH, async (req: Request, res: Response) => {
+    const body = await readCappedBody(req, BEACON_MAX_BYTES);
+    try {
+      if (analytics) {
+        const origin = typeof req.headers.origin === 'string' ? hostOf(req.headers.origin) : null;
+        handleBeacon(
+          { body, address: clientAddress(req) ?? req.socket.remoteAddress ?? '', userAgent: req.get('user-agent') ?? '', network: (await networkOf(req)) ?? 'local' },
+          analytics,
+          visitorSalt,
+          { now: now(), countHeadless, siteHosts: [canonicalHost, req.hostname, ...(origin ? [origin] : [])], limiter: beaconLimiter },
+        );
+      }
+    } catch (err) {
+      log(`beacon: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    res.status(204).end();
+  });
+
+  // The home page's notice, asked for on each load; the store is read at most every 30 seconds.
+  app.get(NOTICE_PATH, async (_req: Request, res: Response) => {
+    res.setHeader('Cache-Control', 'no-cache');
+    res.json(notices ? await notices.current() : {});
   });
 
   app.use('/api', (_req: Request, res: Response) => {
@@ -199,6 +242,14 @@ export function createApp(options: AppOptions): App {
   };
 
   return { app, server, wss, shutdown };
+}
+
+function hostOf(origin: string): string | null {
+  try {
+    return new URL(origin).hostname;
+  } catch {
+    return null;
+  }
 }
 
 /** Resolves once every socket of `wss` has closed, or after `ms`. */
