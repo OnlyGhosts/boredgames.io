@@ -14,10 +14,10 @@ export function sourceLabel(source: string, subreddit: string | null): string {
   return source;
 }
 
-/** How long a room has been open: "under a minute", "12 min", "2 h 5 min". */
+/** How long a room has been open: "under 1 min", "12 min", "2 h 5 min" (short enough for a phone's card). */
 export function ageText(ms: number): string {
   const mins = Math.floor(ms / 60_000);
-  if (mins < 1) return 'under a minute';
+  if (mins < 1) return 'under 1 min';
   if (mins < 60) return `${mins} min`;
   const h = Math.floor(mins / 60);
   const m = mins % 60;

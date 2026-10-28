@@ -471,9 +471,10 @@ details > summary.section__title {
     display: none;
   }
 
+  /* Two columns sized by what they hold, so a label and its value share a line wherever they fit. */
   .table--stack tr {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-columns: auto auto;
     gap: 4px var(--space-3);
     padding: 10px 0;
     border-bottom: 1px solid var(--color-border);
@@ -491,11 +492,26 @@ details > summary.section__title {
     padding: 0;
     border: 0;
     text-align: right;
+    /* A long value wraps inside its half of the card rather than running out of it. */
+    white-space: normal;
+    min-width: 0;
   }
 
   .table--stack td::before {
     content: attr(data-label);
     color: var(--color-text-muted);
     text-align: left;
+    white-space: nowrap;
+  }
+
+  /* The row's first cell (the game, the room code, the day) heads its card. */
+  .table--stack td:first-child {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+    font-weight: 700;
+  }
+
+  .table--stack td:first-child::before {
+    content: none;
   }
 }

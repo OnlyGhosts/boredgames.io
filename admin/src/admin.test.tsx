@@ -42,7 +42,9 @@ describe('the Analytics page', () => {
   it('shows the totals, the games, the deep links, the Wi-Fi joins and the busiest hour', () => {
     expect(html).toContain('35');
     expect(html).toContain('Scribble');
-    expect(html).toContain('Joined by tapping the room on the same Wi-Fi');
+    // Each label keeps its last two words together, so a phone never leaves one alone on a line.
+    expect(html).toContain('Joined by tapping the room on the same\u00a0Wi-Fi');
+    expect(html).toContain('Average players per\u00a0room');
     expect(html).toContain('Typed the code');
     expect(html).toContain(hourText(20));
     expect(html).toContain('11');
@@ -87,7 +89,7 @@ describe('sign-in', () => {
 describe('formatting', () => {
   it('reads ages, hours and sources the way the owner says them', () => {
     expect(ageText(720_000)).toBe('12 min');
-    expect(ageText(30_000)).toBe('under a minute');
+    expect(ageText(30_000)).toBe('under 1 min');
     expect(ageText(2 * 3600_000 + 5 * 60_000)).toBe('2 h 5 min');
     expect(hourText(0)).toBe('00:00 to 01:00');
     expect(hourText(23)).toBe('23:00 to 00:00');

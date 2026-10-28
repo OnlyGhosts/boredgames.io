@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { RANGES, type Range, type Summary } from '@shared/platform/admin';
 import { fetchSummary, SignedOut } from './api';
 import { BarChart } from './BarChart';
-import { gameName, hourText, num, sourceLabel } from './format';
+import { gameName, hourText, noOrphan, num, sourceLabel } from './format';
 
 const RANGE_LABEL: Record<Range, string> = { today: 'Today', '7d': '7 days', '30d': '30 days' };
 
@@ -89,26 +89,18 @@ export function AnalyticsView({ summary, range, onRange }: ViewProps) {
         <section className="card section" data-testid="joins">
           <h2 className="section__title">Rooms and players</h2>
           <dl className="facts">
-            <div>
-              <dt>Joined by tapping the room on the same Wi-Fi</dt>
-              <dd data-testid="joins-nearby">{num(summary.joinsNearby)}</dd>
-            </div>
-            <div>
-              <dt>Typed the code or opened a&nbsp;link</dt>
-              <dd data-testid="joins-code">{num(summary.joinsCode)}</dd>
-            </div>
-            <div>
-              <dt>Average players per room</dt>
-              <dd>{summary.avgPlayersPerRoom.toLocaleString('en-GB')}</dd>
-            </div>
-            <div>
-              <dt>Most players online at once</dt>
-              <dd data-testid="peak-players">{num(summary.peakPlayers)}</dd>
-            </div>
-            <div>
-              <dt>Busiest hour for joining (UK&nbsp;time)</dt>
-              <dd>{summary.busiestHour === null ? 'None yet' : hourText(summary.busiestHour)}</dd>
-            </div>
+            {[
+              { label: 'Joined by tapping the room on the same Wi-Fi', value: num(summary.joinsNearby), testId: 'joins-nearby' },
+              { label: 'Typed the code or opened a link', value: num(summary.joinsCode), testId: 'joins-code' },
+              { label: 'Average players per room', value: summary.avgPlayersPerRoom.toLocaleString('en-GB') },
+              { label: 'Most players online at once', value: num(summary.peakPlayers), testId: 'peak-players' },
+              { label: 'Busiest hour for joining (UK time)', value: summary.busiestHour === null ? 'None yet' : hourText(summary.busiestHour) },
+            ].map((fact) => (
+              <div key={fact.label}>
+                <dt>{noOrphan(fact.label)}</dt>
+                <dd data-testid={fact.testId}>{fact.value}</dd>
+              </div>
+            ))}
           </dl>
         </section>
 
