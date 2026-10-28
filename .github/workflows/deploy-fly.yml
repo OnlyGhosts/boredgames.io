@@ -13,6 +13,9 @@ on:
     paths:
       - 'server/**'
       - 'shared/**'
+      - 'admin/**'
+      - 'vite.admin.config.ts'
+      - 'scripts/start.sh'
       - 'package.json'
       - 'package-lock.json'
       - 'Dockerfile'
@@ -64,6 +67,38 @@ jobs:
             flyctl secrets set "ROOM_CHECKPOINT_KEY=$key" --stage > /dev/null
             echo "ROOM_CHECKPOINT_KEY created"
           fi
+      # The key that signs the admin dashboard's session cookies (with ADMIN_PASSWORD, which the
+      # owner sets): made once, so a deploy does not sign the owner out. Masked, never printed.
+      - name: Admin session key
+        if: env.FLY_API_TOKEN != ''
+        run: |
+          secrets=$(flyctl secrets list --json)
+          printf '%s' "$secrets" | jq -e 'type == "array" or . == null' > /dev/null
+          found=$(printf '%s' "$secrets" | jq '[.[]? | (.Name // .name // "") | ascii_upcase | select(. == "ADMIN_SESSION_KEY")] | length')
+          if [ "$found" != "0" ]; then
+            echo "ADMIN_SESSION_KEY is set"
+          else
+            key=$(openssl rand -base64 32)
+            echo "::add-mask::$key"
+            flyctl secrets set "ADMIN_SESSION_KEY=$key" --stage > /dev/null
+            echo "ADMIN_SESSION_KEY created"
+          fi
+      # The analytics volume fly.toml mounts at /data: 1 GB in lhr, made once before the first deploy
+      # that needs it (that deploy replaces the machine to attach it; the games carry on from the
+      # phones' checkpoints as on any deploy). A failed listing stops the deploy rather than adding a
+      # second volume.
+      - name: Analytics volume
+        if: env.FLY_API_TOKEN != ''
+        run: |
+          app=$(sed -nE 's/^app *= *"([^"]+)".*/\1/p' fly.toml)
+          volumes=$(flyctl volumes list --app "$app" --json)
+          printf '%s' "$volumes" | jq -e 'type == "array" or . == null' > /dev/null
+          found=$(printf '%s' "$volumes" | jq '[.[]? | select((.Name // .name // "") == "bg_data")] | length')
+          if [ "$found" != "0" ]; then
+            echo "bg_data exists"
+          else
+            flyctl volumes create bg_data --app "$app" --region lhr --size 1 --yes
+          fi
       - name: Deploy one machine
         if: env.FLY_API_TOKEN != ''
         run: flyctl deploy --remote-only --ha=false
@@ -80,3 +115,13 @@ jobs:
             flyctl ips allocate-v6
           fi
           flyctl ips list
+      # admin.boredgames.io: the certificate is issued once the owner's DNS has the CNAME
+      # admin -> boredgames-io.fly.dev (docs/ADMIN.md). Asked for once; Fly keeps it renewed.
+      - name: Admin host certificate
+        if: env.FLY_API_TOKEN != ''
+        run: |
+          if flyctl certs show admin.boredgames.io > /dev/null 2>&1; then
+            echo "admin.boredgames.io has a certificate"
+          else
+            flyctl certs add admin.boredgames.io
+          fi

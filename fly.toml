@@ -26,6 +26,16 @@ swap_size_mb = 256
 [env]
   PORT = "3001"
   NODE_ENV = "production"
+  # The admin dashboard (docs/ADMIN.md): its host, and the analytics kept on the volume below.
+  # ADMIN_PASSWORD is a secret the owner sets; ADMIN_SESSION_KEY is made once by the deploy workflow.
+  ADMIN_HOST = "admin.boredgames.io"
+  ANALYTICS_DB = "/data/analytics.db"
+
+# One 1 GB volume in lhr for the analytics (the deploy workflow creates it when it is missing).
+# Rooms never touch it: they still live in memory.
+[mounts]
+  source = "bg_data"
+  destination = "/data"
 
 [http_service]
   internal_port = 3001
