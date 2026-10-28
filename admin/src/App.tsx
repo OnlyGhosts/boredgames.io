@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { Wordmark } from '../../client/src/platform/components/Wordmark';
 import { AnalyticsPage } from './Analytics';
 import { fetchSummary, login, logout, SignedOut, type LoginError } from './api';
 import { LoginView } from './Login';
@@ -60,7 +61,10 @@ export function App() {
   return (
     <div className="shell">
       <header className="topbar">
-        <span className="topbar__brand">boredgames.io admin</span>
+        <span className="topbar__brand">
+          <Wordmark />
+          <span className="topbar__tag">admin</span>
+        </span>
         <nav className="tabs" aria-label="Admin pages">
           {TABS.map((t) => (
             <a key={t.id} href={`#${t.id}`} className="tabs__item" aria-current={t.id === tab ? 'page' : undefined} onClick={() => setTab(t.id)} data-testid={`tab-${t.id}`}>

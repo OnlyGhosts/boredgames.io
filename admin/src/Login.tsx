@@ -1,3 +1,4 @@
+import { Wordmark } from '../../client/src/platform/components/Wordmark';
 import { useState, type FormEvent } from 'react';
 import type { LoginError } from './api';
 
@@ -29,7 +30,10 @@ export function LoginView({ error, busy, onSubmit }: Props) {
   return (
     <main className="login">
       <form className="card login__card" onSubmit={submit} data-testid="admin-login">
-        <h1 className="login__title">boredgames.io admin</h1>
+        <h1 className="login__title">
+          <Wordmark />
+          <span className="login__tag">admin</span>
+        </h1>
         <label className="field">
           <span className="field__label">Password</span>
           <input
