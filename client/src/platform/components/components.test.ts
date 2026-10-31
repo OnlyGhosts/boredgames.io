@@ -1518,6 +1518,38 @@ describe('results popup', () => {
     expect(['bob', 'carol', 'host', 'dan'].map((name) => li(name).includes('results-standings__row--noted'))).toEqual([false, false, true, true]);
   });
 
+  it('shows each player’s best moment under their name, small and muted, and no line for a player the game gave none (at the starting stack)', () => {
+    const html = popup(
+      'carol',
+      results({
+        gameId: 'blackjack',
+        entries: [
+          { playerId: 'bob', name: 'bob', avatar: AV, score: 4000, rank: 1, peak: 4600 },
+          { playerId: 'carol', name: 'carol', avatar: AV, score: 0, rank: 2, note: 'Out in round 14', peak: 3200 },
+          { playerId: 'dan', name: 'dan', avatar: AV, score: 0, rank: 3, note: 'Out in round 6' },
+        ],
+      }),
+    );
+    const row = (name: string): string => html.slice(html.indexOf(`data-name="${name}"`), html.indexOf('</li>', html.indexOf(`data-name="${name}"`)));
+    expect(row('bob')).toContain('>Peaked at\u00a04,600<');
+    expect(row('carol')).toContain('>Peaked at\u00a03,200<');
+    // The peak comes after the name and the note, never before them.
+    expect(row('carol').indexOf('Peaked at')).toBeGreaterThan(row('carol').indexOf('Out in round'));
+    expect(row('dan')).not.toContain('Peaked');
+    expect(tagsWith(html, 'results-peak')).toHaveLength(2);
+    const li = (name: string): string => html.match(new RegExp(`<li[^>]*data-name="${name}"[^>]*>`))?.[0] ?? '';
+    expect(['bob', 'carol', 'dan'].map((name) => li(name).includes('results-standings__row--peaked'))).toEqual([true, true, false]);
+    const css = stylesheet('components.css');
+    const peak = ruleOf(css, '.results-standings__peak');
+    expect(peak).toContain('grid-area: peak');
+    expect(peak).toContain('color: var(--color-text-muted)');
+    // Wide: under the name, the score (or the note) level across both lines.
+    expect(ruleOf(css, '.results-standings__row--peaked')).toContain("grid-template-areas: 'rank avatar name end' 'rank avatar peak end'");
+    // Narrow, with a note too: the name, the note, then the peak, each on a line of its own.
+    const narrow = css.slice(css.indexOf('@container standings (max-width: 26rem) {'));
+    expect(narrow).toMatch(/\.results-standings__row--noted\.results-standings__row--peaked \{[^}]*grid-template-areas: 'rank avatar name end' 'rank avatar note note' 'rank avatar peak peak'/);
+  });
+
   it('lays a note beside the name in a wide list and under it in a narrow one, never squeezing the name', () => {
     const css = stylesheet('components.css');
     expect(ruleOf(css, '.results-standings')).toContain('container: standings / inline-size');

@@ -32,7 +32,11 @@ function settle(gx: Gx, pots: PokerPotResult[], revealed: Record<string, PokerRe
       net[w.playerId] = (net[w.playerId] ?? 0) + w.amount;
     }
   }
-  for (const id of data.order) data.seats[id].committed = 0;
+  for (const id of data.order) {
+    const seat = data.seats[id];
+    seat.committed = 0;
+    seat.peak = Math.max(seat.peak ?? 0, seat.chips);
+  }
   data.results = { pots, revealed, uncontested, net };
   data.toAct = [];
   data.idleHands = data.acted ? 0 : data.idleHands + 1;

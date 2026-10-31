@@ -18,7 +18,7 @@ import { bet, dealIfReady, dealNow, sitOut } from './betting.js';
 import { nextHand } from './dealer.js';
 import { double, hit, skip, split, stand, standAway } from './play.js';
 import { beginRound, endGame, finishGame, resumeIfHeld, seatPlayer, settleDue, snapshotOrResume } from './round.js';
-import { findPlayer, type BlackjackData, type Ctx, type Gx } from './state.js';
+import { findPlayer, type BlackjackData, type Ctx, type Gx, type SeatData } from './state.js';
 import { viewFor } from './view.js';
 
 type Result = GameResult<BlackjackData, BlackjackServerMessage>;
@@ -164,6 +164,14 @@ function standing(data: BlackjackData, playerId: string): GameStanding {
   return seat.outRound === undefined ? { wentOut: 0 } : { wentOut: seat.outRound, note: `Out in round ${seat.outRound}` };
 }
 
+/**
+ * A seat's best moment for the results: its highest stack, when that beat the starting stack and
+ * the final one (nobody reads "Peaked at 1,000", nor a peak that repeats the score beside it).
+ */
+function peakOf(seat: SeatData | undefined, start: number): GameStanding {
+  return seat?.peak !== undefined && seat.peak > Math.max(start, seat.chips) ? { peak: seat.peak } : {};
+}
+
 export const blackjackModule: GameServerModule<BlackjackSettings, BlackjackData, BlackjackView, BlackjackClientMessage, BlackjackServerMessage> = {
   meta: gameById('blackjack'),
   settings: defineSettings(blackjackSettingsSchema, DEFAULT_BLACKJACK_SETTINGS),
@@ -174,7 +182,8 @@ export const blackjackModule: GameServerModule<BlackjackSettings, BlackjackData,
   view: viewFor,
   hostMessages: new Set(['dealNow', 'skip']),
   end: (ctx, data) => withDraft(data, (draft, effects) => endGame({ ctx, data: draft, effects })),
-  standing,
+  // How they went out, with their best moment.
+  standing: (data, playerId, settings) => ({ ...standing(data, playerId), ...peakOf(data.seats[playerId], settings.startingChips) }),
   milestone: (data) => `${data.round}:${data.phase.kind}${data.phase.kind === 'acting' ? `:${data.phase.playerId}:${data.phase.handIndex}` : ''}`,
 };
 

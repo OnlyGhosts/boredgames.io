@@ -76,6 +76,7 @@ export function settleRound(gx: Gx, peeked: boolean): void {
     });
     const staked = settled[id].reduce((sum, h) => sum + h.bet, 0);
     const back = settled[id].reduce((sum, h) => sum + h.payout, 0);
+    seat.peak = Math.max(seat.peak ?? 0, seat.chips);
     const name = nameOf(ctx, id);
     lines.push(back > staked ? `${name} wins ${back - staked}` : back === staked ? `${name} pushes` : `${name} loses ${staked - back}`);
     if (seat.chips === 0) {

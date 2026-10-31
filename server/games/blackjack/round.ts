@@ -6,7 +6,7 @@ import { MIN_PLAYERS, activePlayers, adjustChips, connectedActive, dropLegacySho
 /** Seats a player with the starting stack (at the start: nobody joins the game later). */
 export function seatPlayer(gx: Gx, playerId: string): void {
   if (gx.data.seats[playerId]) return;
-  gx.data.seats[playerId] = { chips: 0, bet: 0, hands: [], bustedOut: false, sittingOut: false };
+  gx.data.seats[playerId] = { chips: 0, bet: 0, hands: [], bustedOut: false, sittingOut: false, peak: gx.ctx.settings.startingChips };
   adjustChips(gx, playerId, gx.ctx.settings.startingChips);
 }
 

@@ -16,7 +16,7 @@ import { gameById } from '../../../shared/platform/games.js';
 import { defineSettings, withDraft, type GameEvent, type GameResult, type GameServerModule, type GameStanding } from '../../platform/game.js';
 import { actTimedOut, foldGone, playerMove } from './betting.js';
 import { beginHand, endGame, next, resumeIfHeld, seatPlayer, settleDue, snapshotOrResume } from './hand.js';
-import { findPlayer, removeSeat, stackedPlayers, type Ctx, type Gx, type PokerData } from './state.js';
+import { findPlayer, removeSeat, stackedPlayers, type Ctx, type Gx, type PokerData, type SeatData } from './state.js';
 import { viewFor } from './view.js';
 
 type Result = GameResult<PokerData, PokerServerMessage>;
@@ -127,6 +127,14 @@ function standing(data: PokerData, playerId: string): GameStanding {
   return seat.outHand === undefined ? { wentOut: 0 } : { wentOut: seat.outHand, note: `Out in hand ${seat.outHand}` };
 }
 
+/**
+ * A seat's best moment for the results: its highest stack, when that beat the starting stack and
+ * the final one (nobody reads "Peaked at 1,000", nor a peak that repeats the score beside it).
+ */
+function peakOf(seat: SeatData | undefined, start: number): GameStanding {
+  return seat?.peak !== undefined && seat.peak > Math.max(start, seat.chips) ? { peak: seat.peak } : {};
+}
+
 export const pokerModule: GameServerModule<PokerSettings, PokerData, PokerView, PokerClientMessage, PokerServerMessage> = {
   meta: gameById('poker'),
   settings: defineSettings(pokerSettingsSchema, DEFAULT_POKER_SETTINGS, normalizePokerSettings),
@@ -141,7 +149,8 @@ export const pokerModule: GameServerModule<PokerSettings, PokerData, PokerView, 
   queuesSeats: true,
   // A player who never got a seat never played: they stay out of the results.
   ranks: (data, playerId) => data.seats[playerId] !== undefined,
-  standing,
+  // How they went out, with their best moment.
+  standing: (data, playerId, settings) => ({ ...standing(data, playerId), ...peakOf(data.seats[playerId], settings.startingChips) }),
   milestone: (data) => `${data.hand}:${data.street ?? ''}:${data.phase.kind}:${data.toAct[0] ?? ''}`,
 };
 

@@ -6,7 +6,7 @@ import { IDLE_HANDS_LIMIT, MIN_PLAYERS, adjustChips, bigBlind, fail, findPlayer,
 /** Seats a player without a seat yet (one queued for a free seat) with the starting stack. */
 export function seatPlayer(gx: Gx, playerId: string): void {
   if (gx.data.seats[playerId]) return;
-  gx.data.seats[playerId] = { chips: 0, bet: 0, committed: 0, cards: [], status: 'out', lastAction: null, gone: false };
+  gx.data.seats[playerId] = { chips: 0, bet: 0, committed: 0, cards: [], status: 'out', lastAction: null, gone: false, peak: gx.ctx.settings.startingChips };
   adjustChips(gx, playerId, gx.ctx.settings.startingChips);
 }
 

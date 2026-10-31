@@ -103,16 +103,19 @@ describe('restoring rooms', () => {
     expect(data.players.every((p) => !p.connected && p.awayNoticeAt === null)).toBe(true);
   });
 
-  it('loads the last results with what each line says of the player, and only as text', () => {
+  it('loads the last results with what each line says of the player (a note as text, a peak as a number)', () => {
     const s = sim('template');
     const [alice] = startGame(s, ['Alice', 'Bob']);
     endGame(s, alice);
     const stored = JSON.parse(JSON.stringify(s.data)) as PlatformRoomData;
     const [first, second] = stored.results?.entries ?? [];
     second.note = 'Out in round 14';
-    expect(loadStoredRoom(JSON.parse(JSON.stringify(stored)))?.results?.entries).toEqual([first, { ...second, note: 'Out in round 14' }]);
+    second.peak = 3200;
+    expect(loadStoredRoom(JSON.parse(JSON.stringify(stored)))?.results?.entries).toEqual([first, { ...second, note: 'Out in round 14', peak: 3200 }]);
     expect(restoreLater({ ...s, data: stored }).data.results).toEqual(stored.results);
     Object.assign(second, { note: 14 });
+    expect(loadStoredRoom(JSON.parse(JSON.stringify(stored)))).toBeNull();
+    Object.assign(second, { note: 'Out in round 14', peak: '3,200' });
     expect(loadStoredRoom(JSON.parse(JSON.stringify(stored)))).toBeNull();
   });
 

@@ -663,8 +663,12 @@ export interface GameServerModule<S = unknown, D = unknown, V = unknown, CMsg = 
   queuesSeats?: boolean;
   /** Whether a participant goes in the results (a queued player who never got a seat does not). Everyone by default. */
   ranks?(data: D, playerId: string): boolean;
-  /** How a participant's game went, for the results: `wentOut` (the round or hand they ran out in) ranks them below everyone still in, the last out first. */
-  standing?(data: D, playerId: string): GameStanding;
+  /**
+   * How a participant's game went, for the results: `wentOut` (the round or hand they ran out in)
+   * ranks them below everyone still in, the last out first; `note` shows in place of the score
+   * ("Out in round 14"); `peak` shows under the name ("Peaked at 3,200"), given only when it says something.
+   */
+  standing?(data: D, playerId: string, settings: RoomSettings<S>): GameStanding;
   /**
    * The host's End game: emit the last score effects and `gameOver` to end at once, or note it and
    * end at the game's own next boundary (Blackjack). Without it the platform ends the game at once

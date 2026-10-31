@@ -88,6 +88,9 @@ const BOARD_DRY = ['2S', '7D', '9H', 'JC', '4S'];
 /** What the results say of each player in place of their chips (null: their chips). */
 const notes = (s: Sim): Array<string | null> | undefined => s.data.results?.entries.map((e) => e.note ?? null);
 
+/** Each player's best moment in the results (null: none worth showing). */
+const peaks = (s: Sim): Array<number | null> | undefined => s.data.results?.entries.map((e) => e.peak ?? null);
+
 /** Plays the hand in progress out: each seat to act goes all in (calls when it may not raise), and the `folders` fold. */
 function allInOrFold(s: Sim, folders: string[] = []): void {
   for (let moves = 0; moves < 30 && data(s).phase.kind === 'acting'; moves++) {
@@ -798,6 +801,8 @@ describe('Poker: hands and the game', () => {
     // Each busted player's line says when they went out; the winner's keeps the chips (no note at all).
     expect(notes(s)).toEqual([null, 'Out in hand 2', 'Out in hand 2', 'Out in hand 1']);
     expect(s.data.results?.entries[0]).not.toHaveProperty('note');
+    // Alice finished holding every chip, her best; the others never beat the starting 1000.
+    expect(peaks(s)).toEqual([null, null, null, null]);
   });
 
   it('keeps the hand each player went out in through a server restart', () => {
@@ -807,6 +812,7 @@ describe('Poker: hands and the game', () => {
     } = fourHanded((s) => {
       restart(s);
       expect(data(s).seats[s.playerId('Dave')]).toMatchObject({ chips: 0, outHand: 1 });
+      expect(data(s).seats[s.playerId('Alice')]).toMatchObject({ chips: 1115, peak: 1115 });
     }, bothIntoAces);
     tickResults(s);
     expect(standings(s)?.map((e) => [e.playerId, e.rank])).toEqual([
@@ -841,6 +847,25 @@ describe('Poker: hands and the game', () => {
       { playerId: dave, score: 0, rank: 4 },
     ]);
     expect(notes(s)).toEqual([null, null, 'Out in hand 2', 'Out in hand 1']);
+  });
+
+  it('keeps each player’s highest stack, and the results show it when it beat both the starting stack and the final one', () => {
+    const s = sim('poker');
+    const [alice, bob, carol] = startGame(s, ['Alice', 'Bob', 'Carol'], { hands: 0 });
+    expect([alice, bob, carol].map((id) => data(s).seats[id].peak)).toEqual([1000, 1000, 1000]);
+    // Hand 1: Alice and Bob fold to Carol's big blind; hand 2: Bob and Carol fold to Alice's.
+    act(s, alice, { t: 'fold' });
+    act(s, bob, { t: 'fold' });
+    expect([alice, bob, carol].map((id) => data(s).seats[id].peak)).toEqual([1000, 1000, 1005]);
+    tickResults(s);
+    act(s, bob, { t: 'fold' });
+    act(s, carol, { t: 'fold' });
+    expect([alice, bob, carol].map((id) => chips(s, id))).toEqual([1005, 995, 1000]);
+    expect([alice, bob, carol].map((id) => data(s).seats[id].peak)).toEqual([1005, 1000, 1005]);
+    endGame(s, alice);
+    expect(standings(s)?.map((e) => e.playerId)).toEqual([alice, carol, bob]);
+    // Carol was up at 1005; Alice finished on her best and Bob never beat the starting 1000.
+    expect(peaks(s)).toEqual([null, 1005, null]);
   });
 
   it('lets the host skip the results and end the game, voiding a hand in progress', () => {

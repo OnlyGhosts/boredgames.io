@@ -138,6 +138,9 @@ const lastHands = (s: Sim, id: string) => view(s).lastRound?.hands[id] ?? [];
 /** What the results say of each player in place of their chips (null: their chips). */
 const notes = (s: Sim): Array<string | null> | undefined => s.data.results?.entries.map((e) => e.note ?? null);
 
+/** Each player's best moment in the results (null: none worth showing). */
+const peaks = (s: Sim): Array<number | null> | undefined => s.data.results?.entries.map((e) => e.peak ?? null);
+
 /** The final table's pause runs out: the results. */
 const finish = (s: Sim): Effect[] => {
   const { phase } = data(s);
@@ -187,7 +190,11 @@ describe('Blackjack: the table', () => {
     });
     // No betting clock: the table waits for the bets.
     expect(data(s).phase).toEqual({ kind: 'betting' });
-    expect(data(s).seats).toEqual({ [alice]: { chips: 1000, bet: 0, hands: [], bustedOut: false, sittingOut: false }, [bob]: { chips: 1000, bet: 0, hands: [], bustedOut: false, sittingOut: false } });
+    // The starting stack is everyone's highest so far.
+    expect(data(s).seats).toEqual({
+      [alice]: { chips: 1000, bet: 0, hands: [], bustedOut: false, sittingOut: false, peak: 1000 },
+      [bob]: { chips: 1000, bet: 0, hands: [], bustedOut: false, sittingOut: false, peak: 1000 },
+    });
     expect([score(s, alice), score(s, bob)]).toEqual([1000, 1000]);
     expect(chatTexts(s.effects)).toContain('Round 1: place your bets!');
     expect(nextDeadline(s.data)).toBeNull();
@@ -1480,6 +1487,10 @@ describe('Blackjack: the end', () => {
     // Each knocked-out player's line says when they went out; the winner's keeps the chips (no note at all).
     expect(notes(s)).toEqual([null, 'Out in round 2', 'Out in round 2', 'Out in round 1']);
     expect(s.data.results?.entries[0]).not.toHaveProperty('note');
+    // Bob and Carol peaked at 110 before going out. Alice finished on her best (120) and Dave never
+    // rose above the starting 100: no peak for them, not even an empty one.
+    expect(peaks(s)).toEqual([null, 110, 110, null]);
+    for (const i of [0, 3]) expect(s.data.results?.entries[i]).not.toHaveProperty('peak');
   });
 
   it('keeps the round each player went out in through a server restart', () => {
@@ -1489,6 +1500,7 @@ describe('Blackjack: the end', () => {
     } = fourGoOut((s) => {
       restart(s);
       expect(data(s).seats[s.playerId('Dave')]).toMatchObject({ bustedOut: true, outRound: 1 });
+      expect(data(s).seats[s.playerId('Bob')]).toMatchObject({ chips: 110, peak: 110 });
     });
     finish(s);
     expect(standings(s)?.map((e) => [e.playerId, e.rank])).toEqual([
@@ -1498,6 +1510,7 @@ describe('Blackjack: the end', () => {
       [dave, 4],
     ]);
     expect(notes(s)).toEqual([null, 'Out in round 2', 'Out in round 2', 'Out in round 1']);
+    expect(peaks(s)).toEqual([null, 110, 110, null]);
   });
 
   it('plays a lone player (or one left alone by a leave) on until their chips are gone', () => {
@@ -1629,6 +1642,37 @@ describe('Blackjack: the host ends the game', () => {
       { playerId: dave, score: 0, rank: 4 },
     ]);
     expect(notes(s)).toEqual([null, null, 'Out in round 2', 'Out in round 1']);
+    // Alice finished on her best, Bob never beat the starting 100, Carol had 110 before going out.
+    expect(peaks(s)).toEqual([null, null, 110, null]);
+  });
+
+  it('keeps each player’s highest stack, and the results show it when it beat both the starting stack and the final one', () => {
+    const s = table();
+    const [alice, bob] = startGame(s, ['Alice', 'Bob'], { startingChips: 100 });
+    expect([data(s).seats[alice].peak, data(s).seats[bob].peak]).toEqual([100, 100]);
+    // Round 1: Alice wins 50 on a 19, Bob loses 10 on a 16.
+    rig(s, '10S', '10H', 'KS', '9S', '6H', '7S');
+    act(s, alice, { t: 'bet', amount: 50 });
+    act(s, bob, { t: 'bet', amount: 10 });
+    for (const id of [alice, bob]) act(s, id, { t: 'stand' });
+    expect([chips(s, alice), chips(s, bob)]).toEqual([150, 90]);
+    expect([data(s).seats[alice].peak, data(s).seats[bob].peak]).toEqual([150, 100]);
+    nextRound(s);
+    // Round 2: Alice loses 30 on a 16, Bob wins 10 back on a 19.
+    rig(s, '10S', '10H', 'KS', '6H', '9C', '7S');
+    act(s, alice, { t: 'bet', amount: 30 });
+    act(s, bob, { t: 'bet', amount: 10 });
+    for (const id of [alice, bob]) act(s, id, { t: 'stand' });
+    expect([chips(s, alice), chips(s, bob)]).toEqual([120, 100]);
+    expect([data(s).seats[alice].peak, data(s).seats[bob].peak]).toEqual([150, 100]);
+    nextRound(s);
+    end(s, alice);
+    expect(standings(s)).toEqual([
+      { playerId: alice, score: 120, rank: 1 },
+      { playerId: bob, score: 100, rank: 2 },
+    ]);
+    // Alice was up at 150; Bob never rose above the starting 100.
+    expect(peaks(s)).toEqual([150, null]);
   });
 
   it('ends at once when the host ends it during a final table that is already on show', () => {

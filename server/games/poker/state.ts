@@ -22,6 +22,8 @@ export interface SeatData {
   gone: boolean;
   /** The hand they went out of chips in (absent while they have chips, and in rooms stored before it existed): the results rank on it. */
   outHand?: number;
+  /** The most chips they held after any hand, from the starting stack (absent in rooms stored before it existed). */
+  peak?: number;
 }
 
 export type PhaseData =

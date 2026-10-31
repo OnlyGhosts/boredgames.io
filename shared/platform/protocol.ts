@@ -55,6 +55,8 @@ export interface ResultEntry {
   rank: number;
   /** How the player finished, in a few words set by the game ("Out in round 14"), shown in place of their score. */
   note?: string;
+  /** Their best moment: the highest score they held, when the game deems it worth showing ("Peaked at 3,200"). */
+  peak?: number;
 }
 
 /** How a game came to an end: on its own, by the host's End game, or with too few players left. */

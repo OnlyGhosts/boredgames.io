@@ -149,8 +149,8 @@ function listNames(names: string[]): string {
  */
 export function rankPlayers(players: PlatformPlayerData[], standingOf: (playerId: string) => GameStanding = () => ({})): ResultEntry[] {
   const rows = players.map((p) => {
-    const { wentOut: out, note } = standingOf(p.id);
-    return { p, out, note };
+    const { wentOut: out, note, peak } = standingOf(p.id);
+    return { p, out, note, peak };
   });
   type Row = (typeof rows)[number];
   /** Above 0 when `a` finished ahead of `b`, 0 when level. */
@@ -167,6 +167,7 @@ export function rankPlayers(players: PlatformPlayerData[], standingOf: (playerId
     score: r.p.score,
     rank: 1 + ranked.filter((o) => ahead(o, r) > 0).length,
     ...(r.note !== undefined && { note: r.note }),
+    ...(r.peak !== undefined && { peak: r.peak }),
   }));
 }
 
@@ -181,7 +182,7 @@ export function finishGame(cx: Cx, reason?: GameEndReason): void {
   const game = moduleFor(data.gameId);
   const { game: played } = data;
   const ranked = participants(data).filter((p) => played === null || !game.ranks || game.ranks(played, p.id));
-  const entries = rankPlayers(ranked, (id) => (played !== null && game.standing ? game.standing(played, id) : {}));
+  const entries = rankPlayers(ranked, (id) => (played !== null && game.standing ? game.standing(played, id, data.settings) : {}));
   data.results = { id: cx.ctx.newId(), gameId: data.gameId, reason: reason ?? (data.endRequested === true ? 'host' : 'finished'), entries };
   const top = entries[0]?.score;
   // A game cut short by players leaving crowns nobody: the standings are just where it stopped.

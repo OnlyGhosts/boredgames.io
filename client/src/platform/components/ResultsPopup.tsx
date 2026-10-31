@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { gameById, type ScoreUnit } from '@shared/platform/games';
 import type { GameResults, ResultEntry } from '@shared/platform/protocol';
-import { noOrphan, scoreShort, scoreWords } from '../lib/format';
+import { noOrphan, scoreShort, scoreWords, thousands } from '../lib/format';
 import { PHONE_QUERY, useMediaQuery } from '../lib/media';
 import { PLATFORM_SOUNDS } from '../lib/platformSounds';
 import { crowned, endReasonLine, rankedEntries, resultsHeadline, resultsPlace, topEntries } from '../lib/results';
@@ -24,7 +24,8 @@ interface Props {
 
 /**
  * The end of a game, however it ended, as a popup over the lobby: the winner, the places and the
- * scores (points, or a card table's chips; a player who went out says when instead) with a small celebration. Closing it (the button, the X, Escape, or a tap outside on a
+ * scores (points, or a card table's chips; a player who went out says when instead; a best moment
+ * under a name) with a small celebration. Closing it (the button, the X, Escape, or a tap outside on a
  * desktop) leaves the player in the lobby, ready for the next game. A modal dialog: the card takes
  * the focus and Tab stays inside until it goes.
  */
@@ -103,7 +104,7 @@ export function ResultsPopup({ results, meId, onClose }: Props) {
               {ordered.map((entry) => (
                 <li
                   key={entry.playerId}
-                  className={`results-standings__row${entry.playerId === meId ? ' results-standings__row--me' : ''}${entry.note === undefined ? '' : ' results-standings__row--noted'}`}
+                  className={`results-standings__row${entry.playerId === meId ? ' results-standings__row--me' : ''}${entry.note === undefined ? '' : ' results-standings__row--noted'}${entry.peak === undefined ? '' : ' results-standings__row--peaked'}`}
                   data-testid="results-entry"
                   data-rank={entry.rank}
                   data-name={entry.name}
@@ -120,6 +121,11 @@ export function ResultsPopup({ results, meId, onClose }: Props) {
                   ) : (
                     <span className="results-standings__note" data-testid="results-note">
                       {noOrphan(entry.note)}
+                    </span>
+                  )}
+                  {entry.peak !== undefined && (
+                    <span className="results-standings__peak" data-testid="results-peak">
+                      {noOrphan(`Peaked at ${thousands(entry.peak)}`)}
                     </span>
                   )}
                 </li>

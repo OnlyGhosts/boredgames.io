@@ -161,6 +161,8 @@ export interface GameStanding {
   wentOut?: number;
   /** How they finished, in a few words ("Out in round 14"): the results show it in place of their score. */
   note?: string;
+  /** Their best moment, the highest score they held: give it only when it says something the score does not ("Peaked at 3,200"). */
+  peak?: number;
 }
 
 export interface GameServerModule<S = unknown, D = unknown, V = unknown, CMsg = unknown, SMsg = unknown> {
@@ -202,7 +204,7 @@ export interface GameServerModule<S = unknown, D = unknown, V = unknown, CMsg = 
    * so a game that ends with one stack left ranks the rest by how long they lasted, not as a tie
    * on nothing. Nothing by default: the results rank on the scores alone.
    */
-  standing?(data: D, playerId: string): GameStanding;
+  standing?(data: D, playerId: string, settings: RoomSettings<S>): GameStanding;
   /**
    * The host's End game (the platform's `endGame`, host only, while playing). Emit the last score
    * effects and `gameOver` to end at once, or note it and end at the game's own next boundary

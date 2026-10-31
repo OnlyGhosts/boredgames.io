@@ -41,6 +41,8 @@ export interface SeatData {
   bustedOut: boolean;
   /** The round they went out in (absent while they have chips, and in rooms stored before it existed): the results rank on it. */
   outRound?: number;
+  /** The most chips they held after any settle, from the starting stack (absent in rooms stored before it existed). */
+  peak?: number;
   /** Chose to sit this round's hand out while the bets were open (absent in rooms stored before it existed). */
   sittingOut?: boolean;
 }
