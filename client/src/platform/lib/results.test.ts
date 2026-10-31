@@ -43,7 +43,8 @@ describe('the results copy', () => {
   it('crowns nobody when one player played alone, and says how they finished instead', () => {
     const solo = (score: number) => results({ gameId: 'blackjack', entries: [entry('jord', score, 1)] });
     expect(crowned(solo(1250))).toBe(false);
-    expect(resultsHeadline(solo(0))).toBe('Game over');
+    expect(resultsHeadline(solo(0), 'chips')).toBe('You ran out of chips');
+    expect(resultsHeadline(solo(1250), 'chips')).toBe('You finished with 1,250 chips');
     expect(resultsPlace(solo(0), 'jord', 'chips')).toBe('You ran out of chips');
     expect(resultsPlace(solo(1250), 'jord', 'chips')).toBe('You finished with 1,250 chips');
     expect(resultsPlace(solo(1), 'jord', 'chips')).toBe('You finished with 1 chip');

@@ -36,11 +36,15 @@ export function crowned(results: GameResults): boolean {
   return results.reason !== 'players' && results.entries.length > 1 && results.entries.some((e) => e.score > 0);
 }
 
-/** "Alice wins!", "Alice and Bob tie!", or a plain line when nobody is crowned. */
-export function resultsHeadline(results: GameResults): string {
+/**
+ * "Alice wins!", "Alice and Bob tie!", or a plain line when nobody is crowned. Alone, it says how
+ * they finished ("You finished with 1,250 chips"), the card's kicker already saying "Game over".
+ */
+export function resultsHeadline(results: GameResults, unit: ScoreUnit = 'points'): string {
   const top = topEntries(results);
   if (top.length === 0) return 'Thanks for playing!';
-  if (results.reason === 'players' || results.entries.length === 1) return 'Game over';
+  if (results.entries.length === 1) return soloLine(top[0].score, unit);
+  if (results.reason === 'players') return 'Game over';
   if (!crowned(results)) return 'Nobody wins this time';
   if (top.length === 1) return `${top[0].name} wins!`;
   return `${listNames(top.map((e) => e.name))} tie!`;
@@ -54,10 +58,7 @@ export function resultsHeadline(results: GameResults): string {
 export function resultsPlace(results: GameResults, meId: string | null, unit: ScoreUnit = 'points'): string | null {
   const mine = meId === null ? undefined : results.entries.find((e) => e.playerId === meId);
   if (!mine) return null;
-  if (results.entries.length === 1) {
-    if (mine.score > 0) return `You finished with ${scoreWords(mine.score, unit)}`;
-    return unit === 'chips' ? 'You ran out of chips' : 'No points this time';
-  }
+  if (results.entries.length === 1) return soloLine(mine.score, unit);
   if (!crowned(results)) {
     const level = results.entries.every((e) => e.score === mine.score);
     if (level && mine.score === 0) return unit === 'chips' ? 'Everyone ran out of chips' : 'Nobody scored';
@@ -66,6 +67,12 @@ export function resultsPlace(results: GameResults, meId: string | null, unit: Sc
   }
   if (mine.rank === 1) return topEntries(results).length > 1 ? 'You tied for the win!' : 'You won!';
   return `You came ${ordinal(mine.rank)}`;
+}
+
+/** How a lone player finished: there was nobody to beat. */
+function soloLine(score: number, unit: ScoreUnit): string {
+  if (score > 0) return `You finished with ${scoreWords(score, unit)}`;
+  return unit === 'chips' ? 'You ran out of chips' : 'No points this time';
 }
 
 /** Why the game ended early, in a few words; null when it ran its course. */
