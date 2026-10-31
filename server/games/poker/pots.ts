@@ -40,3 +40,24 @@ export function splitPot(amount: number, winners: readonly string[]): Array<{ pl
   const odd = amount - share * winners.length;
   return winners.map((playerId, i) => ({ playerId, amount: share + (i < odd ? 1 : 0) }));
 }
+
+/**
+ * Who took the most of a busted seat's chips at a showdown. Each pot it paid into (lowest first,
+ * as buildPots lays them out) holds its stake up to that pot's level, shared evenly among the
+ * pot's winners: the odd chip of a split decides nothing. Several when they took exactly as much,
+ * in the order the pots and their winners come.
+ */
+export function knockedOutBy(seat: string, pots: ReadonlyArray<{ eligible: readonly string[]; winners: readonly string[] }>, committed: Readonly<Record<string, number>>): string[] {
+  const took = new Map<string, number>();
+  let below = 0;
+  for (const pot of pots) {
+    if (!pot.eligible.includes(seat)) break;
+    // A pot's level is the smallest stake among those eligible for it.
+    const level = Math.min(...pot.eligible.map((id) => committed[id] ?? 0));
+    const share = (level - below) / pot.winners.length;
+    below = level;
+    for (const id of pot.winners) if (id !== seat) took.set(id, (took.get(id) ?? 0) + share);
+  }
+  const most = Math.max(0, ...took.values());
+  return most === 0 ? [] : [...took].filter(([, n]) => most - n < 1e-9).map(([id]) => id);
+}

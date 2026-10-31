@@ -20,6 +20,11 @@ export interface SeatData {
   lastAction: PokerLastAction | null;
   /** Left the room mid-hand: the seat is folded and its chips stay in the pot until the hand ends. */
   gone: boolean;
+  /**
+   * Who knocked them out: the name, as it read then, of the player who took the most of their last
+   * chips (several on an exact tie, as in an even split pot). Absent while they have chips.
+   */
+  outTo?: string[];
   /** The hand they went out of chips in (absent while they have chips, and in rooms stored before it existed): the results rank on it. */
   outHand?: number;
   /** The most chips they held after any hand, from the starting stack (absent in rooms stored before it existed). */

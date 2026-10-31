@@ -2,7 +2,7 @@
 import { compareHands, evaluateBest, handName, type HandRank } from '../../../shared/games/poker/hands.js';
 import { POKER_RESULTS_SECONDS, type PokerPotResult, type PokerRevealedHand } from '../../../shared/games/poker/protocol.js';
 import { settleRevealMs } from '../../../shared/games/poker/reveal.js';
-import { buildPots, splitPot } from './pots.js';
+import { buildPots, knockedOutBy, splitPot } from './pots.js';
 import { adjustChips, contenders, nameOf, ringAfter, snapshot, systemMessage, type Gx } from './state.js';
 
 /** The bets of the current street join the pots. */
@@ -21,8 +21,11 @@ function payoutOrder(gx: Gx, ids: readonly string[]): string[] {
   return ringAfter(data, dealerIndex).filter((id) => ids.includes(id));
 }
 
-/** Pays the pots out, builds the results and opens the results phase; `committed` is spent. */
-function settle(gx: Gx, pots: PokerPotResult[], revealed: Record<string, PokerRevealedHand>, uncontested: boolean): void {
+/**
+ * Pays the pots out, builds the results and opens the results phase; `committed` is spent. A seat
+ * left with no chips is out, with the hand and who took its chips (`takers`, by seat) noted.
+ */
+function settle(gx: Gx, pots: PokerPotResult[], revealed: Record<string, PokerRevealedHand>, uncontested: boolean, takers: Record<string, string[]> = {}): void {
   const { data } = gx;
   const net: Record<string, number> = {};
   for (const id of data.order) net[id] = 0 - data.seats[id].committed || 0;
@@ -42,7 +45,10 @@ function settle(gx: Gx, pots: PokerPotResult[], revealed: Record<string, PokerRe
   data.idleHands = data.acted ? 0 : data.idleHands + 1;
   const busted = data.order.filter((id) => data.seats[id].chips === 0 && !data.seats[id].gone);
   for (const id of busted) {
-    data.seats[id].outHand = data.hand;
+    const seat = data.seats[id];
+    seat.outHand = data.hand;
+    // By the names they have now: the line reads right after they leave.
+    if (takers[id]?.length) seat.outTo = takers[id].map((w) => nameOf(gx.ctx, w));
     systemMessage(gx, `${nameOf(gx.ctx, id)} is out of chips.`);
   }
   // The pause starts once the clients have shown the end of the hand (a run-out deals the rest of the board first).
@@ -95,5 +101,8 @@ export function showdown(gx: Gx): void {
     if (pot.winners.length === 1) systemMessage(gx, `${nameOf(ctx, pot.winners[0].playerId)} wins ${label} (${pot.amount}) with ${pot.handName?.toLowerCase()}.`);
     else systemMessage(gx, `${pot.winners.map((w) => nameOf(ctx, w.playerId)).join(' and ')} split ${label} (${pot.amount}) with ${pot.handName?.toLowerCase()}.`);
   });
-  settle(gx, results, revealed, false);
+  const committed = Object.fromEntries(data.order.map((id) => [id, data.seats[id].committed]));
+  const paid = pots.map((pot, i) => ({ eligible: pot.eligible, winners: results[i].winners.map((w) => w.playerId) }));
+  const takers = Object.fromEntries(Object.keys(hands).map((id) => [id, knockedOutBy(id, paid, committed)]));
+  settle(gx, results, revealed, false, takers);
 }

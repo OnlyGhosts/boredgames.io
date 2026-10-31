@@ -11,7 +11,7 @@ import { viewFor } from '../../platform/engine/view.js';
 import { AVATAR, START, chatTexts, endGame, noticeTexts, errorsOf, restart, sim, standings, startGame, type Sim } from '../../platform/engine/testHarness.js';
 import { RESUME_SETTLE_MS } from '../waiting.js';
 import { pokerModule, type PokerData } from './module.js';
-import { buildPots, splitPot } from './pots.js';
+import { buildPots, knockedOutBy, splitPot } from './pots.js';
 
 // The fixture: one hand, blinds 5/10 from 1000 chips; the clocks are the fixed ones.
 const ACT_MS = POKER_ACT_SECONDS * 1000;
@@ -673,6 +673,46 @@ describe('Poker: the showdown', () => {
     expect(chips(s, carol)).toBe(800);
     expect(chatTexts(s.effects).at(-1)).toMatch(/^Bob wins side pot 1 \(300\) with /);
   });
+
+  it('names both winners of a split pot that knocks a player out', () => {
+    const s = sim('poker');
+    const [alice, bob, carol] = startGame(s, ['Alice', 'Bob', 'Carol'], { hands: 0 });
+    // Alice, down to 100, goes all in with ace high; Bob and Carol both make the same straight and split every pot.
+    rigChips(s, { [alice]: 100 });
+    rigHand(s, { [alice]: ['7C', '8D'], [bob]: ['10S', '2D'], [carol]: ['10H', '4C'] }, ['AS', 'KD', 'QH', 'JC', '3S']);
+    allInOrFold(s);
+    expect(view(s).results?.pots[0]).toMatchObject({
+      amount: 300,
+      winners: [
+        { playerId: bob, amount: 150 },
+        { playerId: carol, amount: 150 },
+      ],
+    });
+    expect(data(s).seats[alice]).toMatchObject({ chips: 0, outHand: 1, outTo: ['Bob', 'Carol'] });
+    endGame(s, alice);
+    expect(notes(s)).toEqual([null, null, 'Out in hand 1, to Bob and Carol']);
+  });
+
+  it('names who took the most of a busted player’s chips across the side pots, by the name they had then, even after they leave', () => {
+    const s = sim('poker');
+    const [alice, bob, carol, dave] = startGame(s, ['Alice', 'Bob', 'Carol', 'Dave'], { hands: 0 });
+    // Carol (600 in all) runs jack high into three all-ins: Alice's aces take 100 of her chips in the
+    // main pot, Bob's kings 200 in side pot 1, Dave's queens 300 in side pot 2.
+    rigChips(s, { [alice]: 100, [bob]: 295, [carol]: 590, [dave]: 1000 });
+    rigHand(s, { [alice]: ['AS', 'AD'], [bob]: ['KS', 'KD'], [carol]: ['3S', '5D'], [dave]: ['QS', 'QD'] }, BOARD_DRY);
+    allInOrFold(s);
+    expect(view(s).results?.pots).toEqual([
+      { amount: 400, winners: [{ playerId: alice, amount: 400 }], handName: 'Pair of aces' },
+      { amount: 600, winners: [{ playerId: bob, amount: 600 }], handName: 'Pair of kings' },
+      { amount: 600, winners: [{ playerId: dave, amount: 600 }], handName: 'Pair of queens' },
+    ]);
+    expect(data(s).seats[carol]).toMatchObject({ chips: 0, outHand: 1, outTo: ['Dave'] });
+    // Dave leaves with his chips; the line still names him.
+    s.apply({ type: 'leave', playerId: dave });
+    endGame(s, alice);
+    expect(standings(s)?.map((e) => e.playerId)).toEqual([bob, alice, carol]);
+    expect(notes(s)).toEqual([null, null, 'Out in hand 1, to Dave']);
+  });
 });
 
 describe('Poker: pots', () => {
@@ -693,6 +733,32 @@ describe('Poker: pots', () => {
       { id: 'c', committed: 150, contender: false },
     ])).toEqual([{ amount: 350, eligible: ['a', 'b'] }]);
     expect(buildPots([{ id: 'a', committed: 0, contender: true }])).toEqual([]);
+  });
+
+  it('names who took the most of a busted seat’s chips: each pot it paid into shares its part evenly among that pot’s winners', () => {
+    // One pot, one winner.
+    expect(knockedOutBy('b', [{ eligible: ['a', 'b'], winners: ['a'] }], { a: 500, b: 500 })).toEqual(['a']);
+    // A split pot: an even share each (the odd chip decides nothing), so both are named.
+    expect(knockedOutBy('b', [{ eligible: ['a', 'b', 'c'], winners: ['a', 'c'] }], { a: 501, b: 501, c: 501 })).toEqual(['a', 'c']);
+    // B paid 100 into the main pot (x won it) and 300 into the side pot (y won it): y took the most.
+    const sides = [
+      { eligible: ['x', 'b', 'y'], winners: ['x'] },
+      { eligible: ['b', 'y'], winners: ['y'] },
+    ];
+    expect(knockedOutBy('b', sides, { x: 100, b: 400, y: 400 })).toEqual(['y']);
+    // 200 each way: exactly as much, so both.
+    expect(knockedOutBy('b', sides, { x: 200, b: 400, y: 400 })).toEqual(['x', 'y']);
+    // A pot b never reached (above its stake) takes none of its chips.
+    expect(
+      knockedOutBy(
+        'b',
+        [
+          { eligible: ['x', 'b', 'y'], winners: ['x'] },
+          { eligible: ['y', 'z'], winners: ['z'] },
+        ],
+        { x: 100, b: 100, y: 900, z: 900 },
+      ),
+    ).toEqual(['x']);
   });
 });
 
@@ -799,7 +865,7 @@ describe('Poker: hands and the game', () => {
       { playerId: dave, score: 0, rank: 4 },
     ]);
     // Each busted player's line says when they went out; the winner's keeps the chips (no note at all).
-    expect(notes(s)).toEqual([null, 'Out in hand 2', 'Out in hand 2', 'Out in hand 1']);
+    expect(notes(s)).toEqual([null, 'Out in hand 2, to Alice', 'Out in hand 2, to Alice', 'Out in hand 1, to Alice']);
     expect(s.data.results?.entries[0]).not.toHaveProperty('note');
     // Alice finished holding every chip, her best; the others never beat the starting 1000.
     expect(peaks(s)).toEqual([null, null, null, null]);
@@ -821,7 +887,8 @@ describe('Poker: hands and the game', () => {
       [carol, 2],
       [dave, 4],
     ]);
-    expect(notes(s)).toEqual([null, 'Out in hand 2', 'Out in hand 2', 'Out in hand 1']);
+    // Who knocked each of them out came through the restart too.
+    expect(notes(s)).toEqual([null, 'Out in hand 2, to Alice', 'Out in hand 2, to Alice', 'Out in hand 1, to Alice']);
   });
 
   it('ranks the stacks still in play by chips when the host ends the game, and the busted players below them, the last out first', () => {
@@ -846,7 +913,7 @@ describe('Poker: hands and the game', () => {
       { playerId: carol, score: 0, rank: 3 },
       { playerId: dave, score: 0, rank: 4 },
     ]);
-    expect(notes(s)).toEqual([null, null, 'Out in hand 2', 'Out in hand 1']);
+    expect(notes(s)).toEqual([null, null, 'Out in hand 2, to Bob', 'Out in hand 1, to Alice']);
   });
 
   it('keeps each player’s highest stack, and the results show it when it beat both the starting stack and the final one', () => {

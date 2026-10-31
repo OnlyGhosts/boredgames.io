@@ -120,11 +120,20 @@ function nextDeadline(data: PokerData): number | null {
   }
 }
 
-/** Out of chips: the hand they went out in ranks them and says how long they lasted (one out before the hand was kept ranks first out). */
+/** "Morg", "Morg and Ryan", "Morg, Ryan and Dafid". */
+function listNames(names: readonly string[]): string {
+  return names.length <= 1 ? (names[0] ?? '') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+}
+
+/**
+ * Out of chips: the hand they went out in ranks them and says how long they lasted, and who took
+ * their last chips (one out before the hand was kept ranks first out).
+ */
 function standing(data: PokerData, playerId: string): GameStanding {
   const seat = data.seats[playerId];
   if (!seat || (seat.outHand === undefined && seat.chips > 0)) return {};
-  return seat.outHand === undefined ? { wentOut: 0 } : { wentOut: seat.outHand, note: `Out in hand ${seat.outHand}` };
+  if (seat.outHand === undefined) return { wentOut: 0 };
+  return { wentOut: seat.outHand, note: `Out in hand ${seat.outHand}${seat.outTo?.length ? `, to ${listNames(seat.outTo)}` : ''}` };
 }
 
 /**

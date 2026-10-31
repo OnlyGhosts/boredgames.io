@@ -518,9 +518,10 @@ test('hand two: two folds hand the pot over with no cards shown, and the last ha
     await expect(end).toBeVisible({ timeout: 20_000 });
     await expect(end.getByTestId('results-entry')).toHaveCount(3);
   }
-  const entries = await host.page.getByTestId('results-entry').evaluateAll((els) => els.map((el) => ({ rank: Number((el as HTMLElement).dataset.rank), name: el.textContent ?? '' })));
+  // By the row's name: its text can name another player too ("Out in hand 2, to Pia").
+  const entries = await host.page.getByTestId('results-entry').evaluateAll((els) => els.map((el) => ({ rank: Number(el.getAttribute('data-rank')), name: el.getAttribute('data-name') ?? '' })));
   for (const entry of entries) {
-    const me = players.find((p) => entry.name.includes(p.name));
+    const me = players.find((p) => entry.name === p.name);
     if (!me) throw new Error(`results entry without a player: ${entry.name}`);
     expect(entry.rank).toBe(1 + players.filter((p) => chips[p.name] > chips[me.name]).length);
   }
