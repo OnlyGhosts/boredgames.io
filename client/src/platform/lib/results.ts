@@ -5,6 +5,8 @@
  * joins the lobby afterwards, and never again once closed.
  */
 import type { GameResults, ResultEntry, RoomState } from '@shared/platform/protocol';
+import type { ScoreUnit } from '@shared/platform/games';
+import { scoreWords } from './format';
 import { listNames, ordinal } from './party';
 
 export function resultsToShow(next: RoomState, prev: RoomState | null, meId: string | null, showing: GameResults | null, seenId: string | null, shownId: string | null = null): GameResults | null {
@@ -26,16 +28,20 @@ export function topEntries(results: GameResults): ResultEntry[] {
   return rankedEntries(results).filter((e) => e.rank === 1);
 }
 
-/** Whether the results crown a winner: not when too few players were left to finish the game. */
+/**
+ * Whether the results crown a winner: not when too few players were left to finish the game, not
+ * when one player played alone (nobody to beat), and not when everyone finished on nothing.
+ */
 export function crowned(results: GameResults): boolean {
-  return results.reason !== 'players' && results.entries.length > 0;
+  return results.reason !== 'players' && results.entries.length > 1 && results.entries.some((e) => e.score > 0);
 }
 
 /** "Alice wins!", "Alice and Bob tie!", or a plain line when nobody is crowned. */
 export function resultsHeadline(results: GameResults): string {
   const top = topEntries(results);
-  if (results.reason === 'players') return 'Game over';
   if (top.length === 0) return 'Thanks for playing!';
+  if (results.reason === 'players' || results.entries.length === 1) return 'Game over';
+  if (!crowned(results)) return 'Nobody wins this time';
   if (top.length === 1) return `${top[0].name} wins!`;
   return `${listNames(top.map((e) => e.name))} tie!`;
 }
@@ -43,13 +49,18 @@ export function resultsHeadline(results: GameResults): string {
 /**
  * What the results say to this player: "You won!", "You came 2nd", or null for someone who
  * watched. A game cut short crowns nobody: it says where they stood, or that nobody was ahead.
+ * Alone, there is nobody to beat: it says how they finished ("You finished with 1,250 chips").
  */
-export function resultsPlace(results: GameResults, meId: string | null): string | null {
+export function resultsPlace(results: GameResults, meId: string | null, unit: ScoreUnit = 'points'): string | null {
   const mine = meId === null ? undefined : results.entries.find((e) => e.playerId === meId);
   if (!mine) return null;
+  if (results.entries.length === 1) {
+    if (mine.score > 0) return `You finished with ${scoreWords(mine.score, unit)}`;
+    return unit === 'chips' ? 'You ran out of chips' : 'No points this time';
+  }
   if (!crowned(results)) {
     const level = results.entries.every((e) => e.score === mine.score);
-    if (level && mine.score === 0) return 'Nobody scored';
+    if (level && mine.score === 0) return unit === 'chips' ? 'Everyone ran out of chips' : 'Nobody scored';
     if (level && results.entries.length > 1) return 'All square';
     return mine.rank === 1 ? 'You were in the lead' : `You were ${ordinal(mine.rank)}`;
   }

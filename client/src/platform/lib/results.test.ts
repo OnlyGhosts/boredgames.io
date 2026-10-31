@@ -33,13 +33,31 @@ describe('the results copy', () => {
     expect(resultsPlace(results(), 'host')).toBe('You came 3rd');
     expect(resultsPlace(results(), 'dan')).toBeNull();
     expect(resultsPlace(results(), null)).toBeNull();
-    expect(resultsPlace(results({ entries: [entry('bob', 1, 1)] }), 'bob')).toBe('You won!');
     expect(resultsPlace(results({ reason: 'players' }), 'bob')).toBe('You were in the lead');
     expect(resultsPlace(results({ reason: 'players' }), 'host')).toBe('You were 3rd');
     // Cut short with nobody ahead: no lead to claim.
     expect(resultsPlace(results({ reason: 'players', entries: [entry('bob', 0, 1), entry('carol', 0, 1)] }), 'bob')).toBe('Nobody scored');
     expect(resultsPlace(results({ reason: 'players', entries: [entry('bob', 4, 1), entry('carol', 4, 1)] }), 'carol')).toBe('All square');
-    expect(resultsPlace(results({ reason: 'players', entries: [entry('bob', 4, 1)] }), 'bob')).toBe('You were in the lead');
+  });
+
+  it('crowns nobody when one player played alone, and says how they finished instead', () => {
+    const solo = (score: number) => results({ gameId: 'blackjack', entries: [entry('jord', score, 1)] });
+    expect(crowned(solo(1250))).toBe(false);
+    expect(resultsHeadline(solo(0))).toBe('Game over');
+    expect(resultsPlace(solo(0), 'jord', 'chips')).toBe('You ran out of chips');
+    expect(resultsPlace(solo(1250), 'jord', 'chips')).toBe('You finished with 1,250 chips');
+    expect(resultsPlace(solo(1), 'jord', 'chips')).toBe('You finished with 1 chip');
+    expect(resultsPlace(results({ entries: [entry('bob', 4, 1)] }), 'bob')).toBe('You finished with 4 points');
+    expect(resultsPlace(results({ entries: [entry('bob', 0, 1)] }), 'bob')).toBe('No points this time');
+    expect(resultsPlace(results({ reason: 'players', entries: [entry('bob', 4, 1)] }), 'bob')).toBe('You finished with 4 points');
+  });
+
+  it('crowns nobody when everyone finished on nothing', () => {
+    const broke = results({ gameId: 'blackjack', entries: [entry('bob', 0, 1), entry('carol', 0, 1)] });
+    expect(crowned(broke)).toBe(false);
+    expect(resultsHeadline(broke)).toBe('Nobody wins this time');
+    expect(resultsPlace(broke, 'bob', 'chips')).toBe('Everyone ran out of chips');
+    expect(resultsPlace(results({ entries: [entry('bob', 0, 1), entry('carol', 0, 1)] }), 'bob')).toBe('Nobody scored');
   });
 
   it('says why a game ended early, in a few words', () => {
