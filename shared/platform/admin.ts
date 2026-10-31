@@ -1,8 +1,31 @@
 /**
  * What the admin dashboard and the game server share: the analytics rows the server stores, the
- * summary the dashboard draws, the site notice and the live-room list. Types only, so the admin UI
- * can import them without pulling in any server code.
+ * summary the dashboard draws, the site notice, the live-room list and the UK days both count in.
+ * Types and pure date helpers only, so the admin UI can import them without pulling in any server code.
  */
+
+const UK_DAY = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit' });
+
+/** The UK calendar date of `ts` as YYYY-MM-DD (BST or GMT, whichever London is on). */
+export function ukDay(ts: number): string {
+  const parts = UK_DAY.formatToParts(ts);
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value ?? '';
+  return `${part('year')}-${part('month')}-${part('day')}`;
+}
+
+/** A real calendar date written YYYY-MM-DD, and nothing else. */
+export function isDay(text: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return false;
+  const [y, m, d] = text.split('-').map(Number) as [number, number, number];
+  const date = new Date(Date.UTC(y, m - 1, d));
+  return date.getUTCFullYear() === y && date.getUTCMonth() === m - 1 && date.getUTCDate() === d;
+}
+
+/** The YYYY-MM-DD day `by` days after (or, negative, before) `day`: calendar days, so a clock change never skips one. */
+export function shiftDay(day: string, by: number): string {
+  const [y, m, d] = day.split('-').map(Number) as [number, number, number];
+  return new Date(Date.UTC(y, m - 1, d + by)).toISOString().slice(0, 10);
+}
 
 export type Device = 'phone' | 'tablet' | 'desktop';
 
@@ -61,8 +84,12 @@ export interface Summary {
   totals: DayTotals;
   /** Busiest first. Reddit rows carry the subreddit, or null when the referrer gave none. */
   sources: Array<{ source: string; subreddit: string | null; visitors: number }>;
-  /** Per game: rooms created, players joined, games started and finished, players per game started. */
-  games: Array<{ gameId: string; rooms: number; players: number; started: number; finished: number; avgPlayers: number }>;
+  /**
+   * Per game: games started and finished, and the average players a game started with. Rooms and
+   * joins are not split by game: a room opens on the default game and its host picks another in
+   * the lobby, so only a game's start says which game a party played.
+   */
+  games: Array<{ gameId: string; started: number; finished: number; avgPlayers: number }>;
   /** `?game=` landings, by game. */
   deepLinks: Array<{ game: string; visitors: number }>;
   /** Players joined per room created. */

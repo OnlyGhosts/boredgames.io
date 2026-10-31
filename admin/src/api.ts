@@ -17,7 +17,8 @@ async function json<T>(path: string): Promise<T> {
   return (await res.json()) as T;
 }
 
-export const fetchSummary = (range: Range) => json<Summary>(`/api/admin/summary?range=${range}`);
+/** A range ending today, or one UK day (YYYY-MM-DD). */
+export const fetchSummary = (of: Range | { day: string }) => json<Summary>(`/api/admin/summary?${typeof of === 'string' ? `range=${of}` : `day=${of.day}`}`);
 export const fetchRooms = () => json<LiveRoomsResponse>('/api/admin/rooms');
 export const fetchNotice = () => json<{ notice: Notice | null }>('/api/admin/notice').then((r) => r.notice);
 

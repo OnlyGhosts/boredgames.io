@@ -6,6 +6,8 @@ interface Props {
   days: Array<{ day: string; value: number }>;
   /** What the value counts, for the tooltip and the screen-reader summary ("visitors"). */
   unit: string;
+  /** Opens a day: each bar's column is a button ("Show Thu 29 Oct"). */
+  onPick(day: string): void;
 }
 
 const HEIGHT = 180;
@@ -28,8 +30,11 @@ function labelled(n: number): Set<number> {
   return out;
 }
 
-/** One series of bars by day, drawn at the container's own width so text never scales. */
-export function BarChart({ days, unit }: Props) {
+/**
+ * One series of bars by day, drawn at the container's own width so text never scales. Each day's
+ * column is a real button laid over the drawing, so a bar opens its day by mouse, touch or keyboard.
+ */
+export function BarChart({ days, unit, onPick }: Props) {
   const wrap = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(600);
   const [hover, setHover] = useState<number | null>(null);
@@ -68,18 +73,13 @@ export function BarChart({ days, unit }: Props) {
         {days.map((d, i) => {
           const g = geometry[i]!;
           return (
-            <g key={d.day} data-testid="bar" data-day={d.day} data-value={d.value}>
-              {g.h > 0 && (
-                <path d={barPath(g.x, g.y, barW, base)} className={`chart__bar${shown === i ? ' is-hover' : ''}`}>
-                  <title>{`${dayText(d.day)}: ${num(d.value)} ${unit}`}</title>
-                </path>
-              )}
+            <g key={d.day}>
+              {g.h > 0 && <path d={barPath(g.x, g.y, barW, base)} className={`chart__bar${shown === i ? ' is-hover' : ''}`} />}
               {labels.has(i) && (
                 <text x={i * slot + slot / 2} y={HEIGHT - 8} textAnchor="middle" className="chart__label">
                   {days.length <= 7 ? dayText(d.day).split(' ')[0] : shortDayText(d.day)}
                 </text>
               )}
-              <rect x={i * slot} y={0} width={slot} height={HEIGHT} fill="transparent" onMouseEnter={() => setHover(i)} />
             </g>
           );
         })}
@@ -89,6 +89,22 @@ export function BarChart({ days, unit }: Props) {
           </text>
         )}
       </svg>
+      {days.map((d, i) => (
+        <button
+          key={d.day}
+          type="button"
+          className="chart__hit"
+          style={{ left: i * slot, width: slot, height: HEIGHT }}
+          aria-label={`Show ${dayText(d.day)}`}
+          onClick={() => onPick(d.day)}
+          onMouseEnter={() => setHover(i)}
+          onFocus={() => setHover(i)}
+          onBlur={() => setHover(null)}
+          data-testid="bar"
+          data-day={d.day}
+          data-value={d.value}
+        />
+      ))}
       {shown !== null && days[shown] && (
         <div className="chart__tip" style={{ left: Math.min(width - 70, Math.max(70, shown * slot + slot / 2)), top: geometry[shown]!.y - 8 }} role="status">
           <strong>{num(days[shown].value)}</strong> {unit}

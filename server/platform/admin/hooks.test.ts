@@ -20,10 +20,8 @@ describe('roomChangeRecorder', () => {
 
     const s = await store.summary('today', NOW);
     expect(s.totals).toMatchObject({ rooms: 2, players: 4 });
-    expect(s.games.map((g) => [g.gameId, g.rooms, g.players])).toEqual([
-      ['scribble', 1, 3],
-      ['poker', 1, 1],
-    ]);
+    // Nobody started a game: rooms and joins count in the totals only, never under a game.
+    expect(s.games).toEqual([]);
     expect(s.peakPlayers).toBe(4);
     expect(s.busiestHour).toBe(19);
     await driver.shutdown();

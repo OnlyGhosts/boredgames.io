@@ -4,7 +4,7 @@
  * the raw rows never changes a total. Two backends share the counting and the summary below: an
  * in-memory one (development, tests, a server without its volume) and SQLite (sqliteStore.ts).
  */
-import type { DayTotals, EventRow, Notice, Range, Summary, Visit } from '../../../shared/platform/admin.js';
+import { shiftDay, type DayTotals, type EventRow, type Notice, type Range, type Summary, type Visit } from '../../../shared/platform/admin.js';
 import { ukDay, ukHour } from './analytics.js';
 
 export type { DayTotals, EventRow, Notice, Range, Summary, Visit } from '../../../shared/platform/admin.js';
@@ -14,7 +14,7 @@ export interface AnalyticsStore {
   recordEvent(e: EventRow): void;
   /** Players connected across every room at `ts`: the day's peak keeps the highest. */
   notePlayersOnline(n: number, ts: number): void;
-  summary(range: Range, now: number): Promise<Summary>;
+  summary(span: Span, now: number): Promise<Summary>;
   getNotice(): Promise<Notice | null>;
   setNotice(n: Notice | null): Promise<void>;
   /** Drops raw rows older than RAW_KEEP_MS; the daily counters stay. */
@@ -25,14 +25,17 @@ export interface AnalyticsStore {
 export const DAY_MS = 24 * 60 * 60 * 1000;
 export const RAW_KEEP_MS = 90 * DAY_MS;
 
+/** What a summary covers: a range of UK days ending today, or one UK day (YYYY-MM-DD, already checked). */
+export type Span = Range | { day: string };
+
 const RANGE_DAYS: Record<Range, number> = { today: 1, '7d': 7, '30d': 30 };
 
-/** The UK days a range covers, oldest first, ending with today. */
-export function rangeDays(range: Range, now: number): string[] {
-  const [y, m, d] = ukDay(now).split('-').map(Number) as [number, number, number];
-  const days: string[] = [];
-  for (let back = RANGE_DAYS[range] - 1; back >= 0; back--) days.push(new Date(Date.UTC(y, m - 1, d - back)).toISOString().slice(0, 10));
-  return days;
+/** The UK days a span covers, oldest first: a range ends with today; a day is itself alone. */
+export function spanDays(span: Span, now: number): string[] {
+  if (typeof span !== 'string') return [span.day];
+  const today = ukDay(now);
+  const n = RANGE_DAYS[span];
+  return Array.from({ length: n }, (_, i) => shiftDay(today, i - n + 1));
 }
 
 /** A daily counter: `metric` (views, source, game_started...) for `key` (a game, a source...) on a UK day. */
@@ -108,25 +111,18 @@ export function buildSummary(days: string[], counts: DailyCount[], peaks: Map<st
   });
   sources.sort((a, b) => b.visitors - a.visitors || a.source.localeCompare(b.source) || Number(a.subreddit === null) - Number(b.subreddit === null) || (a.subreddit ?? '').localeCompare(b.subreddit ?? ''));
 
-  const rooms = byKey('room_created');
-  const players = byKey('player_joined');
+  // Only a game's start and end name the game a party played: rooms and joins are filed under the
+  // game a room opened on, the default one, before the host picks in the lobby (see Summary.games).
   const started = byKey('game_started');
   const finished = byKey('game_finished');
   const startPlayers = byKey('start_players');
-  const gameIds = new Set([...rooms.keys(), ...players.keys(), ...started.keys(), ...byKey('game_ended').keys()]);
+  const gameIds = new Set([...started.keys(), ...byKey('game_ended').keys()]);
   gameIds.delete('');
   const games = [...gameIds].map((gameId) => {
     const s = started.get(gameId) ?? 0;
-    return {
-      gameId,
-      rooms: rooms.get(gameId) ?? 0,
-      players: players.get(gameId) ?? 0,
-      started: s,
-      finished: finished.get(gameId) ?? 0,
-      avgPlayers: s ? round1((startPlayers.get(gameId) ?? 0) / s) : 0,
-    };
+    return { gameId, started: s, finished: finished.get(gameId) ?? 0, avgPlayers: s ? round1((startPlayers.get(gameId) ?? 0) / s) : 0 };
   });
-  games.sort((a, b) => b.started - a.started || b.rooms - a.rooms || b.players - a.players || a.gameId.localeCompare(b.gameId));
+  games.sort((a, b) => b.started - a.started || b.finished - a.finished || a.gameId.localeCompare(b.gameId));
 
   const deepLinks = [...byKey('deeplink')].map(([game, visitors]) => ({ game, visitors }));
   deepLinks.sort((a, b) => b.visitors - a.visitors || a.game.localeCompare(b.game));
@@ -189,12 +185,12 @@ export class MemoryAnalyticsStore implements AnalyticsStore {
     this.peaks.set(day, Math.max(this.peaks.get(day) ?? 0, n));
   }
 
-  async summary(range: Range, now: number): Promise<Summary> {
+  async summary(span: Span, now: number): Promise<Summary> {
     const counts = [...this.counts].map(([k, value]) => {
       const [day = '', metric = '', key = ''] = k.split('\t');
       return { day, metric, key, value };
     });
-    return buildSummary(rangeDays(range, now), counts, this.peaks);
+    return buildSummary(spanDays(span, now), counts, this.peaks);
   }
 
   async getNotice(): Promise<Notice | null> {

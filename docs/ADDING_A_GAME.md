@@ -40,6 +40,7 @@ they need about each game from the registries and that record.
 | Shared protocol | `shared/games/<id>/protocol.ts` | Settings schema + defaults + limits, client message schema, server message type, the per-recipient view type |
 | Server module | `server/games/<id>/module.ts` (+ tests), registered in [`server/games/index.ts`](../server/games/index.ts) | `start` / `handle` / `nextDeadline` / `view` |
 | Client module | `client/src/games/<id>/` (`module.tsx`, `Screen.tsx`, `SettingsFields.tsx`, `rules.ts`, `art.tsx`, `<id>.css`), registered in [`client/src/games/index.ts`](../client/src/games/index.ts) | The screen, the settings rows, the lobby's How to play rules, the picture on the lobby tile, optional hooks |
+| Admin picture | [`admin/src/gameArt.ts`](../admin/src/gameArt.ts) | The game's `art.tsx` picture once more, for its rooms on the admin dashboard's Live rooms page (the typecheck asks for it) |
 | E2E | a `test(...)` in `e2e/` | One whole game through the real server |
 
 The two existing games are the reference: [`template`](../server/games/template/module.ts) (Click

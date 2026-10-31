@@ -8,7 +8,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import express, { Router, type NextFunction, type Request, type Response } from 'express';
 import { z } from 'zod';
-import { NOTICE_MAX_LENGTH, RANGES, type LiveRoom, type LiveRoomsResponse, type Range } from '../../../shared/platform/admin.js';
+import { NOTICE_MAX_LENGTH, RANGES, isDay, ukDay, type LiveRoom, type LiveRoomsResponse, type Range } from '../../../shared/platform/admin.js';
 import type { GameDriver } from '../drivers/types.js';
 import type { PlatformRoomData } from '../engine/state.js';
 import type { NoticeCache } from './notice.js';
@@ -165,13 +165,28 @@ export function adminRouter(o: AdminRouterOptions): Router {
     res.status(401).json({ error: 'sign in first' });
   });
 
+  // ?range=today|7d|30d (today when neither is given), or ?day=YYYY-MM-DD for one UK day up to today.
   router.get('/api/admin/summary', async (req: Request, res: Response) => {
+    const now = o.now();
+    const { day } = req.query;
+    if (day !== undefined) {
+      if (req.query.range !== undefined) {
+        res.status(400).json({ error: 'ask for a range or a day, not both' });
+      } else if (typeof day !== 'string' || !isDay(day)) {
+        res.status(400).json({ error: 'day is a date written YYYY-MM-DD' });
+      } else if (day > ukDay(now)) {
+        res.status(400).json({ error: 'day is today or before' });
+      } else {
+        res.json(await o.store.summary({ day }, now));
+      }
+      return;
+    }
     const range = (typeof req.query.range === 'string' ? req.query.range : 'today') as Range;
     if (!RANGES.includes(range)) {
       res.status(400).json({ error: 'range is today, 7d or 30d' });
       return;
     }
-    res.json(await o.store.summary(range, o.now()));
+    res.json(await o.store.summary(range, now));
   });
 
   router.get('/api/admin/rooms', async (_req: Request, res: Response) => {

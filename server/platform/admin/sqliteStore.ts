@@ -5,7 +5,7 @@
  */
 import { DatabaseSync, type StatementSync } from 'node:sqlite';
 import { ukDay } from './analytics.js';
-import { RAW_KEEP_MS, buildSummary, eventIncrements, rangeDays, visitIncrements, type AnalyticsStore, type DailyCount, type EventRow, type Increment, type Notice, type Range, type Summary, type Visit } from './store.js';
+import { RAW_KEEP_MS, buildSummary, eventIncrements, spanDays, visitIncrements, type AnalyticsStore, type DailyCount, type EventRow, type Increment, type Notice, type Span, type Summary, type Visit } from './store.js';
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS visits (
@@ -99,8 +99,8 @@ export class SqliteAnalyticsStore implements AnalyticsStore {
     this.sql.peak.run(ukDay(ts), n);
   }
 
-  async summary(range: Range, now: number): Promise<Summary> {
-    const days = rangeDays(range, now);
+  async summary(span: Span, now: number): Promise<Summary> {
+    const days = spanDays(span, now);
     const first = days[0]!;
     const last = days[days.length - 1]!;
     const counts = this.sql.counts.all(first, last) as unknown as DailyCount[];

@@ -7,15 +7,11 @@ import { createHash, randomBytes } from 'node:crypto';
 import type { GameId } from '../../../shared/platform/games.js';
 import type { PlatformRoomData } from '../engine/state.js';
 
-const UK_DAY = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit' });
-const UK_HOUR = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', hour: '2-digit', hourCycle: 'h23' });
+import { ukDay } from '../../../shared/platform/admin.js';
 
-/** The UK calendar date of `ts` as YYYY-MM-DD (BST or GMT, whichever London is on). */
-export function ukDay(ts: number): string {
-  const parts = UK_DAY.formatToParts(ts);
-  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value ?? '';
-  return `${part('year')}-${part('month')}-${part('day')}`;
-}
+export { ukDay };
+
+const UK_HOUR = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', hour: '2-digit', hourCycle: 'h23' });
 
 /** The hour of the day in London, 0 to 23. */
 export function ukHour(ts: number): number {

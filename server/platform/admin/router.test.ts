@@ -144,6 +144,36 @@ describe('the admin host', () => {
     expect((await call(base, ADMIN, 'GET', '/api/admin/summary?range=forever', { cookie })).status).toBe(400);
   });
 
+  it('summarises one UK day: today or before, written YYYY-MM-DD', async () => {
+    const cookie = cookieOf(await login(PASSWORD));
+    const get = (query: string) => call(base, ADMIN, 'GET', `/api/admin/summary?${query}`, { cookie });
+    // Today in London is Wed 28 Oct; Tuesday had two visitors.
+    store.recordVisit({ ts: Date.UTC(2026, 9, 27, 9, 0), visitor: 'k2', path: '/', source: 'direct', subreddit: null, game: null, device: 'phone' });
+    store.recordVisit({ ts: Date.UTC(2026, 9, 27, 18, 0), visitor: 'k3', path: '/', source: 'direct', subreddit: null, game: null, device: 'desktop' });
+
+    const tuesday = await get('day=2026-10-27');
+    expect(tuesday.status).toBe(200);
+    const s = JSON.parse(tuesday.text) as Summary;
+    expect(s.days.map((d) => d.day)).toEqual(['2026-10-27']);
+    expect(s.totals.visitors).toBe(2);
+    expect(s.sources).toEqual([{ source: 'direct', subreddit: null, visitors: 2 }]);
+
+    const today = await get('day=2026-10-28');
+    expect(today.status).toBe(200);
+    expect(JSON.parse(today.text)).toEqual(JSON.parse((await get('range=today')).text));
+
+    // Before any data: zeros, not an error.
+    const empty = await get('day=2020-02-29');
+    expect(empty.status).toBe(200);
+    expect((JSON.parse(empty.text) as Summary).totals).toEqual({ visitors: 0, views: 0, rooms: 0, players: 0, started: 0, finished: 0 });
+
+    for (const bad of ['day=2026-10-1', 'day=2026-02-30', 'day=2026-13-01', 'day=yesterday', 'day=2026-10-27T00:00', 'day=+2026-10-27', 'day=', 'day=2026-10-27&day=2026-10-26', 'day=2026-10-27&range=7d']) {
+      expect((await get(bad)).status, bad).toBe(400);
+    }
+    // Tomorrow has not happened.
+    expect((await get('day=2026-10-29')).status).toBe(400);
+  });
+
   it('lists the open rooms', async () => {
     const cookie = cookieOf(await login(PASSWORD));
     const created = driver.create('scribble', 'Ann', AVATAR, 'conn-a');

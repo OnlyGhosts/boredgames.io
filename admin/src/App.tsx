@@ -13,8 +13,9 @@ const TABS: Array<{ id: Tab; label: string }> = [
   { id: 'notice', label: 'Notice' },
 ];
 
+/** The page the hash names: `#rooms`, or `#analytics/2026-10-29` (Analytics keeps its day or range after the slash). */
 function tabFromHash(): Tab {
-  const hash = typeof location === 'undefined' ? '' : location.hash.slice(1);
+  const hash = typeof location === 'undefined' ? '' : (location.hash.slice(1).split('/')[0] ?? '');
   return TABS.some((t) => t.id === hash) ? (hash as Tab) : 'analytics';
 }
 

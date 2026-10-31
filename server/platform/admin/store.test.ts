@@ -141,8 +141,8 @@ describe.each(BACKENDS)('$name analytics store', (backend) => {
     seed(store);
     const s = await store.summary('7d', NOW);
     expect(s.games).toEqual([
-      { gameId: 'scribble', rooms: 1, players: 3, started: 1, finished: 1, avgPlayers: 3 },
-      { gameId: 'poker', rooms: 1, players: 2, started: 1, finished: 0, avgPlayers: 2 },
+      { gameId: 'scribble', started: 1, finished: 1, avgPlayers: 3 },
+      { gameId: 'poker', started: 1, finished: 0, avgPlayers: 2 },
     ]);
     // Five seats taken in two rooms: two hosts, one from the Wi-Fi list, two by code.
     expect([s.joinsNearby, s.joinsCode]).toEqual([1, 2]);
@@ -150,6 +150,45 @@ describe.each(BACKENDS)('$name analytics store', (backend) => {
     expect(s.busiestHour).toBe(10);
     const today = await store.summary('today', NOW);
     expect([today.peakPlayers, today.busiestHour, today.joinsNearby, today.joinsCode]).toEqual([5, 20, 0, 1]);
+    await store.close();
+  });
+
+  it('files a game under the game that was played, not the one its room opened on', async () => {
+    const { store } = backend.open();
+    // A room opens on the default game (Scribble), two join, and the host switches to Blackjack and plays it.
+    store.recordEvent(event(D3, 'room_created', 'scribble'));
+    for (let i = 0; i < 2; i++) store.recordEvent(event(D3, 'player_joined', 'scribble'));
+    store.recordEvent(event(D3, 'game_started', 'blackjack', { players: 2 }));
+    store.recordEvent(event(D3, 'game_ended', 'blackjack', { finished: true }));
+    const s = await store.summary('today', NOW);
+    expect(s.games).toEqual([{ gameId: 'blackjack', started: 1, finished: 1, avgPlayers: 2 }]);
+    expect(s.totals).toMatchObject({ rooms: 1, players: 2, started: 1, finished: 1 });
+    await store.close();
+  });
+
+  it('summarises one UK day on its own', async () => {
+    const { store } = backend.open();
+    seed(store);
+    const s = await store.summary({ day: '2026-10-26' }, NOW);
+    expect(s.days).toEqual([{ day: '2026-10-26', visitors: 2, views: 3, rooms: 1, players: 3, started: 1, finished: 1 }]);
+    expect(s.totals).toEqual({ visitors: 2, views: 3, rooms: 1, players: 3, started: 1, finished: 1 });
+    expect(s.sources).toEqual([
+      { source: 'reddit.com', subreddit: 'r/WebGames', visitors: 1 },
+      { source: 'reddit.com', subreddit: null, visitors: 1 },
+    ]);
+    expect(s.games).toEqual([{ gameId: 'scribble', started: 1, finished: 1, avgPlayers: 3 }]);
+    expect([s.joinsNearby, s.joinsCode, s.peakPlayers, s.busiestHour]).toEqual([1, 1, 3, 10]);
+    // The same day asked for as today.
+    expect(await store.summary({ day: '2026-10-28' }, NOW)).toEqual(await store.summary('today', NOW));
+    await store.close();
+  });
+
+  it('answers a day before any data with zeros', async () => {
+    const { store } = backend.open();
+    seed(store);
+    const s = await store.summary({ day: '2025-01-01' }, NOW);
+    expect(s.days).toEqual([{ day: '2025-01-01', visitors: 0, views: 0, rooms: 0, players: 0, started: 0, finished: 0 }]);
+    expect([s.sources, s.games, s.deepLinks, s.peakPlayers, s.busiestHour]).toEqual([[], [], [], 0, null]);
     await store.close();
   });
 

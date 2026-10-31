@@ -1,5 +1,4 @@
 import { GAME_LIST } from '@shared/platform/games';
-import type { LiveRoom } from '@shared/platform/admin';
 
 /** A game's name from its id or its slug (deep links carry slugs). */
 export function gameName(idOrSlug: string): string {
@@ -42,10 +41,6 @@ export function dayText(day: string): string {
 /** "27 Oct" for a YYYY-MM-DD day. */
 export function shortDayText(day: string): string {
   return SHORT_FORMAT.format(new Date(`${day}T12:00:00Z`));
-}
-
-export function phaseText(phase: LiveRoom['phase']): string {
-  return phase === 'playing' ? 'Playing' : phase === 'results' ? 'Results' : 'Lobby';
 }
 
 export function num(n: number): string {

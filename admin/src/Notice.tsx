@@ -12,6 +12,34 @@ export function NoticePreview({ text }: { text: string }) {
   );
 }
 
+/**
+ * Show the notice or not: the site's own switch (components.css: a 44px target round a 44x26 track
+ * whose knob slides right on lime), with no words inside. Its label is the question above it and
+ * its hint the line under it, which says what each state does.
+ */
+export function NoticeSwitch({
+  on,
+  onToggle,
+}: {
+  on: boolean;
+  onToggle(): void;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      className="switch"
+      aria-checked={on}
+      aria-labelledby="notice-on-label"
+      aria-describedby="notice-on-hint"
+      onClick={onToggle}
+      data-testid="notice-on"
+    >
+      <span className="switch__track" aria-hidden="true" />
+    </button>
+  );
+}
+
 /** A datetime-local value (the browser's own time zone) from epoch ms, and back. */
 function toLocalInput(ms: number | null): string {
   if (ms === null) return "";
@@ -131,25 +159,19 @@ export function NoticePage({ onSignedOut }: { onSignedOut(): void }) {
             Show this notice on the home page?
           </span>
           <span className="field__inline">
-            <button
-              type="button"
-              role="switch"
-              className="switch"
-              aria-checked={on}
-              aria-labelledby="notice-on-label"
-              onClick={() => {
+            <NoticeSwitch
+              on={on}
+              onToggle={() => {
                 setOn(!on);
                 if (state.kind === "saved") setState({ kind: "idle" });
               }}
-              data-testid="notice-on"
-            >
-              <span className="switch__thumb" aria-hidden="true" />
-              <span className="switch__text">
-                {on ? "Yes, show it" : "No, keep it hidden"}
-              </span>
-            </button>
+            />
           </span>
-          <span className="field__hint" data-testid="notice-on-hint">
+          <span
+            className="field__hint"
+            id="notice-on-hint"
+            data-testid="notice-on-hint"
+          >
             {noOrphan(
               on
                 ? "Once you save, everyone sees it at the top of the home page."
