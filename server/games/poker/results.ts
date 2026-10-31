@@ -37,7 +37,10 @@ function settle(gx: Gx, pots: PokerPotResult[], revealed: Record<string, PokerRe
   data.toAct = [];
   data.idleHands = data.acted ? 0 : data.idleHands + 1;
   const busted = data.order.filter((id) => data.seats[id].chips === 0 && !data.seats[id].gone);
-  for (const id of busted) systemMessage(gx, `${nameOf(gx.ctx, id)} is out of chips.`);
+  for (const id of busted) {
+    data.seats[id].outHand = data.hand;
+    systemMessage(gx, `${nameOf(gx.ctx, id)} is out of chips.`);
+  }
   // The pause starts once the clients have shown the end of the hand (a run-out deals the rest of the board first).
   const newHand = gx.shown.hand !== data.hand;
   const reveal = settleRevealMs({

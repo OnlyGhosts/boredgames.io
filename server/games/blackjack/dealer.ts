@@ -80,6 +80,7 @@ export function settleRound(gx: Gx, peeked: boolean): void {
     lines.push(back > staked ? `${name} wins ${back - staked}` : back === staked ? `${name} pushes` : `${name} loses ${staked - back}`);
     if (seat.chips === 0) {
       seat.bustedOut = true;
+      seat.outRound = data.round;
       out.push(id);
     }
     seat.hands = [];

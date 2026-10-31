@@ -8,7 +8,7 @@ import { defaultPlatformSettings } from '../../../shared/platform/settings.js';
 import type { Effect } from '../../platform/engine/effects.js';
 import { nextDeadline } from '../../platform/engine/time.js';
 import { viewFor } from '../../platform/engine/view.js';
-import { AVATAR, START, chatTexts, endGame, noticeTexts, errorsOf, sim, standings, startGame, type Sim } from '../../platform/engine/testHarness.js';
+import { AVATAR, START, chatTexts, endGame, noticeTexts, errorsOf, restart, sim, standings, startGame, type Sim } from '../../platform/engine/testHarness.js';
 import { BLACKJACK_DEAL, BLACKJACK_FINAL_HOLD_MS, BLACKJACK_REVEAL, MIN_DEAL_GAP_MS, dealAllowanceMs, revealAllowanceMs } from '../../../shared/games/blackjack/deal.js';
 import { AWAY_NOTICE_MS } from '../../../shared/platform/constants.js';
 import { RESUME_SETTLE_MS } from '../waiting.js';
@@ -134,6 +134,38 @@ const results = (s: Sim) => {
   return last.order.flatMap((playerId) => last.hands[playerId].map((h, handIndex) => ({ playerId, handIndex, outcome: h.outcome, bet: h.bet, payout: h.payout })));
 };
 const lastHands = (s: Sim, id: string) => view(s).lastRound?.hands[id] ?? [];
+
+/** The final table's pause runs out: the results. */
+const finish = (s: Sim): Effect[] => {
+  const { phase } = data(s);
+  if (phase.kind !== 'ending') throw new Error(`no final pause but ${phase.kind}`);
+  return tick(s, phase.endsAt - s.now);
+};
+
+/**
+ * Four players from 100 chips go out one round at a time. Round 1: Dave stakes everything on a 16
+ * and loses to the dealer's 17, the others win 10 on 19s. Round 2: Bob and Carol stake everything
+ * on 16s and lose, Alice wins 10 on a 19 and is the last one standing. `between` runs between the rounds.
+ */
+function fourGoOut(between: (s: Sim) => void = () => undefined): { s: Sim; ids: string[] } {
+  const s = table();
+  const ids = startGame(s, ['Alice', 'Bob', 'Carol', 'Dave'], { startingChips: 100 });
+  const [alice, bob, carol, dave] = ids;
+  rig(s, '10S', '10H', '10C', '10D', 'KS', '9S', '9H', '9C', '6D', '7S');
+  betAll(s, [alice, bob, carol]);
+  act(s, dave, { t: 'bet', amount: 100 });
+  for (const id of ids) act(s, id, { t: 'stand' });
+  expect(chatTexts(s.effects).slice(-2)).toEqual(['Alice wins 10, Bob wins 10, Carol wins 10, Dave loses 100.', 'Dave is out of chips.']);
+  between(s);
+  nextRound(s);
+  rig(s, '10S', '10H', '10C', 'KS', '9S', '6H', '6C', '7S');
+  act(s, alice, { t: 'bet', amount: 10 });
+  act(s, bob, { t: 'bet', amount: 110 });
+  act(s, carol, { t: 'bet', amount: 110 });
+  for (const id of [alice, bob, carol]) act(s, id, { t: 'stand' });
+  expect(chatTexts(s.effects).slice(-3)).toEqual(['Bob is out of chips.', 'Carol is out of chips.', 'Alice is the last one standing.']);
+  return { s, ids };
+}
 
 describe('Blackjack: the table', () => {
   it('seats everyone with the starting stack as their score and opens the first round with betting', () => {
@@ -1430,6 +1462,37 @@ describe('Blackjack: the end', () => {
     ]);
   });
 
+  it('ranks by when each player went out: the last one standing, then the last out; only players out in the same round tie', () => {
+    const {
+      s,
+      ids: [alice, bob, carol, dave],
+    } = fourGoOut();
+    expect(chatTexts(finish(s))).toEqual(['Game over! Alice wins with 120 points.']);
+    expect(standings(s)).toEqual([
+      { playerId: alice, score: 120, rank: 1 },
+      { playerId: bob, score: 0, rank: 2 },
+      { playerId: carol, score: 0, rank: 2 },
+      { playerId: dave, score: 0, rank: 4 },
+    ]);
+  });
+
+  it('keeps the round each player went out in through a server restart', () => {
+    const {
+      s,
+      ids: [alice, bob, carol, dave],
+    } = fourGoOut((s) => {
+      restart(s);
+      expect(data(s).seats[s.playerId('Dave')]).toMatchObject({ bustedOut: true, outRound: 1 });
+    });
+    finish(s);
+    expect(standings(s)?.map((e) => [e.playerId, e.rank])).toEqual([
+      [alice, 1],
+      [bob, 2],
+      [carol, 2],
+      [dave, 4],
+    ]);
+  });
+
   it('plays a lone player (or one left alone by a leave) on until their chips are gone', () => {
     const s = table();
     const [alice] = startGame(s, ['Alice'], { startingChips: 100 });
@@ -1533,6 +1596,31 @@ describe('Blackjack: the host ends the game', () => {
     expect(chatTexts(effects)).toEqual(['Game over! Alice wins with 1015 points.']);
     expect(nextDeadline(s.data)).toBeNull();
     expect(errorsOf(s.game(alice, { t: 'bet', amount: 10 }))).toEqual(['The game is not running.']);
+  });
+
+  it('ranks the stacks still in play by chips when the host ends the game, and the players already out below them, the last out first', () => {
+    const s = table();
+    const [alice, bob, carol, dave] = startGame(s, ['Alice', 'Bob', 'Carol', 'Dave'], { startingChips: 100 });
+    // Round 1: Bob loses 10 on a 16; Dave stakes everything on a 16 and goes out.
+    rig(s, '10S', '10H', '10C', '10D', 'KS', '9S', '6H', '9C', '6D', '7S');
+    betAll(s, [alice, bob, carol]);
+    act(s, dave, { t: 'bet', amount: 100 });
+    for (const id of [alice, bob, carol, dave]) act(s, id, { t: 'stand' });
+    nextRound(s);
+    // Round 2: Carol stakes everything on a 16 and goes out; Alice and Bob win 10 each.
+    rig(s, '10S', '10H', '10C', 'KS', '9S', '9H', '6C', '7S');
+    betAll(s, [alice, bob]);
+    act(s, carol, { t: 'bet', amount: 110 });
+    for (const id of [alice, bob, carol]) act(s, id, { t: 'stand' });
+    nextRound(s);
+    expect(chatTexts(end(s, alice))).toEqual(['The host ended the game.', 'Game over! Alice wins with 120 points.']);
+    expect(s.data.results?.reason).toBe('host');
+    expect(standings(s)).toEqual([
+      { playerId: alice, score: 120, rank: 1 },
+      { playerId: bob, score: 100, rank: 2 },
+      { playerId: carol, score: 0, rank: 3 },
+      { playerId: dave, score: 0, rank: 4 },
+    ]);
   });
 
   it('ends at once when the host ends it during a final table that is already on show', () => {

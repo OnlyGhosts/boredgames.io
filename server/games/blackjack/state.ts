@@ -39,6 +39,8 @@ export interface SeatData {
   hands: HandData[];
   /** No chips left: out of the game, watching. */
   bustedOut: boolean;
+  /** The round they went out in (absent while they have chips, and in rooms stored before it existed): the results rank on it. */
+  outRound?: number;
   /** Chose to sit this round's hand out while the bets were open (absent in rooms stored before it existed). */
   sittingOut?: boolean;
 }

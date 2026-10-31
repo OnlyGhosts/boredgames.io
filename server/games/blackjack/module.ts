@@ -167,6 +167,8 @@ export const blackjackModule: GameServerModule<BlackjackSettings, BlackjackData,
   view: viewFor,
   hostMessages: new Set(['dealNow', 'skip']),
   end: (ctx, data) => withDraft(data, (draft, effects) => endGame({ ctx, data: draft, effects })),
+  // Out of chips: the round says how long they lasted (one out before the round was kept, earliest).
+  standing: (data, playerId) => (data.seats[playerId]?.bustedOut ? { wentOut: data.seats[playerId].outRound ?? 0 } : {}),
   milestone: (data) => `${data.round}:${data.phase.kind}${data.phase.kind === 'acting' ? `:${data.phase.playerId}:${data.phase.handIndex}` : ''}`,
 };
 

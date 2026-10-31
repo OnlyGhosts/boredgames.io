@@ -169,7 +169,9 @@ Game's failed vote) goes out as a `'notice'` line: every client shows it as a to
 **Scores and the end of a game.** Players carry a `score`; your game adds to it with `score`
 effects. However a game ends (it finishes on its own with `gameOver`, the host's End game, or too
 few players are left: a leave, a kick, a seat expiry or an `abort`), the platform ranks the
-participants (ties share a rank) into `RoomState.results` (`{ id, gameId, reason, entries }`, each
+participants (ties share a rank; a chip game's `standing` puts the players who ran out of chips
+below everyone still in, the last out first, so Blackjack and Poker rank how long each lasted
+rather than a tie on nothing) into `RoomState.results` (`{ id, gameId, reason, entries }`, each
 entry with the player's name and avatar so it reads right after they leave; `reason` is
 `'finished'`, `'host'` or `'players'`), sends a system line naming the winner (none when too few
 were left) and takes the room straight back to `phase: 'lobby'`: nobody is held on a podium. Every
@@ -661,6 +663,8 @@ export interface GameServerModule<S = unknown, D = unknown, V = unknown, CMsg = 
   queuesSeats?: boolean;
   /** Whether a participant goes in the results (a queued player who never got a seat does not). Everyone by default. */
   ranks?(data: D, playerId: string): boolean;
+  /** How a participant's game went, for the results: `wentOut` (the round or hand they ran out in) ranks them below everyone still in, the last out first. */
+  standing?(data: D, playerId: string): GameStanding;
   /**
    * The host's End game: emit the last score effects and `gameOver` to end at once, or note it and
    * end at the game's own next boundary (Blackjack). Without it the platform ends the game at once

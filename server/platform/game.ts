@@ -151,6 +151,16 @@ export interface GameSettingsSpec<S> {
   normalize?(s: S): S;
 }
 
+/** How one participant's game went, for the results (a module's `standing`). */
+export interface GameStanding {
+  /**
+   * When they went out of the game (the round or hand: a higher number is later); absent while
+   * they are still in. Players still in rank above everyone who went out, on their scores; those
+   * who went out rank the last out first, and only players out at the same point tie.
+   */
+  wentOut?: number;
+}
+
 export interface GameServerModule<S = unknown, D = unknown, V = unknown, CMsg = unknown, SMsg = unknown> {
   meta: GameMeta;
   settings: GameSettingsSpec<S>;
@@ -185,6 +195,12 @@ export interface GameServerModule<S = unknown, D = unknown, V = unknown, CMsg = 
    * never dealt in (they would rank last having never played). Everyone by default.
    */
   ranks?(data: D, playerId: string): boolean;
+  /**
+   * How a participant's game went, for the results: a chip game says when they went out of chips,
+   * so a game that ends with one stack left ranks the rest by how long they lasted, not as a tie
+   * on nothing. Nothing by default: the results rank on the scores alone.
+   */
+  standing?(data: D, playerId: string): GameStanding;
   /**
    * The host's End game (the platform's `endGame`, host only, while playing). Emit the last score
    * effects and `gameOver` to end at once, or note it and end at the game's own next boundary

@@ -1470,6 +1470,26 @@ describe('results popup', () => {
     expect(list).toContain('>1,100 pts<');
   });
 
+  it('puts the last ones out of a chip game on the podium: the winner in the middle, the last out second, the one out before them third', () => {
+    const outOrder = results({
+      gameId: 'blackjack',
+      entries: [
+        { playerId: 'bob', name: 'bob', avatar: AV, score: 4000, rank: 1 },
+        { playerId: 'carol', name: 'carol', avatar: AV, score: 0, rank: 2 },
+        { playerId: 'host', name: 'host', avatar: AV, score: 0, rank: 3 },
+        { playerId: 'dan', name: 'dan', avatar: AV, score: 0, rank: 4 },
+      ],
+    });
+    const html = popup('carol', outOrder);
+    expect(html).toContain('bob wins!');
+    expect(html).toContain('>4,000 chips<');
+    expect(html).toContain('You came 2nd');
+    expect(tagsWith(html, 'results-step').map((t) => attr(t, 'data-rank'))).toEqual(['2', '1', '3']);
+    expect([...html.matchAll(/class="podium__name">([^<]*)</g)].map((m) => m[1])).toEqual(['carol', 'bob', 'host']);
+    expect(tagsWith(html, 'results-entry').map((t) => attr(t, 'data-name'))).toEqual(['bob', 'carol', 'host', 'dan']);
+    expect(popup('dan', outOrder)).toContain('You came 4th');
+  });
+
   it('announces a tie instead of crowning the first of the tied players', () => {
     const html = popup('bob', results({ entries: [
       { playerId: 'host', name: 'host', avatar: AV, score: 30, rank: 1 },

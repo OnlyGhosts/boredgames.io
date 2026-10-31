@@ -20,6 +20,8 @@ export interface SeatData {
   lastAction: PokerLastAction | null;
   /** Left the room mid-hand: the seat is folded and its chips stay in the pot until the hand ends. */
   gone: boolean;
+  /** The hand they went out of chips in (absent while they have chips, and in rooms stored before it existed): the results rank on it. */
+  outHand?: number;
 }
 
 export type PhaseData =

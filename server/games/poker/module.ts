@@ -134,6 +134,11 @@ export const pokerModule: GameServerModule<PokerSettings, PokerData, PokerView, 
   queuesSeats: true,
   // A player who never got a seat never played: they stay out of the results.
   ranks: (data, playerId) => data.seats[playerId] !== undefined,
+  // Out of chips: the hand says how long they lasted (one out before the hand was kept, earliest).
+  standing: (data, playerId) => {
+    const seat = data.seats[playerId];
+    return seat && (seat.outHand !== undefined || seat.chips === 0) ? { wentOut: seat.outHand ?? 0 } : {};
+  },
   milestone: (data) => `${data.hand}:${data.street ?? ''}:${data.phase.kind}:${data.toAct[0] ?? ''}`,
 };
 

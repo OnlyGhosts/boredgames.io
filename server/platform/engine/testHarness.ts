@@ -7,6 +7,7 @@ import type { PlatformRoomMessage } from '../drivers/types.js';
 import type { Action, Ctx } from './actions.js';
 import type { Effect } from './effects.js';
 import { applyAction } from './reduce.js';
+import { restoreRoomData } from './restore.js';
 import { createRoomData, type PlatformRoomData } from './state.js';
 
 export const START = new Date('2026-01-01T12:00:00Z').getTime();
@@ -112,6 +113,17 @@ export function startGame(s: Sim, names: string[], settings: Record<string, unkn
 /** The last game's standings as `{ playerId, score, rank }` (the names and avatars left out); null while there are none. */
 export function standings(s: Sim): Array<{ playerId: string; score: number; rank: number }> | null {
   return s.data.results?.entries.map(({ playerId, score, rank }) => ({ playerId, score, rank })) ?? null;
+}
+
+/**
+ * The server restarts: the room comes back from a checkpoint taken now (its JSON), `downtimeMs`
+ * later, and every phone rejoins straight away.
+ */
+export function restart(s: Sim, downtimeMs = 90_000): void {
+  const issuedAt = s.now;
+  s.now += downtimeMs;
+  s.data = restoreRoomData(JSON.parse(JSON.stringify(s.data)) as PlatformRoomData, issuedAt, ctxAt(s.now, s.ids)).data;
+  for (const p of s.data.players) s.apply({ type: 'rejoin', token: p.token, connectionId: `again-${p.name}` });
 }
 
 /** The host's End game (a platform message). */

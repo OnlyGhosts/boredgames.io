@@ -8,7 +8,7 @@ import { defaultPlatformSettings } from '../../../shared/platform/settings.js';
 import type { Effect } from '../../platform/engine/effects.js';
 import { nextDeadline } from '../../platform/engine/time.js';
 import { viewFor } from '../../platform/engine/view.js';
-import { AVATAR, START, chatTexts, endGame, noticeTexts, errorsOf, sim, standings, startGame, type Sim } from '../../platform/engine/testHarness.js';
+import { AVATAR, START, chatTexts, endGame, noticeTexts, errorsOf, restart, sim, standings, startGame, type Sim } from '../../platform/engine/testHarness.js';
 import { RESUME_SETTLE_MS } from '../waiting.js';
 import { pokerModule, type PokerData } from './module.js';
 import { buildPots, splitPot } from './pots.js';
@@ -84,6 +84,43 @@ function rigChips(s: Sim, stacks: Record<string, number>): void {
 }
 
 const BOARD_DRY = ['2S', '7D', '9H', 'JC', '4S'];
+
+/** Plays the hand in progress out: each seat to act goes all in (calls when it may not raise), and the `folders` fold. */
+function allInOrFold(s: Sim, folders: string[] = []): void {
+  for (let moves = 0; moves < 30 && data(s).phase.kind === 'acting'; moves++) {
+    const id = data(s).toAct[0];
+    if (folders.includes(id)) act(s, id, { t: 'fold' });
+    else if (errorsOf(act(s, id, { t: 'allIn' })).length > 0) act(s, id, { t: 'call' });
+  }
+  expect(data(s).phase.kind).toBe('results');
+}
+
+/**
+ * Four players from 1000 chips, Alice holding aces every time. Hand 1: Dave, rigged down to 100,
+ * goes all in into Alice and is out (Bob and Carol fold). `between` runs between the hands, and
+ * `second` plays hand 2 (Bob has the button, Carol the small blind, Alice the big blind).
+ */
+function fourHanded(between: (s: Sim) => void, second: (s: Sim, ids: string[]) => void): { s: Sim; ids: string[] } {
+  const s = sim('poker');
+  const ids = startGame(s, ['Alice', 'Bob', 'Carol', 'Dave'], { hands: 0 });
+  const [alice, bob, carol, dave] = ids;
+  rigChips(s, { [dave]: 100 });
+  rigHand(s, { [alice]: ['AS', 'AD'], [bob]: ['7C', '2D'], [carol]: ['8C', '3D'], [dave]: ['KS', 'KD'] }, BOARD_DRY);
+  allInOrFold(s, [bob, carol]);
+  expect([alice, bob, carol, dave].map((id) => chips(s, id))).toEqual([1115, 995, 990, 0]);
+  between(s);
+  tickResults(s);
+  expect(data(s)).toMatchObject({ hand: 2, dealerId: bob, order: [alice, bob, carol] });
+  second(s, ids);
+  return { s, ids };
+}
+
+/** Hand 2 of fourHanded: Bob and Carol go all in into Alice's aces and are out together. */
+function bothIntoAces(s: Sim, [alice, bob, carol]: string[]): void {
+  rigHand(s, { [alice]: ['AS', 'AD'], [bob]: ['KS', 'KD'], [carol]: ['QS', 'QD'] }, BOARD_DRY);
+  allInOrFold(s);
+  expect([alice, bob, carol].map((id) => chips(s, id))).toEqual([3100, 0, 0]);
+}
 
 describe('Poker: the table', () => {
   it('seats everyone with the starting stack as their score, posts the blinds left of the button and opens the preflop betting', () => {
@@ -740,6 +777,61 @@ describe('Poker: hands and the game', () => {
     expect(standings(s)).toEqual([
       { playerId: alice, score: 2000, rank: 1 },
       { playerId: bob, score: 0, rank: 2 },
+    ]);
+  });
+
+  it('ranks the busted players by the hand they went out in, the last out first; only players out in the same hand tie', () => {
+    const {
+      s,
+      ids: [alice, bob, carol, dave],
+    } = fourHanded(() => undefined, bothIntoAces);
+    expect(chatTexts(tickResults(s))).toEqual(['Alice has all the chips!', 'Game over! Alice wins with 3100 points.']);
+    expect(standings(s)).toEqual([
+      { playerId: alice, score: 3100, rank: 1 },
+      { playerId: bob, score: 0, rank: 2 },
+      { playerId: carol, score: 0, rank: 2 },
+      { playerId: dave, score: 0, rank: 4 },
+    ]);
+  });
+
+  it('keeps the hand each player went out in through a server restart', () => {
+    const {
+      s,
+      ids: [alice, bob, carol, dave],
+    } = fourHanded((s) => {
+      restart(s);
+      expect(data(s).seats[s.playerId('Dave')]).toMatchObject({ chips: 0, outHand: 1 });
+    }, bothIntoAces);
+    tickResults(s);
+    expect(standings(s)?.map((e) => [e.playerId, e.rank])).toEqual([
+      [alice, 1],
+      [bob, 2],
+      [carol, 2],
+      [dave, 4],
+    ]);
+  });
+
+  it('ranks the stacks still in play by chips when the host ends the game, and the busted players below them, the last out first', () => {
+    const {
+      s,
+      ids: [alice, bob, carol, dave],
+    } = fourHanded(
+      () => undefined,
+      (s, [alice, bob, carol]) => {
+        // Hand 2: Carol, rigged down to 50, goes all in into Bob's kings and is out; Alice folds her big blind.
+        rigChips(s, { [carol]: 45 });
+        rigHand(s, { [alice]: ['7C', '2D'], [bob]: ['KS', 'KD'], [carol]: ['QS', 'QD'] }, BOARD_DRY);
+        allInOrFold(s, [alice]);
+      },
+    );
+    expect([alice, bob, carol].map((id) => chips(s, id))).toEqual([1105, 1055, 0]);
+    expect(chatTexts(endGame(s, alice))).toEqual(['Game over! Alice wins with 1105 points.']);
+    expect(s.data.results?.reason).toBe('host');
+    expect(standings(s)).toEqual([
+      { playerId: alice, score: 1105, rank: 1 },
+      { playerId: bob, score: 1055, rank: 2 },
+      { playerId: carol, score: 0, rank: 3 },
+      { playerId: dave, score: 0, rank: 4 },
     ]);
   });
 

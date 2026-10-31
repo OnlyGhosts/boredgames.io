@@ -3,6 +3,7 @@ import type { Avatar } from '../../../shared/platform/avatar.js';
 import { gameById, type GameId } from '../../../shared/platform/games.js';
 import type { GameEndReason, ResultEntry } from '../../../shared/platform/protocol.js';
 import { defaultPlatformSettings, platformSettingsPatchSchema, platformSettingsSchema, type PlatformSettings } from '../../../shared/platform/settings.js';
+import type { GameStanding } from '../game.js';
 import { applyGameResult, gameCtx } from './delegate.js';
 import { broadcastSnapshot, fail, requireHost, requirePhase, systemMessage, type Cx } from './messaging.js';
 import { moduleFor } from './module.js';
@@ -142,10 +143,21 @@ function listNames(names: string[]): string {
   return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
 }
 
-/** The standings: best score first, then join order; tied scores share a rank. */
-export function rankPlayers(players: PlatformPlayerData[]): ResultEntry[] {
-  const ranked = [...players].sort((a, b) => b.score - a.score || a.joinOrder - b.joinOrder);
-  return ranked.map((p) => ({ playerId: p.id, name: p.name, avatar: { ...p.avatar }, score: p.score, rank: 1 + ranked.filter((o) => o.score > p.score).length }));
+/**
+ * The standings, in join order among equals, tied places sharing a rank: the players still in the
+ * game best score first, then those who went out (the game's `standing`), the last out first.
+ */
+export function rankPlayers(players: PlatformPlayerData[], standingOf: (playerId: string) => GameStanding = () => ({})): ResultEntry[] {
+  const rows = players.map((p) => ({ p, out: standingOf(p.id).wentOut }));
+  type Row = (typeof rows)[number];
+  /** Above 0 when `a` finished ahead of `b`, 0 when level. */
+  const ahead = (a: Row, b: Row): number => {
+    if (a.out === undefined && b.out === undefined) return a.p.score - b.p.score;
+    if (a.out === undefined || b.out === undefined) return a.out === undefined ? 1 : -1;
+    return a.out - b.out;
+  };
+  const ranked = rows.sort((a, b) => ahead(b, a) || a.p.joinOrder - b.p.joinOrder);
+  return ranked.map((r) => ({ playerId: r.p.id, name: r.p.name, avatar: { ...r.p.avatar }, score: r.p.score, rank: 1 + ranked.filter((o) => ahead(o, r) > 0).length }));
 }
 
 /**
@@ -157,12 +169,13 @@ export function finishGame(cx: Cx, reason?: GameEndReason): void {
   const { data } = cx;
   if (data.phase !== 'playing') return;
   const game = moduleFor(data.gameId);
-  const ranked = participants(data).filter((p) => data.game === null || !game.ranks || game.ranks(data.game, p.id));
-  const entries = rankPlayers(ranked);
+  const { game: played } = data;
+  const ranked = participants(data).filter((p) => played === null || !game.ranks || game.ranks(played, p.id));
+  const entries = rankPlayers(ranked, (id) => (played !== null && game.standing ? game.standing(played, id) : {}));
   data.results = { id: cx.ctx.newId(), gameId: data.gameId, reason: reason ?? (data.endRequested === true ? 'host' : 'finished'), entries };
   const top = entries[0]?.score;
   // A game cut short by players leaving crowns nobody: the standings are just where it stopped.
-  const winners = data.results.reason === 'players' ? [] : entries.filter((e) => e.score === top).map((e) => e.name);
+  const winners = data.results.reason === 'players' ? [] : entries.filter((e) => e.rank === 1).map((e) => e.name);
   if (winners.length === 0) systemMessage(cx, 'Game over!');
   else if (winners.length === 1) systemMessage(cx, `Game over! ${winners[0]} wins with ${top} points.`);
   else systemMessage(cx, `Game over! ${listNames(winners)} tie with ${top} points.`);
