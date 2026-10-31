@@ -135,6 +135,9 @@ const results = (s: Sim) => {
 };
 const lastHands = (s: Sim, id: string) => view(s).lastRound?.hands[id] ?? [];
 
+/** What the results say of each player in place of their chips (null: their chips). */
+const notes = (s: Sim): Array<string | null> | undefined => s.data.results?.entries.map((e) => e.note ?? null);
+
 /** The final table's pause runs out: the results. */
 const finish = (s: Sim): Effect[] => {
   const { phase } = data(s);
@@ -1474,6 +1477,9 @@ describe('Blackjack: the end', () => {
       { playerId: carol, score: 0, rank: 2 },
       { playerId: dave, score: 0, rank: 4 },
     ]);
+    // Each knocked-out player's line says when they went out; the winner's keeps the chips (no note at all).
+    expect(notes(s)).toEqual([null, 'Out in round 2', 'Out in round 2', 'Out in round 1']);
+    expect(s.data.results?.entries[0]).not.toHaveProperty('note');
   });
 
   it('keeps the round each player went out in through a server restart', () => {
@@ -1491,6 +1497,7 @@ describe('Blackjack: the end', () => {
       [carol, 2],
       [dave, 4],
     ]);
+    expect(notes(s)).toEqual([null, 'Out in round 2', 'Out in round 2', 'Out in round 1']);
   });
 
   it('plays a lone player (or one left alone by a leave) on until their chips are gone', () => {
@@ -1621,6 +1628,7 @@ describe('Blackjack: the host ends the game', () => {
       { playerId: carol, score: 0, rank: 3 },
       { playerId: dave, score: 0, rank: 4 },
     ]);
+    expect(notes(s)).toEqual([null, null, 'Out in round 2', 'Out in round 1']);
   });
 
   it('ends at once when the host ends it during a final table that is already on show', () => {

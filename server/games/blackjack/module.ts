@@ -13,7 +13,7 @@ import {
   type BlackjackView,
 } from '../../../shared/games/blackjack/protocol.js';
 import { gameById } from '../../../shared/platform/games.js';
-import { defineSettings, withDraft, type GameEvent, type GameResult, type GameServerModule } from '../../platform/game.js';
+import { defineSettings, withDraft, type GameEvent, type GameResult, type GameServerModule, type GameStanding } from '../../platform/game.js';
 import { bet, dealIfReady, dealNow, sitOut } from './betting.js';
 import { nextHand } from './dealer.js';
 import { double, hit, skip, split, stand, standAway } from './play.js';
@@ -157,6 +157,13 @@ function nextDeadline(data: BlackjackData): number | null {
   }
 }
 
+/** Out of chips: the round they went out in ranks them and says how long they lasted (one out before the round was kept ranks first out). */
+function standing(data: BlackjackData, playerId: string): GameStanding {
+  const seat = data.seats[playerId];
+  if (!seat?.bustedOut) return {};
+  return seat.outRound === undefined ? { wentOut: 0 } : { wentOut: seat.outRound, note: `Out in round ${seat.outRound}` };
+}
+
 export const blackjackModule: GameServerModule<BlackjackSettings, BlackjackData, BlackjackView, BlackjackClientMessage, BlackjackServerMessage> = {
   meta: gameById('blackjack'),
   settings: defineSettings(blackjackSettingsSchema, DEFAULT_BLACKJACK_SETTINGS),
@@ -167,8 +174,7 @@ export const blackjackModule: GameServerModule<BlackjackSettings, BlackjackData,
   view: viewFor,
   hostMessages: new Set(['dealNow', 'skip']),
   end: (ctx, data) => withDraft(data, (draft, effects) => endGame({ ctx, data: draft, effects })),
-  // Out of chips: the round says how long they lasted (one out before the round was kept, earliest).
-  standing: (data, playerId) => (data.seats[playerId]?.bustedOut ? { wentOut: data.seats[playerId].outRound ?? 0 } : {}),
+  standing,
   milestone: (data) => `${data.round}:${data.phase.kind}${data.phase.kind === 'acting' ? `:${data.phase.playerId}:${data.phase.handIndex}` : ''}`,
 };
 

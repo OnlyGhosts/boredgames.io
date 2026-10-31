@@ -148,7 +148,10 @@ function listNames(names: string[]): string {
  * game best score first, then those who went out (the game's `standing`), the last out first.
  */
 export function rankPlayers(players: PlatformPlayerData[], standingOf: (playerId: string) => GameStanding = () => ({})): ResultEntry[] {
-  const rows = players.map((p) => ({ p, out: standingOf(p.id).wentOut }));
+  const rows = players.map((p) => {
+    const { wentOut: out, note } = standingOf(p.id);
+    return { p, out, note };
+  });
   type Row = (typeof rows)[number];
   /** Above 0 when `a` finished ahead of `b`, 0 when level. */
   const ahead = (a: Row, b: Row): number => {
@@ -157,7 +160,14 @@ export function rankPlayers(players: PlatformPlayerData[], standingOf: (playerId
     return a.out - b.out;
   };
   const ranked = rows.sort((a, b) => ahead(b, a) || a.p.joinOrder - b.p.joinOrder);
-  return ranked.map((r) => ({ playerId: r.p.id, name: r.p.name, avatar: { ...r.p.avatar }, score: r.p.score, rank: 1 + ranked.filter((o) => ahead(o, r) > 0).length }));
+  return ranked.map((r) => ({
+    playerId: r.p.id,
+    name: r.p.name,
+    avatar: { ...r.p.avatar },
+    score: r.p.score,
+    rank: 1 + ranked.filter((o) => ahead(o, r) > 0).length,
+    ...(r.note !== undefined && { note: r.note }),
+  }));
 }
 
 /**

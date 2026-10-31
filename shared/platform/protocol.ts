@@ -53,6 +53,8 @@ export interface ResultEntry {
   score: number;
   /** 1-based; tied scores share a rank. */
   rank: number;
+  /** How the player finished, in a few words set by the game ("Out in round 14"), shown in place of their score. */
+  note?: string;
 }
 
 /** How a game came to an end: on its own, by the host's End game, or with too few players left. */

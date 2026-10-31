@@ -2429,7 +2429,7 @@ button.exit-action--end:hover {
   font-weight: 600;
 }
 
-/* Everyone, in order: rank, avatar, name and points. */
+/* Everyone, in order: rank, avatar, name and points (or how they went out). */
 .results-standings {
   width: 100%;
   display: flex;
@@ -2440,15 +2440,24 @@ button.exit-action--end:hover {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-item);
   background: var(--color-surface-3);
+  /* The rows lay out by the list's own width (a phone's list is narrow), not the window's. */
+  container: standings / inline-size;
 }
 
 .results-standings__row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 18px auto minmax(0, 1fr) auto;
+  grid-template-areas: 'rank avatar name end';
+  align-content: center;
   align-items: center;
-  gap: 10px;
+  column-gap: 10px;
   min-height: 44px;
   padding: 4px 12px 4px 10px;
   font-size: 0.9rem;
+}
+
+.results-standings__row > .avatar {
+  grid-area: avatar;
 }
 
 .results-standings__row + .results-standings__row {
@@ -2460,15 +2469,14 @@ button.exit-action--end:hover {
 }
 
 .results-standings__rank {
-  flex: none;
-  width: 18px;
+  grid-area: rank;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   color: var(--color-text-muted);
 }
 
 .results-standings__name {
-  flex: 1;
+  grid-area: name;
   min-width: 0;
   display: flex;
   align-items: center;
@@ -2491,9 +2499,34 @@ button.exit-action--end:hover {
 }
 
 .results-standings__score {
-  flex: none;
+  grid-area: end;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+}
+
+/* How a player went out, in the score's place: capped, so a long one wraps (balanced) before it squeezes the name. */
+.results-standings__note {
+  grid-area: end;
+  max-width: 12rem;
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.3;
+  text-align: right;
+  text-wrap-style: balance;
+}
+
+/* A narrow list (a phone's): the note takes a line of its own under the name. */
+@container standings (max-width: 26rem) {
+  .results-standings__row--noted {
+    grid-template-areas: 'rank avatar name end' 'rank avatar note note';
+  }
+
+  .results-standings__note {
+    grid-area: note;
+    max-width: none;
+    text-align: left;
+  }
 }
 
 .confetti {

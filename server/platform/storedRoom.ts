@@ -36,7 +36,7 @@ const resultsSchema = z.object({
   id: z.string(),
   gameId: z.string(),
   reason: z.enum(['finished', 'host', 'players']),
-  entries: z.array(z.object({ playerId: z.string(), name: z.string(), avatar: avatarSchema, score: z.number(), rank: z.number().int() })),
+  entries: z.array(z.object({ playerId: z.string(), name: z.string(), avatar: avatarSchema, score: z.number(), rank: z.number().int(), note: z.string().optional() })),
 });
 
 const chatSchema = z.object({

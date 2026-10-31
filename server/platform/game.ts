@@ -159,6 +159,8 @@ export interface GameStanding {
    * who went out rank the last out first, and only players out at the same point tie.
    */
   wentOut?: number;
+  /** How they finished, in a few words ("Out in round 14"): the results show it in place of their score. */
+  note?: string;
 }
 
 export interface GameServerModule<S = unknown, D = unknown, V = unknown, CMsg = unknown, SMsg = unknown> {

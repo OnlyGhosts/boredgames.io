@@ -13,7 +13,7 @@ import {
   type PokerView,
 } from '../../../shared/games/poker/protocol.js';
 import { gameById } from '../../../shared/platform/games.js';
-import { defineSettings, withDraft, type GameEvent, type GameResult, type GameServerModule } from '../../platform/game.js';
+import { defineSettings, withDraft, type GameEvent, type GameResult, type GameServerModule, type GameStanding } from '../../platform/game.js';
 import { actTimedOut, foldGone, playerMove } from './betting.js';
 import { beginHand, endGame, next, resumeIfHeld, seatPlayer, settleDue, snapshotOrResume } from './hand.js';
 import { findPlayer, removeSeat, stackedPlayers, type Ctx, type Gx, type PokerData } from './state.js';
@@ -120,6 +120,13 @@ function nextDeadline(data: PokerData): number | null {
   }
 }
 
+/** Out of chips: the hand they went out in ranks them and says how long they lasted (one out before the hand was kept ranks first out). */
+function standing(data: PokerData, playerId: string): GameStanding {
+  const seat = data.seats[playerId];
+  if (!seat || (seat.outHand === undefined && seat.chips > 0)) return {};
+  return seat.outHand === undefined ? { wentOut: 0 } : { wentOut: seat.outHand, note: `Out in hand ${seat.outHand}` };
+}
+
 export const pokerModule: GameServerModule<PokerSettings, PokerData, PokerView, PokerClientMessage, PokerServerMessage> = {
   meta: gameById('poker'),
   settings: defineSettings(pokerSettingsSchema, DEFAULT_POKER_SETTINGS, normalizePokerSettings),
@@ -134,11 +141,7 @@ export const pokerModule: GameServerModule<PokerSettings, PokerData, PokerView, 
   queuesSeats: true,
   // A player who never got a seat never played: they stay out of the results.
   ranks: (data, playerId) => data.seats[playerId] !== undefined,
-  // Out of chips: the hand says how long they lasted (one out before the hand was kept, earliest).
-  standing: (data, playerId) => {
-    const seat = data.seats[playerId];
-    return seat && (seat.outHand !== undefined || seat.chips === 0) ? { wentOut: seat.outHand ?? 0 } : {};
-  },
+  standing,
   milestone: (data) => `${data.hand}:${data.street ?? ''}:${data.phase.kind}:${data.toAct[0] ?? ''}`,
 };
 

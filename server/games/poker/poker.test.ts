@@ -85,6 +85,9 @@ function rigChips(s: Sim, stacks: Record<string, number>): void {
 
 const BOARD_DRY = ['2S', '7D', '9H', 'JC', '4S'];
 
+/** What the results say of each player in place of their chips (null: their chips). */
+const notes = (s: Sim): Array<string | null> | undefined => s.data.results?.entries.map((e) => e.note ?? null);
+
 /** Plays the hand in progress out: each seat to act goes all in (calls when it may not raise), and the `folders` fold. */
 function allInOrFold(s: Sim, folders: string[] = []): void {
   for (let moves = 0; moves < 30 && data(s).phase.kind === 'acting'; moves++) {
@@ -792,6 +795,9 @@ describe('Poker: hands and the game', () => {
       { playerId: carol, score: 0, rank: 2 },
       { playerId: dave, score: 0, rank: 4 },
     ]);
+    // Each busted player's line says when they went out; the winner's keeps the chips (no note at all).
+    expect(notes(s)).toEqual([null, 'Out in hand 2', 'Out in hand 2', 'Out in hand 1']);
+    expect(s.data.results?.entries[0]).not.toHaveProperty('note');
   });
 
   it('keeps the hand each player went out in through a server restart', () => {
@@ -809,6 +815,7 @@ describe('Poker: hands and the game', () => {
       [carol, 2],
       [dave, 4],
     ]);
+    expect(notes(s)).toEqual([null, 'Out in hand 2', 'Out in hand 2', 'Out in hand 1']);
   });
 
   it('ranks the stacks still in play by chips when the host ends the game, and the busted players below them, the last out first', () => {
@@ -833,6 +840,7 @@ describe('Poker: hands and the game', () => {
       { playerId: carol, score: 0, rank: 3 },
       { playerId: dave, score: 0, rank: 4 },
     ]);
+    expect(notes(s)).toEqual([null, null, 'Out in hand 2', 'Out in hand 1']);
   });
 
   it('lets the host skip the results and end the game, voiding a hand in progress', () => {

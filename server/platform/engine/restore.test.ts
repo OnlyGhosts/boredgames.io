@@ -6,6 +6,7 @@ import type { BlackjackData } from '../../games/blackjack/module.js';
 import { GAME_TEST_FIXTURES } from '../../games/testFixtures.js';
 import type { ScribbleData } from '../../games/scribble/state.js';
 import { POINTS_UNDONE_TEXT, RESTARTED_TURN_TEXT } from '../../games/scribble/turns.js';
+import { loadStoredRoom } from '../storedRoom.js';
 import { moduleFor } from './module.js';
 import { EPOCH_WINDOW_MS, restoreRoomData, shiftEpochTimes } from './restore.js';
 import type { PlatformRoomData } from './state.js';
@@ -100,6 +101,19 @@ describe('restoring rooms', () => {
     expect(data.settings).toEqual(s.data.settings);
     expect(data.results).toEqual(s.data.results);
     expect(data.players.every((p) => !p.connected && p.awayNoticeAt === null)).toBe(true);
+  });
+
+  it('loads the last results with what each line says of the player, and only as text', () => {
+    const s = sim('template');
+    const [alice] = startGame(s, ['Alice', 'Bob']);
+    endGame(s, alice);
+    const stored = JSON.parse(JSON.stringify(s.data)) as PlatformRoomData;
+    const [first, second] = stored.results?.entries ?? [];
+    second.note = 'Out in round 14';
+    expect(loadStoredRoom(JSON.parse(JSON.stringify(stored)))?.results?.entries).toEqual([first, { ...second, note: 'Out in round 14' }]);
+    expect(restoreLater({ ...s, data: stored }).data.results).toEqual(stored.results);
+    Object.assign(second, { note: 14 });
+    expect(loadStoredRoom(JSON.parse(JSON.stringify(stored)))).toBeNull();
   });
 
   it('keeps a player already away on the grace they had, moved on by the downtime', () => {

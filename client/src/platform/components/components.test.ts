@@ -1490,6 +1490,54 @@ describe('results popup', () => {
     expect(popup('dan', outOrder)).toContain('You came 4th');
   });
 
+  it('says how each knocked-out player went out in place of their 0 chips, and keeps the chips of the players still holding some', () => {
+    const html = popup(
+      'carol',
+      results({
+        gameId: 'blackjack',
+        reason: 'host',
+        entries: [
+          { playerId: 'bob', name: 'bob', avatar: AV, score: 2350, rank: 1 },
+          { playerId: 'carol', name: 'carol', avatar: AV, score: 1400, rank: 2 },
+          { playerId: 'host', name: 'host', avatar: AV, score: 0, rank: 3, note: 'Out in round 14' },
+          { playerId: 'dan', name: 'dan', avatar: AV, score: 0, rank: 4, note: 'Out in round 9' },
+        ],
+      }),
+    );
+    const row = (name: string): string => html.slice(html.indexOf(`data-name="${name}"`), html.indexOf('</li>', html.indexOf(`data-name="${name}"`)));
+    expect(row('bob')).toContain('>2,350 chips<');
+    expect(row('carol')).toContain('>1,400 chips<');
+    for (const name of ['bob', 'carol']) expect(row(name)).not.toContain('results-note');
+    // The note takes the score's place, its last two words held together so neither is left alone on a line.
+    expect(row('host')).toContain('>Out in round\u00a014<');
+    expect(row('dan')).toContain('>Out in round\u00a09<');
+    for (const name of ['host', 'dan']) expect(row(name)).not.toContain('chips');
+    expect(tagsWith(html, 'results-note')).toHaveLength(2);
+    // A row with a note is marked, so only it takes a second line on a phone.
+    const li = (name: string): string => html.match(new RegExp(`<li[^>]*data-name="${name}"[^>]*>`))?.[0] ?? '';
+    expect(['bob', 'carol', 'host', 'dan'].map((name) => li(name).includes('results-standings__row--noted'))).toEqual([false, false, true, true]);
+  });
+
+  it('lays a note beside the name in a wide list and under it in a narrow one, never squeezing the name', () => {
+    const css = stylesheet('components.css');
+    expect(ruleOf(css, '.results-standings')).toContain('container: standings / inline-size');
+    const row = ruleOf(css, '.results-standings__row');
+    expect(row).toContain('display: grid');
+    expect(row).toContain('grid-template-columns: 18px auto minmax(0, 1fr) auto');
+    expect(row).toContain("grid-template-areas: 'rank avatar name end'");
+    // The lines stay together, level with the avatar, however tall the row.
+    expect(row).toContain('align-content: center');
+    // Wide: in the score's place, capped so a long note wraps (in balanced lines) before it takes the name's room.
+    const note = ruleOf(css, '.results-standings__note');
+    expect(note).toContain('grid-area: end');
+    expect(note).toMatch(/max-width: \d+rem/);
+    expect(note).toContain('text-wrap-style: balance');
+    // Narrow (a 360px phone's list is about 300px wide): the note takes a line of its own under the name.
+    const narrow = css.slice(css.indexOf('@container standings (max-width: 26rem) {'));
+    expect(narrow).toMatch(/^@container standings \(max-width: 26rem\) \{\s*\.results-standings__row--noted \{[^}]*grid-template-areas: 'rank avatar name end' 'rank avatar note note'/);
+    expect(narrow).toMatch(/\.results-standings__note \{[^}]*grid-area: note;[^}]*max-width: none/);
+  });
+
   it('announces a tie instead of crowning the first of the tied players', () => {
     const html = popup('bob', results({ entries: [
       { playerId: 'host', name: 'host', avatar: AV, score: 30, rank: 1 },
