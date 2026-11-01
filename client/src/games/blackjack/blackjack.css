@@ -351,6 +351,32 @@
   flex: none;
 }
 
+/*
+ * A seat whose hands do not all show at once (a row that slides, a full tile in a big table's
+ * strip showing the hand in play alone) says how many it holds: a small pill over its cards'
+ * bottom corner, where no rank or suit is. With every hand in view it goes.
+ */
+.tbl-tile__cards:has(> .bj-seat-hands) {
+  position: relative;
+}
+
+.tbl-tile__cards > .bj-seat-hands {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  height: 15px;
+  padding: 0 5px;
+  font-size: 0.6rem;
+  pointer-events: none;
+}
+
+.tbl-tile__cards > .bj-hands--seat:not([data-fade]) ~ .bj-seat-hands {
+  display: none;
+}
+
 /* ---------- A seat's sheet ---------- */
 .bj-seat-detail {
   --tbl-w: 56px;
@@ -481,14 +507,26 @@
     grid-template-areas: 'head' 'seats' 'stage';
   }
 
+  /*
+   * The round and the line fill the room left of the dealer's hand, centred in it: where the line
+   * has no room for the whole of it, the box it sits in gives way and the line takes a shorter form
+   * (TurnLine), so it is never cut and the round never runs up to the table's edge.
+   */
   .bj-table.tbl-felt--calm > .tbl-ribbon {
     grid-area: head;
     z-index: 1;
-    align-self: center;
+    align-self: stretch;
     justify-self: start;
     align-items: flex-start;
+    justify-content: center;
     width: calc(50% - (var(--bj-card-w) * (1 + var(--fan-step)) + 6px) / 2 - 6px);
     text-align: left;
+  }
+
+  .bj-table.tbl-felt--calm:not(.tbl-crowd--none) > .tbl-ribbon > .tbl-ribbon__note {
+    align-items: flex-start;
+    min-height: 0;
+    overflow: hidden;
   }
 
   .bj-table .tbl-ribbon__sub {
@@ -516,6 +554,7 @@
 
   .bj-table.tbl-felt--calm.tbl-crowd--none > .tbl-ribbon {
     grid-area: ribbon;
+    align-self: center;
     justify-self: center;
     align-items: center;
     width: auto;

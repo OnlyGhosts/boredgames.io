@@ -1,4 +1,5 @@
 import type { BlackjackRoomState, BlackjackView } from '@shared/games/blackjack/protocol';
+import { FitText } from '../../../platform/table/fit';
 import type { Tone } from '../../../platform/table/Outcome';
 import { PlayerTile, PlayersGrid, SeatSheet, type SeatLine, type SeatMark } from '../../../platform/table/PlayersGrid';
 import { StackCount, StakePill } from '../../../platform/table/Stakes';
@@ -195,7 +196,23 @@ export function Seats({ room, view, ids, staged, table, timeline, now, leaving, 
                   data={{ 'data-chips': chipsOf(id), 'data-bet': seat.bet }}
                   cards={
                     hands.length > 0 && id !== staged ? (
-                      <HandRow playerId={id} hands={hands} start={room.settings.startingChips} timeline={timeline} now={now} leaving={leaving} activeIndex={turn ? (view.turn?.handIndex ?? -1) : -1} place="seat" size="sm" mini testId="seat-hand" />
+                      <>
+                        <HandRow
+                          playerId={id}
+                          hands={hands}
+                          start={room.settings.startingChips}
+                          timeline={timeline}
+                          now={now}
+                          leaving={leaving}
+                          activeIndex={turn ? (view.turn?.handIndex ?? -1) : -1}
+                          place="seat"
+                          size="sm"
+                          mini
+                          testId="seat-hand"
+                        />
+                        {/* Split hands the tile cannot show at once: how many, over its cards' corner (blackjack.css); "×3" where "3 hands" has no room. */}
+                        {hands.length > 1 && <FitText forms={[`${hands.length} hands`, `×${hands.length}`]} className="tbl-pill bj-seat-hands" testId="seat-hand-count" />}
+                      </>
                     ) : undefined
                   }
                   fan={{ cards: Math.max(2, ...hands.map((h) => h.cards.length)), hands: hands.length }}

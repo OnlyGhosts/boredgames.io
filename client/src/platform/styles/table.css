@@ -914,6 +914,7 @@
   justify-content: center;
   gap: 2px 10px;
   margin: 2px 0 0;
+  min-width: 0;
   max-width: 100%;
   font-family: var(--font-display);
   font-size: 1.05rem;
@@ -922,8 +923,14 @@
   animation: tbl-slide-in 300ms var(--ease-out) both;
 }
 
+/* A name longer than the line breaks onto the next rather than run past it; the lines balance, so no word is left alone on the last. */
 .tbl-turn__text {
   min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.tbl-turn .tbl-turn__text {
+  text-wrap-style: balance;
 }
 
 .tbl-turn--go {
@@ -938,7 +945,11 @@
   color: var(--color-danger-text);
 }
 
+/* One line, never wider than the line it sits in: where it has no room, TurnLine drops it rather than cut it. */
 .tbl-turn__sub {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
   font-family: var(--font-sans);
   font-size: 0.8rem;
   font-weight: 600;
@@ -1070,31 +1081,66 @@
   scroll-snap-align: start;
 }
 
-/* The hint at an end with more seats past it: a small tab with a chevron over the faded sliver, a tap moving the strip on a page. */
+/*
+ * The hint at an end with more seats past it: a small tab with a chevron over the faded sliver, a
+ * tap moving the strip on a page. The tab is drawn small (::before), centred on the end; the button
+ * round it is a 40px target from the table's edge, a little over the next tile's edge, so a thumb
+ * finds it without the tab crowding the seats.
+ */
 .tbl-strip__more {
+  --tab-w: min(20px, calc(var(--strip-edge, 24px) - 4px));
+  --tab-at: calc((var(--strip-edge, 24px) - var(--tab-w)) / 2);
   position: absolute;
   top: 50%;
   z-index: 2;
   display: grid;
-  place-items: center;
-  width: min(20px, calc(var(--strip-edge, 24px) - 4px));
-  height: min(36px, calc(100% - 4px));
+  grid-template-columns: var(--tab-w);
+  align-items: center;
+  justify-items: center;
+  width: 40px;
+  height: min(44px, 100%);
   padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-text);
+  transform: translateY(-50%);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tbl-strip__more::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  z-index: -1;
+  width: var(--tab-w);
+  height: min(36px, calc(100% - 4px));
+  box-sizing: border-box;
   border: 1px solid var(--color-border);
   border-radius: 999px;
   background: var(--color-surface-2);
-  color: var(--color-text);
   box-shadow: var(--shadow-piece);
   transform: translateY(-50%);
-  cursor: pointer;
 }
 
 .tbl-strip__more--left {
-  left: calc((var(--strip-edge, 24px) - min(20px, calc(var(--strip-edge, 24px) - 4px))) / 2);
+  left: 0;
+  justify-content: start;
+  padding-left: var(--tab-at);
+}
+
+.tbl-strip__more--left::before {
+  left: var(--tab-at);
 }
 
 .tbl-strip__more--right {
-  right: calc((var(--strip-edge, 24px) - min(20px, calc(var(--strip-edge, 24px) - 4px))) / 2);
+  right: 0;
+  justify-content: end;
+  padding-right: var(--tab-at);
+}
+
+.tbl-strip__more--right::before {
+  right: var(--tab-at);
 }
 
 .tbl-strip__more svg {
@@ -1428,6 +1474,18 @@
   flex: 1 1 0;
   min-width: min-content;
   font-size: 0.8125em;
+}
+
+/*
+ * The name's own minimum is its floor (useNameFloor), never its whole length: it grows from nothing
+ * to its full width where the header has the room, and a longer name ends in an ellipsis inside the
+ * tile (its full length as the header's minimum once pushed it, and the badge after it, past the
+ * tile's edge, cut mid-letter).
+ */
+.tbl-tile__head .tbl-tile__name-text {
+  flex: 1 1 auto;
+  width: 0;
+  max-width: max-content;
 }
 
 /*
@@ -2165,6 +2223,14 @@
   color: var(--color-text);
 }
 
+/* Off my turn the clear button's room stays (a box its size), so the field needs the same room on and off my turn: AmountField's layout never changes with it. */
+.tbl-amount__field:not(:has(.tbl-amount__clear))::after {
+  content: '';
+  flex: none;
+  align-self: stretch;
+  width: 40px;
+}
+
 .tbl-amount__steps {
   display: grid;
   grid-auto-flow: column;
@@ -2214,22 +2280,30 @@
   color: var(--color-text-faint);
 }
 
+/*
+ * The moves share the row evenly, except that a button is never narrower than its word (and its
+ * icon): a longer word (Poker's Check/Fold) takes what it needs and the others share the rest.
+ */
 .tbl-panel__moves {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(min-content, 1fr));
   gap: var(--space-2);
+  container: moves / inline-size;
 }
 
 /* An odd number of moves (Poker's Fold, Raise and All in) sits in one row. */
 .tbl-panel__moves--3 {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  container: moves / inline-size;
+  grid-template-columns: repeat(3, minmax(min-content, 1fr));
 }
 
-/* Three moves in a narrow panel (a small laptop): the icons give their room to the words. */
+/* Three moves in a narrow panel (a small laptop, a phone): the icons and the padding give their room to the words. */
 @container moves (max-width: 300px) {
-  .tbl-panel__moves .tbl-move__icon {
+  .tbl-panel__moves--3 .tbl-move__icon {
     display: none;
+  }
+
+  .tbl-panel__moves--3 .tbl-move {
+    padding: 0 4px;
   }
 }
 
@@ -2367,9 +2441,41 @@
     border-radius: 0;
   }
 
-  .tbl-panel__moves {
-    grid-template-columns: repeat(var(--moves, 2), minmax(0, 1fr));
+  /* No room beside the quick amounts for the coin, seven digits and the clear button (Poker's "½ pot" on a 320px phone): the coin goes (AmountField). */
+  .tbl-amount[data-layout='bare'] .tbl-amount__coin {
+    display: none;
+  }
+
+  /* Still none (a phone on its side): the quick amounts under the field, as on a desktop. */
+  .tbl-amount[data-layout='stacked'] {
+    flex-direction: column;
     gap: 6px;
+  }
+
+  .tbl-amount[data-layout='stacked'] .tbl-amount__field {
+    border: 1.5px solid var(--color-border-strong);
+    border-radius: var(--radius-sm);
+  }
+
+  .tbl-amount[data-layout='stacked'] .tbl-amount__field:focus-within {
+    border-color: var(--color-primary-text);
+  }
+
+  .tbl-amount[data-layout='stacked'] .tbl-amount__step:first-child {
+    border-left-width: 1.5px;
+    border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+  }
+
+  .tbl-panel__moves {
+    grid-template-columns: repeat(var(--moves, 2), minmax(min-content, 1fr));
+    gap: 6px;
+  }
+
+  /* Blackjack's four in this one row (a phone on its side): the icons go where they would cut the words ("Double" needs 81px with its icon). */
+  @container moves (max-width: 340px) {
+    .tbl-panel__moves--4 .tbl-move__icon {
+      display: none;
+    }
   }
 }
 

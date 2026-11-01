@@ -97,6 +97,93 @@ export async function cornersClear(page: Page, label: string, { dealer = false }
   await expect.poll(read, { message: `${label}: every card’s rank and suit in full, nothing over them` }).toEqual([]);
 }
 
+/**
+ * The line saying whose turn it is reads whole where it sits (a phone's Blackjack line, in the room
+ * left of the dealer's hand): no part of it runs past its own box, it is never taller than the box
+ * it sits in, and it and the round over it lie inside the ribbon and the felt. A split seat's
+ * "Party Queen’s turn, hand 4 of 7" once ran 96px past a 114px ribbon on a 320px phone, cut
+ * mid-word, and the round sat on the table's top edge.
+ */
+export async function turnLineFits(page: Page, label: string): Promise<void> {
+  const read = () =>
+    page.evaluate(() => {
+      const bad: string[] = [];
+      const line = document.querySelector<HTMLElement>('[data-testid="table-turn"]');
+      const ribbon = line?.closest<HTMLElement>('.tbl-ribbon');
+      const felt = line?.closest<HTMLElement>('.tbl-felt');
+      if (!line || !ribbon || !felt) return ['no turn line'];
+      const inside = (r: DOMRect, b: DOMRect) => r.left >= b.left - 0.5 && r.right <= b.right + 0.5 && r.top >= b.top - 0.5 && r.bottom <= b.bottom + 0.5;
+      const rb = ribbon.getBoundingClientRect();
+      const fs = getComputedStyle(felt);
+      const fr = felt.getBoundingClientRect();
+      const inner = new DOMRect(
+        fr.left + felt.clientLeft + parseFloat(fs.paddingLeft),
+        fr.top + felt.clientTop + parseFloat(fs.paddingTop),
+        felt.clientWidth - parseFloat(fs.paddingLeft) - parseFloat(fs.paddingRight),
+        felt.clientHeight - parseFloat(fs.paddingTop) - parseFloat(fs.paddingBottom),
+      );
+      for (const part of Array.from(line.children) as HTMLElement[]) {
+        if (part.scrollWidth > part.clientWidth + 1) bad.push(`"${part.textContent}" runs ${part.scrollWidth - part.clientWidth}px past its box`);
+        if (!inside(part.getBoundingClientRect(), rb)) bad.push(`"${part.textContent}" outside the ribbon`);
+      }
+      const box = line.parentElement;
+      if (line.scrollHeight > line.clientHeight + 1 || (box && line.offsetHeight > box.clientHeight + 1)) bad.push(`"${line.textContent}" taller than its box`);
+      // No word alone on the last of its lines ("Waiting for 11 / players").
+      const words = line.querySelector('.tbl-turn__text')?.firstChild;
+      if (words instanceof Text) {
+        const tops: number[] = [];
+        const range = document.createRange();
+        for (const m of words.data.matchAll(/\S+/g)) {
+          range.setStart(words, m.index ?? 0);
+          range.setEnd(words, (m.index ?? 0) + m[0].length);
+          tops.push(Math.round(range.getClientRects()[0]?.top ?? 0));
+        }
+        const last = tops[tops.length - 1];
+        if (new Set(tops).size > 1 && tops.filter((top) => top === last).length < 2) bad.push(`"${words.data}" leaves a word alone on its last line`);
+      }
+      if (ribbon.scrollHeight > ribbon.clientHeight + 1 || ribbon.scrollWidth > ribbon.clientWidth + 1) bad.push('the ribbon cut');
+      const round = ribbon.querySelector('.tbl-ribbon__sub');
+      if (round && !inside(round.getBoundingClientRect(), inner)) bad.push(`"${round.textContent}" off the felt's inside`);
+      return bad;
+    });
+  await expect.poll(read, { message: `${label}: whose turn it is reads whole, inside the ribbon and the felt` }).toEqual([]);
+}
+
+/**
+ * The panel's words read whole: every move's label (Stand, Double, Poker's Check/Fold) in full, no
+ * ellipsis, and the amount's field holds its coin, figure and clear button inside its own box, the
+ * clear button clear of the quick amounts and the first thing a tap on it finds. "Double" once read
+ * "D…" on a phone on its side, and the clear button lay 24px under "½".
+ */
+export async function panelFits(page: Page, label: string): Promise<void> {
+  const read = () =>
+    page.evaluate(() => {
+      const bad: string[] = [];
+      for (const el of Array.from(document.querySelectorAll<HTMLElement>('.tbl-move__label'))) {
+        if (el.getBoundingClientRect().width > 0 && el.scrollWidth > el.clientWidth + 0.5) bad.push(`"${el.textContent}" cut to ${el.clientWidth}px of ${el.scrollWidth}px`);
+      }
+      const meet = (a: DOMRect, b: DOMRect) => Math.min(a.right, b.right) - Math.max(a.left, b.left) > 0.5 && Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 0.5;
+      for (const amount of Array.from(document.querySelectorAll<HTMLElement>('.tbl-amount'))) {
+        const field = amount.querySelector<HTMLElement>('.tbl-amount__field');
+        if (!field) continue;
+        if (field.scrollWidth > field.clientWidth + 0.5) bad.push(`the field's content runs ${field.scrollWidth - field.clientWidth}px past it`);
+        const steps = Array.from(amount.querySelectorAll<HTMLElement>('.tbl-amount__step')).map((s) => s.getBoundingClientRect());
+        for (const part of Array.from(field.querySelectorAll<HTMLElement>('.tbl-amount__input, .tbl-amount__clear'))) {
+          const r = part.getBoundingClientRect();
+          if (steps.some((s) => meet(r, s))) bad.push(`${part.className} under a quick amount`);
+        }
+        const clear = field.querySelector<HTMLElement>('.tbl-amount__clear');
+        if (clear) {
+          const r = clear.getBoundingClientRect();
+          const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+          if (!hit || !clear.contains(hit)) bad.push(`a tap on the clear button finds ${hit?.className ?? 'nothing'}`);
+        }
+      }
+      return bad;
+    });
+  await expect.poll(read, { message: `${label}: every move's word in full, the amount's field whole and its clear button clear` }).toEqual([]);
+}
+
 /** My hand at the bottom of the table is wholly on screen. */
 export async function myAreaOnScreen(page: Page, testId: string, label: string): Promise<void> {
   const read = () =>
@@ -222,11 +309,20 @@ export async function seatFloors(page: Page, label: string, card: number): Promi
           parts.push(['pill', pill]);
         }
         const nameBox = shown(tile.querySelector('.tbl-tile__name'));
-        if (nameBox) parts.push(['name', nameBox]);
-        // The name before the pill: cut (an ellipsis) only past its first six characters, all of a shorter one shown.
+        if (nameBox) {
+          // The name and its badge (Poker's dealer button) inside the tile: a long name once kept its whole width and ran past the edge, cut mid-letter.
+          if (!inside(nameBox, t)) bad.push(`${name}: the name off the tile`);
+          parts.push(['name', nameBox]);
+        }
+        // The name before the pill: cut (an ellipsis) only past its first six characters, all of a shorter one shown,
+        // or where the header has no room for six (wide letters on a narrow tile): then it takes all the header has.
         const nameText = tile.querySelector<HTMLElement>('.tbl-tile__name-text');
         const text = nameText?.firstChild;
         if (nameText && text instanceof Text && nameText.scrollWidth > nameText.clientWidth + 0.5) {
+          if (getComputedStyle(nameText).textOverflow !== 'ellipsis') bad.push(`${name}: the name cut with no ellipsis`);
+          // The header's room all given to it: the pill beside it at its least (its mark alone, or gone).
+          const pillWord = tile.querySelector('[data-testid="seat-pill"] [data-testid="seat-line"]')?.textContent ?? '';
+          const full = pillWord === '';
           const range = document.createRange();
           const widthOf = (k: number) => {
             range.setStart(text, 0);
@@ -245,7 +341,7 @@ export async function seatFloors(page: Page, label: string, card: number): Promi
           const length = text.data.length;
           let seen = 0;
           while (seen < length && widthOf(seen + 1) + ellipsis <= nameText.clientWidth + 0.5) seen += 1;
-          if (seen < Math.min(length, 6)) bad.push(`${name}: the name cut to ${seen} characters`);
+          if (seen < Math.min(length, 6) && !full) bad.push(`${name}: the name cut to ${seen} characters`);
         }
         for (let i = 0; i < parts.length; i++) for (let j = i + 1; j < parts.length; j++) if (meet(parts[i][1], parts[j][1])) bad.push(`${name}: the ${parts[i][0]} over the ${parts[j][0]}`);
       }
@@ -321,10 +417,19 @@ export async function stripShown(page: Page, label: string, card: number): Promi
         const left = el.scrollLeft > 1;
         const right = el.scrollLeft + el.clientWidth < el.scrollWidth - 1;
         const hints = Array.from(el.parentElement?.querySelectorAll<HTMLElement>('[data-testid="seat-strip-more"]') ?? []);
-        // Each hint sits over its own end, never over a tile in view.
+        // Each hint's tab (drawn by ::before) sits over its own end, never over a tile in view.
         const astray = hints.filter((h) => {
           const r = h.getBoundingClientRect();
-          return h.dataset.side === 'left' ? r.left < box.left - 0.5 || r.right > box.left + edge + 0.5 : r.right > box.right + 0.5 || r.left < box.right - edge - 0.5;
+          const tab = getComputedStyle(h, '::before');
+          const width = parseFloat(tab.width);
+          const tabLeft = h.dataset.side === 'left' ? r.left + parseFloat(tab.left) : r.right - parseFloat(tab.right) - width;
+          const tabRight = tabLeft + width;
+          return h.dataset.side === 'left' ? tabLeft < box.left - 0.5 || tabRight > box.left + edge + 0.5 : tabRight > box.right + 0.5 || tabLeft < box.right - edge - 0.5;
+        }).length;
+        // And each is a target a thumb finds: 40px wide, and 40px tall where the strip is.
+        const small = hints.filter((h) => {
+          const r = h.getBoundingClientRect();
+          return r.width < 39.5 || r.height < Math.min(40, box.height) - 0.5;
         }).length;
         return {
           whole,
@@ -332,12 +437,18 @@ export async function stripShown(page: Page, label: string, card: number): Promi
           due: [left ? 'left' : '', right ? 'right' : ''].filter(Boolean).join(' '),
           hints: hints.map((h) => h.dataset.side).join(' '),
           astray,
+          small,
         };
       });
-    await expect.poll(async () => {
-      const v = await read();
-      return v.fade === v.due && v.hints === v.due && v.astray === 0;
-    }, { message: `${at}: the ends with seats past them fade and carry the hint` }).toBe(true);
+    await expect
+      .poll(
+        async () => {
+          const v = await read();
+          return v.fade === v.due && v.hints === v.due && v.astray === 0 && v.small === 0;
+        },
+        { message: `${at}: the ends with seats past them fade and carry the hint, a 40px target` },
+      )
+      .toBe(true);
     const view = await read();
     expect(view.whole.length, `${at}: whole tiles in view`).toBeGreaterThan(0);
     for (const id of view.whole) seen.add(id);

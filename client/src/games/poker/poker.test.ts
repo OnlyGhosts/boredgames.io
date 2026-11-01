@@ -614,7 +614,7 @@ describe('the screen', () => {
     expect(html).toMatch(/data-testid="my-cards"[^>]*><div class="tbl-hand__head"><span class="pk-dealer"[^>]*data-testid="my-dealer"/);
     // A blind of 10 on the tile's footer, "bet 10", where the chips fly to; the stack beside it.
     const plain = html.replace(/<span class="tbl-chipmark" aria-hidden="true">(?:<svg.*?<\/svg>)+<\/span>/g, '');
-    expect(plain).toMatch(/data-testid="seat-bet" data-bet="10" data-table-anchor="[^"]+"><span class="tbl-tile__bet-text" data-fit="0">bet 10<\/span><\/span>/);
+    expect(plain).toMatch(/data-testid="seat-bet" data-bet="10" data-table-anchor="[^"]+"><span class="tbl-tile__bet-text">bet 10<\/span><\/span>/);
     expect(plain).toMatch(/data-testid="seat-chips" data-chips="990"><span class="tbl-tile__chips-text">990<\/span><\/span>/);
     expect(html).toMatch(/class="tbl-stake tbl-stake--pot pk-pot__pill" data-testid="pot" data-bet="15" data-chips="15" data-shown="15" data-table-anchor="pot"><span class="tbl-stake__word">Pot<\/span> <span class="tbl-stake__value">15</);
   });
@@ -650,6 +650,11 @@ describe('the screen', () => {
     expect(tagsWith(spectator, 'my-area')).toHaveLength(0);
     expect(tagsWith(spectator, 'seat')).toHaveLength(3);
     expect(attr(tagWith(spectator, 'hand-stage'), 'data-player-id')).toBe('host');
+    // A player out of chips gets the same short panel, saying so: the table has the room the controls took.
+    const out = render(pkRoom(view({ players: { ...view().players, carol: seat({ chips: 0, status: 'out', busted: true }) } })), 'carol', false);
+    expect(out).toContain('You’re out of chips. You can play the next game.');
+    expect(attr(tagWith(out, 'pk-panel'), 'data-out')).toBe('true');
+    for (const id of ['raise-input', 'action-fold', 'action-call', 'action-check', 'action-raise', 'action-allin', 'raise-max', 'premove-checkFold']) expect(tagsWith(out, id), id).toHaveLength(0);
     expect(tagsWith(spectator, 'stage-card').map((t) => attr(t, 'data-face'))).toEqual(['down', 'down']);
     // The hand on my stage is named by its pill, and its seat leaves its cards to the stage: they show once.
     expect(textOf(spectator, 'stage-owner')).toBe('Hana');

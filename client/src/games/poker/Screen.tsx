@@ -71,7 +71,18 @@ export function PokerScreen({ room, meId, isHost }: GameScreenProps<PokerView, P
       sheet={sheet}
       onSheet={openSheet}
       table={<Table room={shown} view={view} meId={meId} frame={frame} live={timeline} now={now} isPhone={isPhone} focus={focus} standing={standing} clock={clock} />}
-      panel={<ControlPanel view={view} meId={meId} balance={chipsOnScreen(timeline, meId, seat?.chips ?? 0, now)} watching={standing === 'watching'} canSend={playing && connected && !rejoining} busy={busy} hotkeys={!isPhone} />}
+      panel={
+        <ControlPanel
+          view={view}
+          meId={meId}
+          balance={chipsOnScreen(timeline, meId, seat?.chips ?? 0, now)}
+          watching={standing === 'watching'}
+          out={standing === 'out'}
+          canSend={playing && connected && !rejoining}
+          busy={busy}
+          hotkeys={!isPhone}
+        />
+      }
     />
   );
 }

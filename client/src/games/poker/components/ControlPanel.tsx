@@ -21,6 +21,8 @@ interface Props {
   balance: number;
   /** I watch the whole game: no moves, one line. */
   watching: boolean;
+  /** I am out of chips for the rest of the game: no moves, one line saying so. */
+  out?: boolean;
   /** Sends can go out: the game is running, the socket is up and the seat is back (no rejoin in flight). */
   canSend: boolean;
   /** Cards or chips are still moving: the moves wait for them. */
@@ -36,7 +38,7 @@ interface Props {
  * button. Every control is always there, lit only on my turn when it
  * is on offer. The amount starts at the minimum raise each turn.
  */
-export function ControlPanel({ view, meId, balance, watching, canSend, busy, hotkeys }: Props) {
+export function ControlPanel({ view, meId, balance, watching, out = false, canSend, busy, hotkeys }: Props) {
   const seat = view.players[meId];
   const raiseText = usePoker((s) => s.raiseText);
   const pending = usePoker((s) => s.pending);
@@ -78,8 +80,9 @@ export function ControlPanel({ view, meId, balance, watching, canSend, busy, hot
     { label: 'Max', ariaLabel: 'All your chips', testId: 'raise-max', value: range ? range.max : null },
   ];
 
-  // A spectator of the whole game has no moves at all: one line in place of the controls.
+  // A spectator of the whole game has no moves at all: one line in place of the controls. So has a player out of chips, for the rest of the game.
   if (watching) return <WatchingPanel testId="pk-panel" />;
+  if (out) return <WatchingPanel testId="pk-panel" out />;
 
   // Someone else acts and I am in the hand: the moves become picks for my turn (lib/premove).
   // No icons: the words need the room on a phone, and a pick's tick takes the icon's place.

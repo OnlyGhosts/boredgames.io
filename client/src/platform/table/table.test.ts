@@ -478,12 +478,21 @@ describe('the components', () => {
     expect(split).toContain('<span class="tbl-tile__total" data-testid="seat-total" data-tone="active" data-long=""><span class="tbl-tile__total-text" data-fit="0">21/15</span></span>');
     // The stack and the bet each have their chips drawn before the figure: one lime chip for the stack. The bet reads "50k" by its chips where the word has no room.
     expect(out).toMatch(/<span class="tbl-tile__chips" data-testid="seat-chips" data-chips="1250000"><span class="tbl-chipmark" aria-hidden="true"><svg[^>]*><g class="tbl-chip tbl-chip--lime"/);
-    expect(plain).toContain('<span class="tbl-tile__foot"><span class="tbl-tile__chips" data-testid="seat-chips" data-chips="1250000"><span class="tbl-tile__chips-text">1.3M</span></span><span class="tbl-tile__bet" data-testid="seat-bet" data-bet="50000"><span class="tbl-tile__bet-text" data-fit="0">bet 50k</span></span></span>');
+    expect(plain).toContain(
+      '<span class="tbl-tile__foot"><span class="tbl-tile__chips" data-testid="seat-chips" data-chips="1250000"><span class="tbl-tile__chips-text">1.3M</span></span><span class="tbl-tile__bet" data-testid="seat-bet" data-bet="50000"><span class="tbl-tile__bet-text">bet 50k</span></span></span>',
+    );
     // A figure with no room for its whole form steps to its short one: "bet 1,250", then "1,250", then "1.3k".
-    const { figureForms } = await import('./PlayersGrid');
+    const { figureForms, footForms } = await import('./PlayersGrid');
     expect(figureForms(1250)).toEqual(['1,250', '1.3k']);
     expect(figureForms(50_000)).toEqual(['50k']);
     expect(figureForms(990)).toEqual(['990']);
+    // The stack and the bet fitted together: the bet's word first, then the stack short, then the bet, then the stack's chip; then the stack goes, and last the bet.
+    const forms = (chips: number | undefined, bet: number | undefined) => footForms(chips, bet).map((f) => `${f.mark ? '*' : ''}${f.chips ?? '-'} ${f.bet ?? '-'}`);
+    expect(forms(1250, 1250)).toEqual(['*1,250 bet 1,250', '*1,250 1,250', '*1.3k 1,250', '*1.3k 1.3k', '1.3k 1.3k', '- bet 1,250', '- 1,250', '- 1.3k', '- -']);
+    // A split seat's long stake by a big stack (12.3M and 350k on a 107px compact tile): the stack drops its chip before it goes.
+    expect(forms(12_345_678, 350_000)).toEqual(['*12.3M bet 350k', '*12.3M 350k', '12.3M 350k', '- bet 350k', '- 350k', '- -']);
+    expect(forms(990, undefined)).toEqual(['*990 -', '990 -', '- -']);
+    expect(forms(undefined, 0)).toEqual(['- -']);
     expect(out).not.toContain('tbl-tile__mark');
     // A compact tile shows the same: the cards, the total, the stack and the bet.
     const compact = html(createElement(PlayerTile, { ...props, tier: 'compact' }));
@@ -526,12 +535,22 @@ describe('the components', () => {
     expect(css).toMatch(/\.tbl-grid--full \{\s*grid-template-columns: repeat\(var\(--cols, 4\), minmax\(0, 320px\)\);/);
   });
 
-  it('the line under the ribbon: whose turn it is in its tone, the quieter second part, the clock before it', () => {
-    const out = html(createElement(TurnLine, { text: "Pia’s turn", tone: 'other', state: 'turn', sub: 'Quinn raises to 40', clock: createElement('span', { 'data-testid': 'timer' }) }));
-    expect(out).toMatch(/^<p class="tbl-turn tbl-turn--other" data-testid="table-turn" data-state="turn"><span class="tbl-turn__clock"><span data-testid="timer"><\/span><\/span><span class="tbl-turn__text">Pia’s turn<\/span><span class="tbl-turn__sub" data-testid="turn-sub">Quinn raises to 40<\/span><\/p>$/);
+  it('the line under the ribbon: whose turn it is in its tone, the quieter second part, the clock before it', async () => {
+    const out = html(createElement(TurnLine, { text: 'Pia’s turn', tone: 'other', state: 'turn', sub: 'Quinn raises to 40', clock: createElement('span', { 'data-testid': 'timer' }) }));
+    expect(out).toMatch(
+      /^<p class="tbl-turn tbl-turn--other" data-testid="table-turn" data-state="turn"><span class="tbl-turn__clock"><span data-testid="timer"><\/span><\/span><span class="tbl-turn__text">Pia’s turn<\/span><span class="tbl-turn__sub" data-testid="turn-sub">Quinn raises to 40<\/span><\/p>$/,
+    );
     const plain = html(createElement(TurnLine, { text: 'Your turn', tone: 'go', state: 'mine' }));
     expect(plain).not.toContain('tbl-turn__sub');
     expect(plain).not.toContain('tbl-turn__clock');
+    // Where it has no room for the whole of it: without the second part first, then the shorter forms it brings.
+    const { turnForms } = await import('./TurnLine');
+    expect(turnForms('Pia’s turn, hand 2 of 3', 'Next: Quinn', [{ text: 'Pia’s turn', sub: 'Hand 2 of 3' }])).toEqual([
+      { text: 'Pia’s turn, hand 2 of 3', sub: 'Next: Quinn' },
+      { text: 'Pia’s turn, hand 2 of 3' },
+      { text: 'Pia’s turn', sub: 'Hand 2 of 3' },
+    ]);
+    expect(turnForms('Your turn', undefined)).toEqual([{ text: 'Your turn', sub: undefined }]);
   });
 
   it('the stage: the hand alone, big and centred, with no columns beside it', () => {
@@ -543,12 +562,15 @@ describe('the components', () => {
     expect(css).not.toContain('tbl-stage__aside');
   });
 
-  it('lays the moves two to a row, three in one row, and tells a phone how many to put in its one row', () => {
+  it('lays the moves two to a row, three in one row, and tells a phone how many to put in its one row, never a button narrower than its word', () => {
     const moves = (count: number) => html(createElement(PanelMoves, { count, children: [] }));
-    expect(moves(4)).toBe('<div class="tbl-panel__moves" style="--moves:4" role="group" aria-label="Your moves"></div>');
+    expect(moves(4)).toBe('<div class="tbl-panel__moves tbl-panel__moves--4" style="--moves:4" role="group" aria-label="Your moves"></div>');
     expect(moves(3)).toContain('class="tbl-panel__moves tbl-panel__moves--3" style="--moves:3"');
     const css = readFileSync(join(import.meta.dirname, '../styles/table.css'), 'utf8');
-    expect(css).toMatch(/\.tbl-panel__moves \{\s*grid-template-columns: repeat\(var\(--moves, 2\), minmax\(0, 1fr\)\);/);
+    expect(css).toMatch(/\.tbl-panel__moves \{\s*grid-template-columns: repeat\(var\(--moves, 2\), minmax\(min-content, 1fr\)\);/);
+    // Where four in a row would cut "Double" (a phone on its side), the icons go.
+    const phone = css.slice(css.indexOf('/* The panel kept short'));
+    expect(phone).toMatch(/^[^@]*@container moves \(max-width: 340px\) \{\s*\.tbl-panel__moves--4 \.tbl-move__icon \{\s*display: none;/);
   });
 
   it('puts the quick amounts under the field on a desktop, joined to it on a phone, and never cuts the figure', () => {

@@ -1,7 +1,7 @@
 import { expect, test, type Browser, type BrowserContext, type Locator, type Page } from '@playwright/test';
 import { closeResults, createParty, expectReadyCount, joinByCode, readyAll } from './party';
-import { tableBots, type TableBot } from './tableBots';
-import { cornersClear, myAreaOnScreen, seatFloors, stripShown, stripSwiped, tilesReadable, turnInStrip } from './tableFit';
+import { tableBot, tableBots, type TableBot } from './tableBots';
+import { cornersClear, myAreaOnScreen, panelFits, seatFloors, stripShown, stripSwiped, tilesReadable, turnInStrip } from './tableFit';
 
 /**
  * Texas Hold'em on the Stake-style table, between a desktop host and two phones (390x844, touch):
@@ -926,5 +926,75 @@ test('a move picked before my turn: Pia ticks Call any while Hana raises, and th
     expect(errors).toEqual([]);
   } finally {
     for (const c of contexts) await c.close();
+  }
+});
+
+/**
+ * A review's long names, at every phone size, on its side and on a desktop. A long name kept its
+ * whole width and pushed the dealer button 4px past its tile's edge, the name cut mid-letter with no
+ * ellipsis; "Check/Fold" read "Check/F…" on a 320px phone and in every desktop's panel; and the raise
+ * field ran 11px under "½ pot" on a phone on its side, its clear button under it.
+ */
+test('long names at the table: each ends in an ellipsis inside its tile with the dealer button, Check/Fold reads whole and the clear button lies clear', async ({ browser, baseURL }) => {
+  const base = baseURL ?? 'http://localhost:4173';
+  const ctx = await browser.newContext({ viewport: SMALL, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
+  const page = await ctx.newPage();
+  const errors: string[] = [];
+  page.on('pageerror', (err) => errors.push(err.message));
+  const bots: TableBot[] = [];
+  try {
+    const code = await createParty(page, 'Hana', 'poker');
+    for (const name of ['WWWWWWWWWWWWWWWW', 'Bartholomew Jane', 'MMMMMMMMMMMMMMMM']) bots.push(await tableBot(name, code, base, { game: 'poker', hold: true }));
+    await expectReadyCount(page, 4);
+    await page.getByTestId('start-game').click();
+    const screen = page.getByTestId('poker-screen');
+    await expect(screen).toHaveAttribute('data-phase', 'acting');
+    const myId = await page.getByTestId('my-area').getAttribute('data-player-id');
+    const turn = async () => (await screen.getAttribute('data-turn-player')) ?? '';
+    const sizes = [SMALL, { width: 360, height: 780 }, PORTRAIT, { width: 667, height: 375 }, { width: 844, height: 390 }, { width: 1440, height: 900 }];
+    // How the amount lays out at each size (its steps joined to it, without the coin, or under it): the same on my turn and off it, so the panel never jumps.
+    const layouts: Record<string, string[]> = {};
+    const look = async (what: string) => {
+      for (const size of sizes) {
+        await page.setViewportSize(size);
+        const label = `${what} at ${size.width}x${size.height}`;
+        await tilesReadable(page, label);
+        await panelFits(page, label);
+        (layouts[`${size.width}x${size.height}`] ??= []).push((await page.locator('.tbl-amount').getAttribute('data-layout')) ?? 'joined');
+      }
+      await page.setViewportSize(SMALL);
+    };
+    // Bots before me call the big blind; on my turn I raise and every bot after me calls: each move is one the table takes.
+    const seen = new Set<string>();
+    for (let moves = 0; moves < 8 && seen.size < 2; moves++) {
+      await expect.poll(turn, { message: 'someone to act' }).not.toBe('');
+      const id = await turn();
+      if (id === myId) {
+        if (!seen.has('mine')) {
+          seen.add('mine');
+          await expect(page.getByTestId('raise-clear')).toBeVisible();
+          await look('my turn');
+        }
+        await page.getByTestId('action-raise').click();
+      } else {
+        if (!seen.has('pick')) {
+          seen.add('pick');
+          await expect(page.getByTestId('premove-checkFold')).toHaveText('Check/Fold');
+          await look('a pick for my turn');
+        }
+        const bot = bots.find((b) => b.id === id);
+        if (!bot) throw new Error(`no bot has the turn: ${id}`);
+        bot.move({ t: 'call' });
+      }
+      await expect.poll(turn, { message: `the turn passes from ${id}` }).not.toBe(id);
+    }
+    expect([...seen].sort()).toEqual(['mine', 'pick']);
+    for (const [size, both] of Object.entries(layouts)) expect(new Set(both).size, `${size}: the amount's layout on my turn and off it (${both.join(', ')})`).toBe(1);
+    await expect(page.locator('[data-testid="seat"] [data-testid="seat-dealer"], [data-testid="my-dealer"]')).toHaveCount(1);
+    expect(errors).toEqual([]);
+    expect(bots.flatMap((b) => b.errors)).toEqual([]);
+  } finally {
+    for (const b of bots) b.close();
+    await ctx.close();
   }
 });

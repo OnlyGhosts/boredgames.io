@@ -1,6 +1,6 @@
 import type { BlackjackPhase, BlackjackView, HandOutcome } from '@shared/games/blackjack/protocol';
 import { formatChips } from '../../../platform/lib/format';
-import type { TurnTone } from '../../../platform/table/TurnLine';
+import type { TurnForm, TurnTone } from '../../../platform/table/TurnLine';
 import type { BjFocus } from './focus';
 
 export { formatChips };
@@ -115,6 +115,8 @@ export interface FocusLine {
   tone: TurnTone;
   /** A quieter second part: who is next, how many bets are in, the dealer's rule, where I stand. */
   sub?: string;
+  /** Shorter forms for a line with no room for the whole of it (TurnLine): a split hand's number under the name ("Pia’s turn", "Hand 2 of 3"), then the name alone. */
+  short?: TurnForm[];
 }
 
 export interface FocusLineInput {
@@ -145,11 +147,14 @@ export function focusLine(focus: BjFocus, s: FocusLineInput): FocusLine {
   const note = standing === 'playing' || standing === 'watching' ? undefined : STANDING_LINES[standing];
   switch (focus.kind) {
     case 'turn': {
-      const which = s.handCount > 1 ? `, hand ${focus.handIndex + 1} of ${s.handCount}` : '';
-      if (focus.mine) return { state: 'mine', text: `Your turn${which}`, tone: 'go' };
+      const split = s.handCount > 1;
+      const which = split ? `, hand ${focus.handIndex + 1} of ${s.handCount}` : '';
+      const splitForms = (turn: string): { short?: TurnForm[] } => (split ? { short: [{ text: turn, sub: `Hand ${focus.handIndex + 1} of ${s.handCount}` }, { text: turn }] } : {});
+      if (focus.mine) return { state: 'mine', text: `Your turn${which}`, tone: 'go', ...splitForms('Your turn') };
       const next = focus.next === null ? 'Dealer' : focus.next === s.meId ? 'You' : s.nameOf(focus.next);
       const name = s.nameOf(focus.playerId);
-      return { state: 'turn', text: s.turnAway ? `${name} is away` : `${name}’s turn${which}`, tone: 'other', sub: note ?? `Next: ${next}` };
+      if (s.turnAway) return { state: 'turn', text: `${name} is away`, tone: 'other', sub: note ?? `Next: ${next}` };
+      return { state: 'turn', text: `${name}’s turn${which}`, tone: 'other', sub: note ?? `Next: ${next}`, ...splitForms(`${name}’s turn`) };
     }
     case 'dealer':
       if (focus.last) return { state: 'dealer', text: LAST_HAND, tone: 'other', sub: "Dealer’s turn" };

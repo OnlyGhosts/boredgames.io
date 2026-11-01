@@ -7,7 +7,7 @@ import { CheckIcon, ChevronIcon, CloseIcon, SparkIcon } from '../components/Icon
 import { useScrollFade } from '../lib/useScrollFade';
 import { CardsIcon, OutIcon, StarIcon } from './Icons';
 import { TotalPill, type Tone } from './Outcome';
-import { FitText, TILE_FIT } from './fit';
+import { FitText, TILE_FIT, overflows, tileOf, useFitForm } from './fit';
 import { ChipMark, STACK_CHIP, StackCount, StakePill } from './Stakes';
 import type { StakeFormat } from './stakes';
 import { CARD_FLOOR, GRID_GAP, columnWidth, fanStep, fitGrid, fitStrip, fitsRoom, naturalHeight, seatPlan, shapeOf, stripHeight, stripRows, tileHeight, type Room, type SeatPlan, type TileTier } from './grid';
@@ -320,6 +320,46 @@ export function figureForms(n: number): string[] {
   return short === whole ? [whole] : [whole, short];
 }
 
+/** How a tile's footer shows its stack and its bet: each figure's words (null: not shown), and whether the stack keeps its chip. */
+export interface FootForm {
+  chips: string | null;
+  bet: string | null;
+  mark: boolean;
+}
+
+/**
+ * A tile's footer, the stack and the bet fitted together, the fullest first (they share a line on
+ * a compact tile, so one giving way gives the other room): the bet's word goes first ("bet 50k",
+ * then "50k"), then the stack reads short, then the bet, then the stack's chip; past that the stack
+ * goes (the seat's sheet shows it) and the bet takes the room in its fullest form that fits, and
+ * last the bet goes too. Never cut.
+ */
+export function footForms(chips: number | undefined, bet: number | undefined): FootForm[] {
+  const c = chips === undefined ? [null] : figureForms(chips);
+  const b = bet === undefined || bet <= 0 ? [null] : [`bet ${tileFigure(bet)}`, ...figureForms(bet)];
+  const at = (list: (string | null)[], i: number) => list[Math.min(i, list.length - 1)] ?? null;
+  const short = at(c, 1);
+  const out: FootForm[] = [];
+  const add = ({ chips: shown, bet: staked, mark }: FootForm) => {
+    const form = { chips: shown, bet: staked, mark: shown !== null && mark };
+    const last = out[out.length - 1];
+    if (!last || last.chips !== form.chips || last.bet !== form.bet || last.mark !== form.mark) out.push(form);
+  };
+  add({ chips: c[0], bet: b[0], mark: true });
+  add({ chips: c[0], bet: at(b, 1), mark: true });
+  add({ chips: short, bet: at(b, 1), mark: true });
+  add({ chips: short, bet: at(b, 2), mark: true });
+  if (short !== null) add({ chips: short, bet: at(b, 2), mark: false });
+  for (const form of b) add({ chips: null, bet: form, mark: false });
+  add({ chips: null, bet: null, mark: false });
+  return out;
+}
+
+/** A figure on a tile's footer has no room for the form on show. */
+function footCut(el: HTMLElement): boolean {
+  return Array.from(el.querySelectorAll<HTMLElement>('.tbl-tile__chips-text, .tbl-tile__bet-text')).some(overflows);
+}
+
 /** How a seat's status line reads: the turn in the accent, a settled result strong, out in red, the rest quiet. */
 export type SeatLineTone = 'turn' | 'strong' | 'bad' | 'quiet';
 
@@ -471,10 +511,42 @@ function useFanStep(ref: RefObject<HTMLElement | null>, cards: number, floor: nu
 /** The characters of a name a tile always shows: all of a shorter one; a longer one is cut (an ellipsis) only past them. */
 export const NAME_FLOOR = 6;
 
+/** The status mark's size in a tile's pill (MarkIcon). */
+const MARK_SIZE = 10;
+
+/**
+ * The least a status pill takes once it has given way (table.css): its mark alone in a little
+ * padding, or nothing for a pill on turn or with no mark.
+ */
+function pillLeast(pill: Element): number {
+  if (pill.classList.contains('tbl-tile__pill--turn') || (pill.querySelector('.tbl-tile__pill-mark')?.childElementCount ?? 0) === 0) return 0;
+  return MARK_SIZE + 0.7 * (parseFloat(getComputedStyle(pill).fontSize) || 0);
+}
+
+/**
+ * The most a name may take in its tile's header: the header's width less the avatar, the name's
+ * badge, the status pill at its least (its mark alone) and the gaps between them. Infinity off a
+ * header.
+ */
+function nameRoom(el: HTMLElement): number {
+  const name = el.parentElement;
+  const head = name?.parentElement;
+  if (!name || !head?.classList.contains('tbl-tile__head')) return Infinity;
+  const gap = (box: Element) => parseFloat(getComputedStyle(box).columnGap) || 0;
+  const beside = Array.from(head.children).filter((c) => c !== name);
+  const kin = Array.from(name.children).filter((c) => c !== el);
+  const width = (c: Element) => (c.classList.contains('tbl-tile__pill') ? pillLeast(c) : c.getBoundingClientRect().width);
+  const taken = (list: Element[], between: number) => list.reduce((sum, c) => sum + width(c) + between, 0);
+  return head.clientWidth - taken(beside, gap(head)) - taken(kin, gap(name));
+}
+
 /**
  * Holds a tile's name at least as wide as its first NAME_FLOOR characters (and the ellipsis after
  * them where it is longer), measured in its own font as it lays out and again when that changes
- * (the fonts arriving, a bigger text size): the status pill beside it gives way first.
+ * (the fonts arriving, a bigger text size, the tile's width): the status pill beside it gives way
+ * first. Never wider than the header has room for (nameRoom): a name of wide letters on a narrow
+ * tile ("WWWWWW…" on a 107px compact tile) ends in its ellipsis inside the tile rather than run
+ * past its edge.
  */
 function useNameFloor(ref: RefObject<HTMLSpanElement | null>, name: string): void {
   useLayoutEffect(() => {
@@ -495,12 +567,14 @@ function useNameFloor(ref: RefObject<HTMLSpanElement | null>, name: string): voi
         width += probe.getBoundingClientRect().width;
         probe.remove();
       }
-      const next = `${Math.ceil(width) + 1}px`;
+      const next = `${Math.max(0, Math.floor(Math.min(Math.ceil(width) + 1, nameRoom(el))))}px`;
       if (el.style.minWidth !== next) el.style.minWidth = next;
     };
     read();
     const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(read) : null;
     observer?.observe(el);
+    const head = el.parentElement?.parentElement;
+    if (head) observer?.observe(head);
     let live = true;
     void document.fonts?.ready.then(() => {
       if (live) read();
@@ -524,6 +598,10 @@ function SeatTile({ playerId, name, avatar, connected, tier, turn, line, mark, o
   const cardsRef = useRef<HTMLSpanElement>(null);
   const nameRef = useRef<HTMLSpanElement>(null);
   useNameFloor(nameRef, name);
+  const footRef = useRef<HTMLSpanElement>(null);
+  const foot = footForms(chips, bet);
+  const footAt = useFitForm(footRef, foot.map((f) => `${f.chips}|${f.bet}|${f.mark}`).join('\n'), foot.length, tileOf, footCut);
+  const shownFoot = foot[footAt] ?? foot[0];
   const fanCards = Math.max(2, fan?.cards ?? 2);
   const step = useFanStep(cardsRef, fanCards, room.wide ? CARD_FLOOR.wide : CARD_FLOOR.phone);
   const fanStyle = { '--tile-fan': fanCards, '--tile-hands': Math.max(1, fan?.hands ?? 1), ...(step === null ? {} : { '--fan-step': step }) } as CSSProperties;
@@ -584,18 +662,18 @@ function SeatTile({ playerId, name, avatar, connected, tier, turn, line, mark, o
           </span>
         )}
         {(chips !== undefined || bet !== undefined) && (
-          <span className="tbl-tile__foot">
-            {chips !== undefined && (
+          <span ref={footRef} className="tbl-tile__foot" data-fit={footAt > 0 ? footAt : undefined}>
+            {chips !== undefined && shownFoot.chips !== null && (
               <span className="tbl-tile__chips" data-testid="seat-chips" data-chips={chips}>
-                <ChipMark bands={STACK_CHIP} />
-                <FitText forms={figureForms(chips)} className="tbl-tile__chips-text" />
+                {shownFoot.mark && <ChipMark bands={STACK_CHIP} />}
+                <span className="tbl-tile__chips-text">{shownFoot.chips}</span>
               </span>
             )}
             {bet !== undefined && (
               <span className="tbl-tile__bet" data-testid="seat-bet" data-bet={bet} {...betData}>
-                {bet > 0 && <ChipMark bands={betChips(bet, start ?? bet, 2).bands} />}
-                {/* "bet 50k"; where the tile has no room for the word, "50k" by its chips; for a long figure, its short form. */}
-                {bet > 0 && <FitText forms={[`bet ${tileFigure(bet)}`, ...figureForms(bet)]} className="tbl-tile__bet-text" />}
+                {bet > 0 && shownFoot.bet !== null && <ChipMark bands={betChips(bet, start ?? bet, 2).bands} />}
+                {/* "bet 50k"; where the tile has no room for the word, "50k" by its chips; for a long figure, its short form (footForms). */}
+                {bet > 0 && shownFoot.bet !== null && <span className="tbl-tile__bet-text">{shownFoot.bet}</span>}
               </span>
             )}
           </span>

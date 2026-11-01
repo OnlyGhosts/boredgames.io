@@ -40,7 +40,7 @@ function BjTurnLine({ room, view, meId, focus, frame, extra }: { room: Blackjack
     result: focus.kind === 'result' ? { outcome: seatOutcome(hands) ?? 'push', back: hands.reduce((sum, h) => sum + (h.payout ?? 0), 0) } : undefined,
     ...extra,
   });
-  return <TurnLine text={line.text} tone={line.tone} state={line.state} sub={line.sub} subTestId={focus.kind === 'bets' ? 'bets-count' : 'turn-sub'} />;
+  return <TurnLine text={line.text} tone={line.tone} state={line.state} sub={line.sub} short={line.short} subTestId={focus.kind === 'bets' ? 'bets-count' : 'turn-sub'} />;
 }
 
 /**

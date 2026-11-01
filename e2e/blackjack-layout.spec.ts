@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import react from '@vitejs/plugin-react';
 import { build } from 'vite';
 import { createParty, expectReadyCount } from './party';
-import { cornersClear, seatFloors, stakesShown, stripShown, stripSwiped, tilesReadable, turnInStrip } from './tableFit';
+import { cornersClear, panelFits, seatFloors, stakesShown, stripShown, stripSwiped, tilesReadable, turnInStrip, turnLineFits } from './tableFit';
 import { tableBots, type TableBot } from './tableBots';
 
 /**
@@ -1590,6 +1590,51 @@ test.describe('many hands (the harness)', () => {
       await pages.close();
     }
   });
+
+  // A review's long names and big stakes, at every phone size, on its side and on a desktop. A long name kept its whole width and ran up
+  // to 129px past its tile, cut mid-letter with no ellipsis; "Party Queen’s turn, hand 4 of 7" and "Next: MMMMMMMMMMMMMMMM" ran 96px
+  // past the 114px ribbon left of the dealer's hand, the round on the table's top edge; "Stand" and "Double" read "St…" and "D…" on a
+  // phone on its side, where the amount's clear button lay 24px under "½"; a seat of seven split hands cut its "12.3M" and "350k" on a
+  // 360px phone and gave no sign of its hands past the one in view; "Waiting for 11 players" left "players" alone on a line.
+  for (const size of [
+    { width: 320, height: 568 },
+    { width: 360, height: 780 },
+    { width: 390, height: 844 },
+    { width: 667, height: 375 },
+    { width: 844, height: 390 },
+    { width: 1440, height: 900 },
+  ]) {
+    test(`${size.width}x${size.height}: long names end in an ellipsis inside their tiles, the turn line and the panel's words read whole`, async ({ browser }) => {
+      const pages = harnessPages(browser, size);
+      try {
+        const names = 'names=WWWWWWWWWWWWWWWW,Bartholomew%20Jane,%F0%9F%8E%89%F0%9F%8E%89%20Party%20Queen,MMMMMMMMMMMMMMMM';
+        const big = 'start=100000&chips=12345678&bet=50000&stake=12000';
+        for (const query of [
+          `phase=betting&others=4&${names}`,
+          `phase=betting&others=12&myBet=25000&${big}`,
+          `phase=mine&others=3&hands=1&cards=2&${big}&${names}`,
+          `phase=other&others=8&otherHands=7&otherActive=3&turn=2&${big}&${names}`,
+          `phase=dealer&others=6&hands=2&${big}&${names}`,
+        ]) {
+          const page = await pages.go(query);
+          await tilesReadable(page, query);
+          await turnLineFits(page, query);
+          await panelFits(page, query);
+          // A seat whose split hands do not all show at once says how many it holds; one showing them all does not.
+          for (const row of await page.locator('[data-testid="seat-hands-row"]').all()) {
+            const hidden = await row.evaluate((el) => el.scrollWidth > el.clientWidth + 1);
+            const count = row.locator('xpath=..').getByTestId('seat-hand-count');
+            const hands = await row.getAttribute('data-count');
+            if (hidden) await expect(count, `${query}: the hands' count`).toHaveText(new RegExp(`^(${hands} hands|×${hands})$`));
+            else await expect(count, `${query}: no count with every hand in view`).toBeHidden();
+          }
+        }
+        expect(pages.errors).toEqual([]);
+      } finally {
+        await pages.close();
+      }
+    });
+  }
 
   // Two split hands with one other player at 412x915 (and 390x844), one of them long (five or six cards): each hand's stake and total
   // stay on the stage, not even a pixel past its edge, whatever the stake. Its room measured by the row's longest hand, a two-card

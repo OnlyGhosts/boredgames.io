@@ -1058,7 +1058,19 @@ describe("the table’s focus and the stage", () => {
     expect(focusLine({ kind: 'turn', playerId: 'host', handIndex: 1, mine: true, next: null }, { ...s, handCount: 3 }).text).toBe('Your turn, hand 2 of 3');
     expect(focusLine({ kind: 'turn', playerId: 'bob', handIndex: 0, mine: false, next: 'host' }, s)).toEqual({ state: 'turn', text: "Pia’s turn", tone: 'other', sub: 'Next: You' });
     expect(focusLine({ kind: 'turn', playerId: 'bob', handIndex: 0, mine: false, next: null }, s).sub).toBe('Next: Dealer');
-    expect(focusLine({ kind: 'dealer' }, s)).toEqual({ state: 'dealer', text: "Dealer’s turn", tone: 'other', sub: 'Draws to 17' });
+    // Split hands: a line with no room for the whole of it says the hand's number under the name, then the name alone (TurnLine).
+    expect(focusLine({ kind: 'turn', playerId: 'bob', handIndex: 3, mine: false, next: 'carol' }, { ...s, handCount: 7 })).toEqual({
+      state: 'turn',
+      text: 'Pia’s turn, hand 4 of 7',
+      tone: 'other',
+      sub: 'Next: Quinn',
+      short: [{ text: 'Pia’s turn', sub: 'Hand 4 of 7' }, { text: 'Pia’s turn' }],
+    });
+    expect(focusLine({ kind: 'turn', playerId: 'host', handIndex: 1, mine: true, next: null }, { ...s, handCount: 3 }).short).toEqual([
+      { text: 'Your turn', sub: 'Hand 2 of 3' },
+      { text: 'Your turn' },
+    ]);
+    expect(focusLine({ kind: 'dealer' }, s)).toEqual({ state: 'dealer', text: 'Dealer’s turn', tone: 'other', sub: 'Draws to 17' });
     expect(focusLine({ kind: 'bets', placed: ['bob'], waiting: ['host'] }, s)).toEqual({ state: 'bets', text: 'Place your bet', tone: 'go', sub: '1 of 2 bets in' });
     expect(focusLine({ kind: 'bets', placed: ['host'], waiting: ['bob'] }, s).text).toBe('Waiting for Pia');
     expect(focusLine({ kind: 'result', playerId: 'host' }, { ...s, result: { outcome: 'win', back: 100 } })).toEqual({ state: 'result', text: 'You win +100', tone: 'go' });
@@ -1424,7 +1436,9 @@ describe('the players grid', () => {
     const marks = drawn.slice(drawn.indexOf('data-testid="seats"'), drawn.indexOf('</ul>')).match(/class="tbl-chipmark"/g) ?? [];
     expect(marks.length).toBeGreaterThanOrEqual(2);
     const full = drawn.replace(/<span class="tbl-chipmark" aria-hidden="true">(?:<svg.*?<\/svg>)+<\/span>/g, '');
-    expect(full).toContain('<span class="tbl-tile__chips" data-testid="seat-chips" data-chips="1000"><span class="tbl-tile__chips-text" data-fit="0">1,000</span></span><span class="tbl-tile__bet" data-testid="seat-bet" data-bet="10"><span class="tbl-tile__bet-text" data-fit="0">bet 10</span></span>');
+    expect(full).toContain(
+      '<span class="tbl-tile__chips" data-testid="seat-chips" data-chips="1000"><span class="tbl-tile__chips-text">1,000</span></span><span class="tbl-tile__bet" data-testid="seat-bet" data-bet="10"><span class="tbl-tile__bet-text">bet 10</span></span>',
+    );
     const tiles = full.slice(full.indexOf('data-testid="seats"'), full.indexOf('</ul>'));
     expect(tiles).not.toContain('tbl-stake');
     // The panel's line says my stack in words.

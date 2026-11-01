@@ -48,19 +48,24 @@ export function PanelShell({ label, onSubmit, testId, data, actions, children }:
   );
 }
 
+/** A player out of chips for the rest of the game (Poker): what the panel says in place of the controls. */
+export const OUT_TEXT = 'You’re out of chips. You can play the next game.';
+
 /**
  * A spectator's panel in place of the controls: one quiet line saying they watch and can play the
  * next game. A host who watches keeps the table's buttons under it (Deal now, Skip), a row that is
- * always there, dimmed when nothing is on offer (Blackjack's TableAction).
+ * always there, dimmed when nothing is on offer (Blackjack's TableAction). A player `out` of chips
+ * for the rest of the game gets the same short panel saying so, and the table the room the
+ * controls took.
  */
-export function WatchingPanel({ testId, actions }: { testId: string; actions?: ReactNode }) {
+export function WatchingPanel({ testId, actions, out = false }: { testId: string; actions?: ReactNode; out?: boolean }) {
   return (
-    <section className="tbl-panel tbl-panel--watching" aria-label="Watching" data-testid={testId} data-watching="true">
+    <section className="tbl-panel tbl-panel--watching" aria-label={out ? 'Out of chips' : 'Watching'} data-testid={testId} data-watching={out ? undefined : 'true'} data-out={out ? 'true' : undefined}>
       <p className="tbl-panel__watching" data-testid="watching-note">
         <span className="tbl-panel__watch-icon" aria-hidden="true">
           <EyeIcon size={18} />
         </span>
-        <span>{WATCHING_TEXT}</span>
+        <span>{out ? OUT_TEXT : WATCHING_TEXT}</span>
       </p>
       {actions && <div className="tbl-panel__actions">{actions}</div>}
     </section>
@@ -93,10 +98,10 @@ export function PanelLabelRow({ label, htmlFor, balance, anchor }: { label: stri
   );
 }
 
-/** The moves, two to a row (three in one row; all in one row on a phone); every one always there. */
+/** The moves, two to a row (three in one row; all in one row on a phone); every one always there. Its count names it (table.css drops the icons where the words need the room). */
 export function PanelMoves({ label = 'Your moves', count, children }: { label?: string; count: number; children: ReactNode }) {
   return (
-    <div className={`tbl-panel__moves${count === 3 ? ' tbl-panel__moves--3' : ''}`} style={{ '--moves': count } as CSSProperties} role="group" aria-label={label}>
+    <div className={`tbl-panel__moves tbl-panel__moves--${count}`} style={{ '--moves': count } as CSSProperties} role="group" aria-label={label}>
       {children}
     </div>
   );
