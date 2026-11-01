@@ -6,10 +6,19 @@ import { PHONE_QUERY, useMediaQuery } from '../lib/media';
 import { PLATFORM_SOUNDS } from '../lib/platformSounds';
 import { crowned, endReasonLine, rankedEntries, resultsHeadline, resultsPlace, topEntries } from '../lib/results';
 import { useModalFocus } from '../lib/useModalFocus';
+import { useScrollFade } from '../lib/useScrollFade';
 import { Avatar } from './Avatar';
 import { Confetti } from './Confetti';
+import { HoldTogether } from './HoldTogether';
 import { CloseIcon } from './Icons';
 import { PhoneBored, PhoneHappy } from './Mascots';
+
+/** The headline, its last word held to the name before it (HoldTogether): "wins!" is never alone on a line. */
+function Headline({ text }: { text: string }) {
+  const cut = text.lastIndexOf(' ');
+  if (cut < 1) return <>{text}</>;
+  return <HoldTogether before={text.slice(0, cut)} after={text.slice(cut + 1)} />;
+}
 
 /** The winner's score under the headline: "1,100 points", "1,040 chips", or "30 points each" for a tie. */
 function scoreLine(score: number, tie: boolean, unit: ScoreUnit | undefined): string {
@@ -19,6 +28,8 @@ function scoreLine(score: number, tie: boolean, unit: ScoreUnit | undefined): st
 interface Props {
   results: GameResults;
   meId: string | null;
+  /** The room's host: a host who played alone ended the game themselves. */
+  hostId?: string | null;
   onClose(): void;
 }
 
@@ -29,8 +40,11 @@ interface Props {
  * desktop) leaves the player in the lobby, ready for the next game. A modal dialog: the card takes
  * the focus and Tab stays inside until it goes.
  */
-export function ResultsPopup({ results, meId, onClose }: Props) {
+export function ResultsPopup({ results, meId, hostId = null, onClose }: Props) {
   const cardRef = useRef<HTMLDivElement | null>(null);
+  // On a short screen the standings scroll under the header: the cut edge fades.
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const [fade] = useScrollFade(scrollRef);
   const isPhone = useMediaQuery(PHONE_QUERY);
   useModalFocus(cardRef, true, onClose);
 
@@ -43,9 +57,10 @@ export function ResultsPopup({ results, meId, onClose }: Props) {
   const iWon = meId !== null && champions.some((e) => e.playerId === meId);
   const unit = gameById(results.gameId).scoreUnit;
   const place = resultsPlace(results, meId, unit);
-  const reason = endReasonLine(results);
   // Alone, there is nobody to beat: the headline says how they finished, and there is no table of one.
   const solo = results.entries.length === 1;
+  // A host who played alone and ended it hears it as their own doing, not "the host".
+  const reason = endReasonLine(results, solo && meId !== null && meId === hostId);
   // Something to smile about: a winner, or a lone player who kept some of their score.
   const cheerful = celebrate || (solo && (results.entries[0]?.score ?? 0) > 0);
 
@@ -61,12 +76,12 @@ export function ResultsPopup({ results, meId, onClose }: Props) {
       <button type="button" className="results-popup__backdrop" aria-label="Close" tabIndex={-1} onClick={isPhone ? undefined : onClose} data-testid="results-backdrop" />
       {celebrate && <Confetti />}
       <div className="overlay__card overlay__card--wide results-card" ref={cardRef} tabIndex={-1} data-testid="results-card">
-        <div className="results-card__scroll">
+        <div className="results-card__scroll scroll-fade" ref={scrollRef} data-fade={fade}>
           <div className={`results-hero${iWon ? ' results-hero--won' : ''}`}>
             {cheerful ? <PhoneHappy className="results-hero__mascot" /> : <PhoneBored className="results-hero__mascot" />}
             <p className="overlay__kicker results-hero__kicker">{`${gameById(results.gameId).name} · Game over`}</p>
             <h2 className="overlay__title results-hero__title" data-testid="results-headline">
-              {resultsHeadline(results, unit)}
+              <Headline text={resultsHeadline(results, unit)} />
             </h2>
             {champions.length > 0 && (
               <p className="results-hero__points" data-testid="results-points">

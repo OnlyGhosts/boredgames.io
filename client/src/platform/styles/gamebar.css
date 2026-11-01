@@ -200,7 +200,8 @@
 
 .chip {
   position: relative;
-  flex: 0 1 var(--chip-w);
+  flex: 0 1 auto;
+  max-width: 8.5rem;
   min-width: var(--chip-min);
   display: flex;
   flex-direction: column;

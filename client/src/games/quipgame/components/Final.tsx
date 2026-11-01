@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import type { QuipgameRoomState, QuipgameView } from '@shared/games/quipgame/protocol';
 import { Avatar } from '../../../platform/components/Avatar';
+import { HoldTogether } from '../../../platform/components/HoldTogether';
 import { formatPoints } from '../../../platform/lib/format';
 import { WATCHING_TEXT } from '../../../platform/lib/watching';
 import { submitRanking } from '../actions';
@@ -99,7 +100,7 @@ export function FinalResult({ room, view, footer }: Props & { footer: ReactNode 
   return (
     <section className="card quip-final quip-final--result" aria-label="Final result" data-testid="quip-final-result">
       <p className="quip-kicker">Final round</p>
-      <h2 className="quip-result__headline">{rows[0] ? `${rows[0].authorName} wins the final!` : 'The final'}</h2>
+      <h2 className="quip-result__headline">{rows[0] ? <HoldTogether before={rows[0].authorName} after="wins the final!" /> : 'The final'}</h2>
       <div className="quip-prompt quip-prompt--sm" data-testid="final-prompt">
         {view.finalPrompt ?? ''}
       </div>

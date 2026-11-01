@@ -2,9 +2,11 @@ import { useRef } from 'react';
 import { GAME_LIST, gameById, type GameMeta } from '@shared/platform/games';
 import type { RoomState } from '@shared/platform/protocol';
 import type { AnyGameClientModule } from '../game';
+import { noOrphan } from '../lib/format';
 import { playerCountLabel } from '../lib/party';
 import { selectGame } from '../net/actions';
 import { registeredGame } from '../registry';
+import { DotList } from './DotList';
 import { HowToPlay } from './HowToPlay';
 
 interface Props {
@@ -40,7 +42,7 @@ export function GamePicker({ room, isHost, game }: Props) {
           <GameTile game={current} selected readonly />
           <div className="game-picker__about">
             <p className="game-picker__note" data-testid="game-picker-note">
-              {host?.name ?? 'The host'} picks the game
+              {noOrphan(`${host?.name ?? 'The host'} picks the game`)}
             </p>
             {howToPlay}
           </div>
@@ -59,9 +61,7 @@ export function GamePicker({ room, isHost, game }: Props) {
         ))}
       </div>
       <div className="game-picker__foot">
-        <p className="game-picker__meta" data-testid="game-picker-meta">
-          {current.name} · <span className="game-picker__count">{playerCountLabel(current)}</span>
-        </p>
+        <DotList as="p" className="game-picker__meta" parts={[current.name, playerCountLabel(current)]} testId="game-picker-meta" />
         {howToPlay}
       </div>
     </section>
@@ -78,7 +78,7 @@ function GameTile({ game, selected, readonly = false, onSelect }: { game: GameMe
   const body = (
     <>
       <span className="game-tile__art">{Art ? <Art /> : null}</span>
-      <span className="game-tile__name">{game.name}</span>
+      <span className="game-tile__name">{noOrphan(game.name)}</span>
     </>
   );
   if (readonly) {

@@ -185,6 +185,24 @@ test('two phones and a played room show on Analytics and Live rooms', async ({ b
   await expect(admin.getByTestId('tile-rooms').locator('.tile__value')).toHaveText('1');
   await expect(admin.getByTestId('tile-started').locator('.tile__value')).toHaveText('1');
   await expect(admin.locator('[data-testid="game-row"][data-game="scribble"]')).toContainText('Scribble');
+
+  // A 320px phone: the Games table keeps a game's name whole (it broke "Scri / bble" when cells could break anywhere),
+  // nothing scrolls sideways, Sign out keeps to the brand's line and the range buttons are 40px targets.
+  await admin.setViewportSize({ width: 320, height: 568 });
+  const cell = admin.locator('[data-testid="game-row"][data-game="scribble"] td').first();
+  const lines = (el: Element) => {
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    return new Set([...range.getClientRects()].map((r) => Math.round(r.top))).size;
+  };
+  await expect.poll(() => cell.evaluate(lines), { message: 'Scribble on one line' }).toBe(1);
+  expect(await admin.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
+  const middle = async (id: string) => {
+    const box = await admin.locator(id).boundingBox();
+    return (box?.y ?? 0) + (box?.height ?? 0) / 2;
+  };
+  expect(Math.abs((await middle('[data-testid="admin-sign-out"]')) - (await middle('.topbar__brand'))), 'Sign out beside the brand').toBeLessThan(12);
+  for (const id of ['range-day', 'range-7d', 'range-30d']) expect((await admin.getByTestId(id).boundingBox())?.height ?? 0, id).toBeGreaterThanOrEqual(40);
 });
 
 test('Analytics steps back a day to that day’s numbers, and a bar in 7 days opens its day', async ({ browser }) => {

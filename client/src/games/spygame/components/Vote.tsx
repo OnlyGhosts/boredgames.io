@@ -105,14 +105,14 @@ export function VotePanel(props: Props) {
   );
 }
 
-/** The modal sheet with the Yes/No buttons, for eligible voters. */
+/** The modal sheet with the Yes/No buttons, for eligible voters: a centred box on a desktop (sheet--dialog), not two buttons across the screen. */
 export function VoteSheet(props: Props) {
   const sheetOpen = useSpygame((s) => s.voteSheetOpen);
   const setOpen = useSpygame((s) => s.setVoteSheetOpen);
   const role = voteRoleOf(props.view, props.meId);
   const open = sheetOpen && role === 'voter' && props.view.vote !== null;
   return (
-    <BottomSheet open={open} title="Vote now" onClose={() => setOpen(false)} testId="vote-sheet">
+    <BottomSheet open={open} title="Vote now" onClose={() => setOpen(false)} testId="vote-sheet" className="sheet--dialog">
       <VoteBody {...props} role={role} withButtons testIdPrefix="vote" />
     </BottomSheet>
   );

@@ -1,5 +1,5 @@
 import { useEffect, useState, type KeyboardEvent } from 'react';
-import { formatChips, parseChipAmount } from '../lib/format';
+import { formatChips, parseChipAmount, shortChips } from '../lib/format';
 import { ChipIcon } from './Chips';
 import { SettingRow } from './SettingControls';
 
@@ -42,8 +42,17 @@ export function ChipsSetting({ id, label, value, min, max, presets, onCommit, hi
     <div className="chips-setting" data-testid={`settings-${id}-control`}>
       <div className="chips-setting__presets" role="group" aria-label={`${label} presets`}>
         {presets.map((preset) => (
-          <button key={preset} type="button" className={`chips-setting__preset${preset === value ? ' is-selected' : ''}`} aria-pressed={preset === value} onClick={() => commit(preset)} data-testid={`settings-${id}-${preset}`}>
-            {formatChips(preset)}
+          // Short ("2.5k", "10k") so five fit a 320px phone or a tablet's narrow settings column; the full figure is its name.
+          <button
+            key={preset}
+            type="button"
+            className={`chips-setting__preset${preset === value ? ' is-selected' : ''}`}
+            aria-pressed={preset === value}
+            aria-label={formatChips(preset)}
+            onClick={() => commit(preset)}
+            data-testid={`settings-${id}-${preset}`}
+          >
+            {shortChips(preset)}
           </button>
         ))}
       </div>

@@ -125,7 +125,7 @@ export function RoomScreen({ room }: { room: RoomState }) {
     return (
       <>
         <Lobby room={room} game={game} />
-        {results && <ResultsPopup key={results.id} results={results} meId={meId} onClose={closeResults} />}
+        {results && <ResultsPopup key={results.id} results={results} meId={meId} hostId={room.hostId} onClose={closeResults} />}
       </>
     );
   }

@@ -55,15 +55,17 @@
   --letters: 1;
   --seps: 0;
   /*
-   * A word always fits on one row: its tiles shrink (down to 16px) before anything wraps, so a
-   * ten-letter word on a 375px phone never leaves one orphan tile on a second line.
+   * A word always fits on one row: its tiles shrink (down to 16px, 14px in a narrow bar) before
+   * anything wraps, so a ten-letter word on a 375px phone, or a twelve-letter one on a 320px phone,
+   * never leaves one orphan tile on a second line.
    */
+  --gtile-min: 16px;
   --gtile-fit-word: calc((100cqw - var(--seps) * var(--gsep-w) - (var(--letters) + var(--seps) - 1) * var(--gtile-gap)) / var(--letters));
   /* The tile width at which the whole phrase fits the bar on one row (short viewports use it). */
   --gtile-fit-bar: calc(
     (100cqw - var(--total-seps) * var(--gsep-w) - (var(--groups) - 1) * var(--ggap) - (var(--total-letters) + var(--total-seps) - var(--groups)) * var(--gtile-gap)) / var(--total-letters)
   );
-  --gtile-w: clamp(16px, var(--gtile-fit-word), var(--gtile-max));
+  --gtile-w: clamp(var(--gtile-min), var(--gtile-fit-word), var(--gtile-max));
   display: inline-flex;
   flex-wrap: wrap; /* only a word longer than the whole bar ever breaks mid-word */
   gap: var(--gtile-gap);
@@ -185,6 +187,7 @@
 
   .guess-tiles__group {
     --gtile-gap: 2px;
+    --gtile-min: 14px;
     --gtile-max: 20px;
     --gsep-w: 10px;
   }

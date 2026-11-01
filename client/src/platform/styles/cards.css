@@ -172,6 +172,7 @@
 }
 
 .chips-setting__preset {
+  position: relative;
   min-width: 0;
   min-height: 44px;
   padding: 0 2px;
@@ -183,6 +184,13 @@
   font-size: clamp(0.75rem, 3.4vw, 0.85rem);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+/* Its tap reaches half the gap either side: six small blinds across a 320px phone are 37px each, their targets 43px. */
+.chips-setting__preset::before {
+  content: '';
+  position: absolute;
+  inset: 0 -3px;
 }
 
 .chips-setting__preset.is-selected {

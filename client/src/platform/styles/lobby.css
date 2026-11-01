@@ -204,6 +204,18 @@
   font-size: 0.9375rem;
 }
 
+/* The narrowest phones: tighter insets and gaps, so a long name keeps a few more letters beside its status and the remove button. */
+@media (max-width: 374px) {
+  .lobby__players .player {
+    padding-left: 10px;
+    gap: 10px;
+  }
+
+  .lobby__players .player__status--ready {
+    gap: 6px;
+  }
+}
+
 /* The panel's title stands a little apart from the first setting's title. */
 .lobby__settings .card__head {
   margin-bottom: var(--space-4);
@@ -297,10 +309,54 @@
   }
 }
 
+/*
+ * A phone on its side: the footer's buttons share one row (Start or I'm ready, Sit this one out,
+ * Change my look), so the players show above it; a hint, the start check and the waiting line
+ * take a line of their own.
+ */
+@media (max-height: 500px) and (min-aspect-ratio: 3/2) {
+  .lobby__footer .lobby__controls {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: stretch;
+  }
+
+  .lobby__footer .lobby__controls > [data-testid='start-game'] {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .lobby__footer .lobby__controls > .ready-controls {
+    flex: 2 1 0;
+    min-width: 0;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .lobby__footer .ready-controls > .btn {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .lobby__footer .ready-controls__more {
+    flex: 2 1 0;
+    min-width: 0;
+  }
+
+  .lobby__footer .lobby__controls > .start-confirm,
+  .lobby__footer .lobby__waiting,
+  .lobby__footer .ready-controls__hint {
+    flex: 1 0 100%;
+  }
+}
+
+/* "Waiting for <host> to start Poker…": balanced, the game's name never alone (noOrphan), a long name wrapped inside. */
 .lobby__waiting {
   color: var(--color-text-muted);
   font-size: 0.875rem;
   font-weight: 500;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
 }
 
 /* ---------- Game picker: illustrated tiles, three to a row; a short last row stretches to fill it ---------- */
@@ -337,10 +393,14 @@
   flex: none;
 }
 
+/* "<host> picks the game": a long name with no spaces wraps rather than push the page sideways. */
 .game-picker__note {
+  min-width: 0;
+  max-width: 100%;
   color: var(--color-text-muted);
   font-weight: 500;
   font-size: 0.9375rem;
+  overflow-wrap: anywhere;
 }
 
 /* One neutral panel for every game; the pictures carry the colour. */
@@ -444,10 +504,6 @@ button.game-tile:active {
 }
 
 /* When the line must wrap it breaks at the dot, never inside the count. */
-.game-picker__count {
-  white-space: nowrap;
-}
-
 .game-picker__foot .how-to-play {
   flex: none;
 }

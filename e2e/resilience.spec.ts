@@ -443,6 +443,40 @@ test.describe('the waiting overlay fits a small phone with three long names', ()
     await check(PORTRAIT.width);
   });
 
+  test('the host removes two: the game ends, and its results fit a small phone with every long name, the standings in view', async () => {
+    await host.page.setViewportSize(SMALL);
+    for (const left of [2, 1]) {
+      await host.page.getByTestId('waiting-remove').first().click();
+      if (left > 1) await expect(host.page.getByTestId('waiting-remove')).toHaveCount(left);
+    }
+    await expect(host.page.getByTestId('overlay-game-end')).toBeVisible({ timeout: 15_000 });
+    for (const size of [SMALL, PORTRAIT, { width: 667, height: 375 }]) {
+      await host.page.setViewportSize(size);
+      await expect(host.page.getByTestId('results-entry').first()).toBeVisible();
+      const fit = await host.page.evaluate(() => {
+        const scroll = document.querySelector('.results-card__scroll') as HTMLElement;
+        const card = (document.querySelector('[data-testid="results-card"]') as HTMLElement).getBoundingClientRect();
+        const actions = (document.querySelector('.results-card__actions') as HTMLElement).getBoundingClientRect();
+        const headline = document.querySelector('[data-testid="results-headline"]') as HTMLElement;
+        const rows = [...document.querySelectorAll('[data-testid="results-entry"]')].map((row) => row.getBoundingClientRect());
+        return {
+          sideways: scroll.scrollWidth - scroll.clientWidth,
+          headline: headline.scrollWidth - headline.clientWidth,
+          rowsOut: rows.filter((r) => r.left < card.left - 0.5 || r.right > card.right + 0.5).length,
+          firstRowShows: rows[0].top < actions.top - 20,
+          fade: scroll.scrollHeight > scroll.clientHeight + 1 ? (scroll.getAttribute('data-fade') ?? '') : 'bottom',
+        };
+      });
+      // Nothing scrolls the card sideways; the standings start above Back to the room (the mascot gives way on a short
+      // screen; on its side the list sits beside the winner), and where they run on, the cut edge fades.
+      expect(fit, `${size.width}x${size.height}`).toEqual({ sideways: 0, headline: 0, rowsOut: 0, firstRowShows: true, fade: expect.stringContaining('bottom') });
+      for (const id of ['results-done', 'results-close']) {
+        const box = await host.page.getByTestId(id).boundingBox();
+        expect((box?.y ?? -1) >= 0 && (box?.y ?? 0) + (box?.height ?? 0) <= size.height + 0.5, `${id} on screen at ${size.width}x${size.height}`).toBe(true);
+      }
+    }
+  });
+
   test('no page errors were raised in any browser', async () => {
     expect([host, ...guests].flatMap((p) => p.errors)).toEqual([]);
   });

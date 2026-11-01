@@ -130,6 +130,20 @@
   text-align: center;
 }
 
+/* A centred error that wraps keeps its icon in its first line, not stranded at the left edge beside it. */
+.home__start .code-preview .field__error,
+.home__create .field__error {
+  display: block;
+  text-wrap: balance;
+}
+
+.home__start .code-preview .field__error svg,
+.home__create .field__error svg {
+  display: inline-block;
+  margin: 0 6px 0 0;
+  vertical-align: -3px;
+}
+
 .code-preview__note {
   white-space: nowrap;
 }

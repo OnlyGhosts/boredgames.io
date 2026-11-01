@@ -16,6 +16,7 @@ import { SettingsPanel } from '../components/SettingsPanel';
 import { SiteHeader } from '../components/SiteHeader';
 import type { AnyGameClientModule } from '../game';
 import { copyText } from '../lib/clipboard';
+import { noOrphan } from '../lib/format';
 import { COLUMNS_QUERY, PHONE_QUERY, useMediaQuery } from '../lib/media';
 import { canStart, listNames, notReadyPlayers, readyLine, readyPlayers } from '../lib/party';
 import { useListRoom } from '../lib/useListRoom';
@@ -90,7 +91,7 @@ export function Lobby({ room, game }: Props) {
       {me && <ReadyControls me={me} extra={changeLook} />}
       {!isHost && (
         <p className="lobby__waiting" data-testid="waiting-for-host">
-          Waiting for {host?.name ?? 'the host'} to start {meta.name}
+          {noOrphan(`Waiting for ${host?.name ?? 'the host'} to start ${meta.name}`)}
           <span className="ellipsis" aria-hidden="true" />
         </p>
       )}

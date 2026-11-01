@@ -154,7 +154,7 @@ export function AnalyticsView({ summary, span, now, onSpan, busy = false }: View
                 <tbody>
                   {summary.games.map((g) => (
                     <tr key={g.gameId} data-testid="game-row" data-game={g.gameId}>
-                      <td data-label="Game">{gameName(g.gameId)}</td>
+                      <td data-label="Game">{noOrphan(gameName(g.gameId))}</td>
                       <td className="num" data-label="Started">{num(g.started)}</td>
                       <td className="num" data-label="Finished">{num(g.finished)}</td>
                       <td className="num" data-label="Players per game">{g.avgPlayers.toLocaleString('en-GB')}</td>
@@ -180,7 +180,7 @@ export function AnalyticsView({ summary, span, now, onSpan, busy = false }: View
                 <tbody>
                   {summary.deepLinks.map((d) => (
                     <tr key={d.game} data-testid="deep-link-row">
-                      <td>{gameName(d.game)}</td>
+                      <td>{noOrphan(gameName(d.game))}</td>
                       <td className="num">{num(d.visitors)}</td>
                     </tr>
                   ))}

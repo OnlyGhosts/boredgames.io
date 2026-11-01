@@ -26,13 +26,14 @@ export function parseNearby(v: unknown): NearbyCard[] {
 }
 
 /**
- * "Scribble · 3 players", plus "· playing now" while a game is on. Spaces inside a part don't
- * break, so on a narrow card the line wraps only at a dot and never cuts a word short.
+ * The parts of the card's line, "Scribble · 3 players" plus "· playing now" while a game is on,
+ * for a DotList: it wraps only between parts, so a narrow card never cuts a part short or leaves
+ * a dot at the end of a line.
  */
-export function nearbyMeta(card: NearbyCard): string {
+export function nearbyMeta(card: NearbyCard): string[] {
   const parts = [gameById(card.gameId).name, `${card.players} ${card.players === 1 ? 'player' : 'players'}`];
   if (card.playing) parts.push('playing now');
-  return parts.map((part) => part.replace(/ /g, '\u00a0')).join(' · ');
+  return parts;
 }
 
 /** "Jord’s room" (a name ending in s still takes ’s, as people say it). */

@@ -212,7 +212,7 @@ h2,
 }
 
 .segmented__item {
-  min-height: 36px;
+  min-height: 40px;
   padding: 0 16px;
   border: 0;
   border-radius: var(--radius-pill);
@@ -242,8 +242,8 @@ h2,
 .stepper__btn {
   display: grid;
   place-items: center;
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   padding: 0;
   border: 0;
   border-radius: var(--radius-pill);
@@ -347,12 +347,15 @@ details > summary.section__title {
   color: var(--color-text-muted);
   padding: 0 8px 8px 0;
   border-bottom: 1px solid var(--color-border);
+  vertical-align: bottom;
+  text-wrap: balance;
 }
 
+/* A cell wraps between words, and breaks a word only when it is wider than the whole table can give it. */
 .table td {
   padding: 8px 8px 8px 0;
   border-bottom: 1px solid var(--color-border);
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 
 .table tr:last-child td {
@@ -364,6 +367,11 @@ details > summary.section__title {
   padding-right: 0;
   padding-left: 8px;
   white-space: nowrap;
+}
+
+/* A number column's heading wraps ("Players / per game") so a narrow phone has room for whole game names. */
+.table th.num {
+  white-space: normal;
 }
 
 .facts {
@@ -657,6 +665,13 @@ details > summary.section__title {
   .tabs {
     order: 3;
     width: 100%;
+  }
+
+  /* The narrowest phones: a smaller wordmark, so Sign out stays on the brand's line. */
+  @media (max-width: 359px) {
+    .topbar__brand {
+      --wordmark-height: 18px;
+    }
   }
 
   .tabs__item {

@@ -16,12 +16,17 @@ describe('the nearby list', () => {
     expect(parseNearby({ rooms: [good] })).toEqual([]);
     expect(parseNearby({ now: 2000, rooms: [good, good, good, good] })).toHaveLength(3);
   });
-  it('writes the meta line short: game, players, and playing now in a game; it wraps only at a dot', () => {
-    const nb = (text: string): string => text.replace(/ /g, '\u00a0');
-    expect(nearbyMeta(card())).toBe(`${nb('Scribble')} · ${nb('3 players')}`);
-    expect(nearbyMeta(card({ players: 1 }))).toBe(`${nb('Scribble')} · ${nb('1 player')}`);
-    expect(nearbyMeta(card({ players: 4, playing: true }))).toBe(`${nb('Scribble')} · ${nb('4 players')} · ${nb('playing now')}`);
+  it('writes the meta line short: game, players, and playing now in a game; it wraps only between parts, never leaving a dot at a line end', () => {
+    expect(nearbyMeta(card())).toEqual(['Scribble', '3 players']);
+    expect(nearbyMeta(card({ players: 1 }))).toEqual(['Scribble', '1 player']);
+    expect(nearbyMeta(card({ players: 4, playing: true }))).toEqual(['Scribble', '4 players', 'playing now']);
     expect(roomTitle('Jord')).toBe('Jord’s room');
+    // Each part after the first carries its dot in front, inside the part that cannot break: a part that
+    // wraps to a new line takes its dot with it (into the clipped margin), never leaving it at the end of the line before.
+    const html = renderToString(createElement(NearbyRooms, { rooms: [card({ players: 4, playing: true })], onJoin: () => undefined })).replace(/<!-- -->/g, '');
+    const parts = [...html.matchAll(/<span class="dot-list__part">(.*?)<\/span>(?=<span class="dot-list__part">|<\/span>)/g)].map((m) => m[1].replace(/<[^>]+>/g, ''));
+    expect(parts).toEqual(['Scribble', ' · 4 players', ' · playing now']);
+    expect(html.replace(/<[^>]+>/g, '')).toContain('Scribble · 4 players · playing now');
   });
 
   it('renders one card per room with a Join button, and nothing at all for none', () => {
@@ -31,7 +36,7 @@ describe('the nearby list', () => {
     expect(html).not.toContain('<h2');
     expect(html.match(/data-testid="nearby-room"/g)).toHaveLength(2);
     expect(html).toContain('Jord’s room');
-    expect(html).toContain('Scribble · 3\u00a0players');
+    expect(html.replace(/<[^>]+>/g, '')).toContain('Scribble · 3 players');
     expect(html).toContain('aria-label="Join Sam’s room"');
   });
 });

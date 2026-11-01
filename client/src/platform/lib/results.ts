@@ -75,11 +75,14 @@ function soloLine(score: number, unit: ScoreUnit): string {
   return unit === 'chips' ? 'You ran out of chips' : 'No points this time';
 }
 
-/** Why the game ended early, in a few words; null when it ran its course. */
-export function endReasonLine(results: GameResults): string | null {
+/**
+ * Why the game ended early, in a few words; null when it ran its course. `byMe`: the host who
+ * ended it is the one reading (a host who played alone), so it says so rather than "the host".
+ */
+export function endReasonLine(results: GameResults, byMe = false): string | null {
   switch (results.reason) {
     case 'host':
-      return 'The host ended the game.';
+      return byMe ? 'You ended the game.' : 'The host ended the game.';
     case 'players':
       return 'Too few players were left.';
     case 'finished':

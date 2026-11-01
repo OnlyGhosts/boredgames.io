@@ -563,6 +563,21 @@
 }
 
 /*
+ * An upright phone: the drawer's word choice needs more room than the phone-width canvas offers
+ * (five long words are taller than the canvas of a small phone), so it covers the screen below the
+ * header like the summaries; the guesses wait underneath until a word is picked. On its side the
+ * canvas column is the screen's full height, so the choice stays on the canvas.
+ */
+@media (max-width: 760px) and (max-aspect-ratio: 3/2) {
+  .overlay--pick {
+    position: fixed;
+    inset: var(--phone-header-bottom, 0px) 0 0 0;
+    z-index: 60;
+    padding: var(--space-3) var(--gutter) calc(var(--space-4) + env(safe-area-inset-bottom));
+  }
+}
+
+/*
  * ---------- An upright phone with its keyboard open (html.is-keyboard, from useViewport) ----------
  * Typing a guess never shrinks the drawing. The canvas keeps its full-width 4:3 size and the rest
  * gives way around it: the header steps aside (only its clock stays, over the canvas's top right

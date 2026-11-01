@@ -74,9 +74,10 @@ export function ScribbleScreen({ room, meId, isHost }: GameScreenProps<ScribbleV
     };
   }, [isPhone]);
 
-  // Phones show the turn summary as a fixed overlay. It must leave the header (and in landscape
-  // the whole side column) uncovered so the players and menu buttons stay reachable; the header's
-  // height varies (its word line comes and goes), so its edges are published as CSS vars.
+  // Phones show the turn summary (and, upright, the drawer's word choice) as a fixed overlay. It
+  // must leave the header (and in landscape the whole side column) uncovered so the players and
+  // menu buttons stay reachable; the header's height varies (its word line comes and goes), so its
+  // edges are published as CSS vars.
   useLayoutEffect(() => {
     const root = rootRef.current;
     const header = root?.querySelector<HTMLElement>('[data-testid="game-header"]');

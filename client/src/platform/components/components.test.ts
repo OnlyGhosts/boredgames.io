@@ -638,9 +638,9 @@ describe('wordmark and mascots', () => {
     // The picture slot comes before the name on every tile (the module's Art fills it once the games are registered: client/src/games/art.test.ts).
     expect(html.match(/<span class="game-tile__art">/g)).toHaveLength(GAME_LIST.filter((x) => x.status === 'live').length);
     expect(html).toContain('<span class="game-tile__art"></span><span class="game-tile__name">Scribble</span>');
-    // The tile gets the plain name, so a two-line name splits evenly ("The Spy" over "Game" at 320px); the rules card still keeps the last two words together.
-    expect(html).toContain('<span class="game-tile__name">The Spy Game</span>');
-    expect(html).not.toContain('\u00a0');
+    // A two-line name keeps its last two words together ("The" over "Spy Game" at 320px), never "Game" alone, like the rules card.
+    expect(html).toContain('<span class="game-tile__name">The Spy\u00a0Game</span>');
+    expect(html).toContain('<span class="game-tile__name">Quip\u00a0Game</span>');
     expect(noOrphan('Adults only. Crude and filthy.')).toBe('Adults only. Crude and\u00a0filthy.');
     expect(noOrphan('Scribble')).toBe('Scribble');
     expect(html).not.toContain('✏️');
@@ -1405,13 +1405,15 @@ describe('results popup', () => {
     ],
     ...overrides,
   });
-  const popup = (meId: string | null, r: GameResults = results()) => renderToString(createElement(ResultsPopup, { results: r, meId, onClose: () => undefined }));
+  const popup = (meId: string | null, r: GameResults = results(), hostId: string | null = 'host') => renderToString(createElement(ResultsPopup, { results: r, meId, hostId, onClose: () => undefined }));
+  // The headline's words (its last one held to the name with a no-break space).
+  const headline = (html: string): string => textOf(html, 'results-headline').replace(/\u00a0/g, ' ');
 
   it('celebrates the winner by name and points, tells each player their place, ranks the top three with the winner in the middle and lists everyone', () => {
     const html = popup('bob');
     expect(tagWith(html, 'overlay-game-end')).toContain('data-winner="true"');
     expect(html).toContain('Scribble · Game over');
-    expect(html).toContain('bob wins!');
+    expect(headline(html)).toBe('bob wins!');
     expect(html).toContain('>30 points<');
     expect(html).toContain('You won!');
     expect(html).toContain('data-testid="confetti"');
@@ -1432,11 +1434,12 @@ describe('results popup', () => {
   it('says why a game ended early, and crowns nobody when too few players were left', () => {
     const host = popup('bob', results({ reason: 'host' }));
     expect(textOf(host, 'results-reason')).toBe('The host ended the game.');
-    expect(host).toContain('bob wins!');
+    expect(headline(host)).toBe('bob wins!');
+    // The host reads it the same in a game with others in it.
+    expect(textOf(popup('host', results({ reason: 'host' })), 'results-reason')).toBe('The host ended the game.');
     const short = popup('bob', results({ reason: 'players' }));
     expect(textOf(short, 'results-reason')).toBe('Too few players were left.');
-    expect(short).toContain('Game over');
-    expect(short).not.toContain('bob wins!');
+    expect(headline(short)).toBe('Game over');
     expect(short).not.toContain('data-testid="confetti"');
     expect(short).toContain('You were in the lead');
     expect(tagsWith(short, 'results-entry')).toHaveLength(3);
@@ -1481,7 +1484,7 @@ describe('results popup', () => {
       ],
     });
     const html = popup('carol', outOrder);
-    expect(html).toContain('bob wins!');
+    expect(headline(html)).toBe('bob wins!');
     expect(html).toContain('>4,000 chips<');
     expect(html).toContain('You came 2nd');
     expect(tagsWith(html, 'results-step').map((t) => attr(t, 'data-rank'))).toEqual(['2', '1', '3']);
@@ -1545,8 +1548,10 @@ describe('results popup', () => {
     expect(peak).toContain('color: var(--color-text-muted)');
     // Wide: under the name, the score (or the note) level across both lines.
     expect(ruleOf(css, '.results-standings__row--peaked')).toContain("grid-template-areas: 'rank avatar name end' 'rank avatar peak end'");
-    // Narrow, with a note too: the name, the note, then the peak, each on a line of its own.
+    // Narrow: the peak spans the name's and the score's columns, like a note, never squeezed beside the score.
     const narrow = css.slice(css.indexOf('@container standings (max-width: 26rem) {'));
+    expect(narrow).toMatch(/\.results-standings__row--peaked \{[^}]*grid-template-areas: 'rank avatar name end' 'rank avatar peak peak'/);
+    // Narrow, with a note too: the name, the note, then the peak, each on a line of its own.
     expect(narrow).toMatch(/\.results-standings__row--noted\.results-standings__row--peaked \{[^}]*grid-template-areas: 'rank avatar name end' 'rank avatar note note' 'rank avatar peak peak'/);
   });
 
@@ -1564,10 +1569,16 @@ describe('results popup', () => {
     expect(note).toContain('grid-area: end');
     expect(note).toMatch(/max-width: \d+rem/);
     expect(note).toContain('text-wrap-style: balance');
+    // The cap fits "to" and the widest 16-letter name ("to WWWWWWWWWWWWWWWW", 224px) on a line; a narrower box breaks such a name, never cuts it.
+    expect(note).toContain('max-width: 15rem');
+    expect(note).toContain('overflow-wrap: anywhere');
     // Narrow (a 360px phone's list is about 300px wide): the note takes a line of its own under the name.
     const narrow = css.slice(css.indexOf('@container standings (max-width: 26rem) {'));
-    expect(narrow).toMatch(/^@container standings \(max-width: 26rem\) \{\s*\.results-standings__row--noted \{[^}]*grid-template-areas: 'rank avatar name end' 'rank avatar note note'/);
+    expect(narrow).toMatch(/\.results-standings__row--noted \{[^}]*grid-template-areas: 'rank avatar name end' 'rank avatar note note'/);
     expect(narrow).toMatch(/\.results-standings__note \{[^}]*grid-area: note;[^}]*max-width: none/);
+    // A long score ("86,419,721 chips") wraps between the number and its unit rather than squeeze the name to a letter.
+    expect(narrow).toMatch(/\.results-standings__row \{[^}]*grid-template-columns: 18px auto minmax\(0, 1fr\) fit-content\(40%\)/);
+    expect(ruleOf(css, '.results-standings__score')).toContain('text-align: right');
   });
 
   it('announces a tie instead of crowning the first of the tied players', () => {
@@ -1575,10 +1586,55 @@ describe('results popup', () => {
       { playerId: 'host', name: 'host', avatar: AV, score: 30, rank: 1 },
       { playerId: 'bob', name: 'bob', avatar: AV, score: 30, rank: 1 },
     ] }));
-    expect(html).toContain('host and bob tie!');
+    expect(headline(html)).toBe('host and bob tie!');
     expect(html).toContain('You tied for the win!');
     expect(html).toContain('>30 points each<');
-    expect(html).not.toContain('host wins!');
+  });
+
+  it('wraps a long name inside the card, keeps the last word with it, and never scrolls the card sideways', () => {
+    const long = 'WWWWWWWWWWWWWWWW';
+    const html = popup('bob', results({ entries: [
+      { playerId: 'w', name: long, avatar: AV, score: 30, rank: 1 },
+      { playerId: 'bob', name: 'bob', avatar: AV, score: 20, rank: 2 },
+    ] }));
+    // The name's last letter and "wins!" never part: "wins!" never sits alone on a line, nor splits.
+    expect(tagWith(html, 'results-headline')).toBeTruthy();
+    expect(html).toContain(`${long.slice(0, -1)}<span class="hold-together">W\u00a0wins!</span>`);
+    // An emoji is held whole, never half of it.
+    const party = popup('bob', results({ entries: [
+      { playerId: 'p', name: 'Party 🎉', avatar: AV, score: 30, rank: 1 },
+      { playerId: 'bob', name: 'bob', avatar: AV, score: 20, rank: 2 },
+    ] }));
+    expect(party).toContain('Party <span class="hold-together">🎉\u00a0wins!</span>');
+    const css = stylesheet('components.css');
+    const title = ruleOf(css, '.results-hero__title');
+    expect(title).toContain('overflow-wrap: anywhere');
+    expect(title).toContain('text-wrap: balance');
+    expect(ruleOf(css, '.hold-together')).toContain('white-space: nowrap');
+    const scroll = ruleOf(css, '.results-card__scroll');
+    expect(scroll).toContain('overflow-x: hidden');
+  });
+
+  it('fades the standings where a short screen cuts them, and gives a short screen the podium and the list before the mascot', () => {
+    const html = popup('bob');
+    expect(html).toMatch(/class="results-card__scroll scroll-fade"/);
+    const css = stylesheet('components.css');
+    const short = css.slice(css.indexOf('@media (max-height: 600px) {'));
+    expect(short).toMatch(/^@media \(max-height: 600px\) \{\s*\.results-hero__mascot \{\s*height: 48px;/);
+    expect(short).toMatch(/@media \(max-height: 440px\) \{\s*\.results-hero__mascot \{\s*display: none;/);
+    // A phone on its side: the standings beside the winner, so the first rows show at once.
+    const side = css.slice(css.indexOf('@media (max-height: 440px) and (min-aspect-ratio: 3/2) {'));
+    expect(side).toMatch(/\.results-card__scroll \{[^}]*grid-template-columns: minmax\(0, 1fr\) minmax\(0, 1fr\)/);
+    expect(side).toMatch(/\.results-standings \{[^}]*grid-area: 2 \/ 1 \/ 4 \/ 2/);
+  });
+
+  it('tells a host who played alone that they ended it, and anyone else that the host did', () => {
+    const alone = results({ gameId: 'blackjack', reason: 'host', entries: [{ playerId: 'host', name: 'host', avatar: AV, score: 1250, rank: 1 }] });
+    expect(textOf(popup('host', alone), 'results-reason')).toBe('You ended the game.');
+    expect(headline(popup('host', alone))).toBe('You finished with 1,250 chips');
+    // A guest who played alone while the host watched: it was the host.
+    const guest = results({ gameId: 'blackjack', reason: 'host', entries: [{ playerId: 'bob', name: 'bob', avatar: AV, score: 1250, rank: 1 }] });
+    expect(textOf(popup('bob', guest), 'results-reason')).toBe('The host ended the game.');
   });
 
   it('closes with Back to the room or the X, and holds no ready, leave or host buttons: the lobby has those', () => {
@@ -2192,7 +2248,9 @@ describe('player chips', () => {
     }
     expect(chips).toContain('gap: var(--chip-gap)');
     const chip = css.match(/\n\.chip \{([^}]*)\}/)?.[1] ?? '';
-    expect(chip).toContain('flex: 0 1 var(--chip-w)');
+    // A chip is as wide as its name needs, up to 8.5rem ("Desmond" whole beside an empty header), and gives way down to its least.
+    expect(chip).toContain('flex: 0 1 auto');
+    expect(chip).toContain('max-width: 8.5rem');
     expect(chip).toContain('min-width: var(--chip-min)');
     expect(ruleOf(css, '.chips--faces')).toContain('gap: var(--chip-face-gap)');
     expect(ruleOf(css, '.chips--faces .chip')).toContain('flex-basis: var(--chip-face-w)');

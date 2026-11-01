@@ -16,7 +16,7 @@ function findPlayer(room: ScribbleRoomState, id: string): PlayerPublic | undefin
 export function ChoosingOverlay({ phase, room, isDrawer, paused = false }: { phase: ChoosingPhase; room: ScribbleRoomState; isDrawer: boolean; paused?: boolean }) {
   const drawer = findPlayer(room, phase.drawerId);
   return (
-    <div className="overlay overlay--choosing" data-testid="overlay-choosing">
+    <div className={`overlay overlay--choosing${isDrawer ? ' overlay--pick' : ''}`} data-testid="overlay-choosing">
       <div className="overlay__card">
         {isDrawer ? (
           <>

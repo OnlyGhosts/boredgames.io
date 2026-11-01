@@ -103,5 +103,12 @@ describe('chips', () => {
     expect(editor).toMatch(/aria-pressed="false"[^>]*data-testid="settings-stake-10"/);
     expect(editor).toContain('value="50"');
     expect(editor).not.toContain('settings-value-stake');
+    // A big stack reads short on its button ("10k", 32px of text where "10,000" overflowed a 768px tablet's button), its name in full.
+    const stacks = renderToString(createElement(ChipsSetting, { ...props, id: 'startingChips', presets: [500, 1000, 2500, 10000], value: 1000 }));
+    expect(stacks.match(/data-testid="settings-startingChips-\d+">[^<]*</g)?.map((m) => m.replace(/.*>/, '').slice(0, -1))).toEqual(['500', '1k', '2.5k', '10k']);
+    expect(stacks).toMatch(/aria-label="10,000"[^>]*data-testid="settings-startingChips-10000"/);
+    // Each preset's tap reaches half the gap either side (six small blinds are 37px wide on a 320px phone).
+    const css = readFileSync(fileURLToPath(new URL('../styles/cards.css', import.meta.url)), 'utf8');
+    expect(css).toMatch(/\.chips-setting__preset::before \{[^}]*position: absolute;[^}]*inset: 0 -3px;/);
   });
 });

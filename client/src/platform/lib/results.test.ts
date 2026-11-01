@@ -64,6 +64,9 @@ describe('the results copy', () => {
   it('says why a game ended early, in a few words', () => {
     expect(endReasonLine(results())).toBeNull();
     expect(endReasonLine(results({ reason: 'host' }))).toBe('The host ended the game.');
+    // Read by the host who ended it (a host who played alone): their own doing, not "the host".
+    expect(endReasonLine(results({ reason: 'host' }), true)).toBe('You ended the game.');
+    expect(endReasonLine(results({ reason: 'players' }), true)).toBe('Too few players were left.');
     expect(endReasonLine(results({ reason: 'players' }))).toBe('Too few players were left.');
   });
 

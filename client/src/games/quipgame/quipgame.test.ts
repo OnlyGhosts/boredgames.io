@@ -392,7 +392,8 @@ describe('the final', () => {
       ['2', 'host', '2000'],
     ]);
     expect(html).toContain('🥇');
-    expect(html).toContain('bob wins the final!');
+    // The name's last letter and "wins" never part: a long name never leaves "wins" alone on a line.
+    expect(html).toContain('bo<span class="hold-together">b\u00a0wins</span> the final!');
     expect(textOf(html, 'quip-next')).toBe('Show results');
   });
 });

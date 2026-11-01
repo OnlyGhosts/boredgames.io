@@ -55,9 +55,9 @@ describe('the How to play button', () => {
     const module = { meta: template, Screen: () => null, Art: () => null, rules: templateRules };
     const host = renderToString(createElement(GamePicker, { room: room({ gameId: 'template' }), isHost: true, game: module }));
     expect(host).toContain('data-testid="game-picker-meta"');
-    expect(host.replace(/<!-- -->/g, '').replace(/<span class="game-picker__count">/g, '').replace(/<\/span>/g, '')).toContain('Click Race · 1+ players');
-    // The count keeps to one piece, so a narrow line breaks at the dot.
-    expect(host).toContain('<span class="game-picker__count">1+ players</span>');
+    expect(host.replace(/<!-- -->/g, '').replace(/<[^>]+>/g, '')).toContain('Click Race · 1+ players');
+    // Each part keeps to one piece, so a narrow line breaks between them (with no dot left at a line's end).
+    expect(host).toContain('<span class="dot-list__part"><span class="dot-list__dot"> · </span>1+ players</span>');
     expect(host.indexOf('data-testid="how-to-play"')).toBeGreaterThan(host.indexOf('data-testid="game-picker-meta"'));
     const guest = renderToString(createElement(GamePicker, { room: room({ gameId: 'template' }), isHost: false, game: module }));
     expect(guest.indexOf('data-testid="how-to-play"')).toBeGreaterThan(guest.indexOf('data-testid="game-picker-note"'));

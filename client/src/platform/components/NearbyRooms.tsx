@@ -1,5 +1,6 @@
 import { nearbyMeta, roomTitle, type NearbyCard } from '../lib/nearby';
 import { Avatar } from './Avatar';
+import { DotList } from './DotList';
 
 interface Props {
   rooms: NearbyCard[];
@@ -18,9 +19,7 @@ export function NearbyRooms({ rooms, disabled, onJoin }: Props) {
             <Avatar avatar={room.host.avatar} size="md" />
             <span className="nearby__text">
               <span className="nearby__title">{roomTitle(room.host.name)}</span>
-              <span className="nearby__meta" data-testid="nearby-meta">
-                {nearbyMeta(room)}
-              </span>
+              <DotList className="nearby__meta" parts={nearbyMeta(room)} testId="nearby-meta" />
             </span>
             <button
               type="button"

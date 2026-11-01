@@ -213,6 +213,8 @@ describe('voting', () => {
     expect(useSpygameStore.getState().voteSheetOpen).toBe(true);
     const html = renderToString(createElement(spygameClient.Screen, { room: voting('agent'), meId: 'dave', isHost: false }));
     expect(tagWith(html, 'vote-sheet')).toBeTruthy();
+    // A centred box on a desktop, not Yes and No each half the screen wide.
+    expect(tagWith(html, 'vote-sheet')).toContain('class="sheet sheet--dialog"');
     expect(tagsWith(html, 'vote-yes')).toHaveLength(1);
     expect(tagsWith(html, 'vote-no')).toHaveLength(1);
     expect(attr(tagWith(html, 'vote-panel'), 'data-role')).toBe('voter');
@@ -526,7 +528,10 @@ describe('the stylesheet', () => {
     expect(reach(markRule)).toBeLessThanOrEqual(border + nameOnlyPad);
     const portraitMark = css.match(/\.spy--phone \.spy-grid \.spy-tile__mark \{([^}]*)\}/)?.[1] ?? '';
     expect(reach(portraitMark)).toBeLessThanOrEqual(border + Number(css.match(/\.spy--phone \.spy-grid \.spy-tile \{[^}]*padding: 4px (\d+)px 4px 6px;/)?.[1]));
-    expect(css).not.toContain('::before');
+    // The mark is the element itself, never a ::before; the stylesheet's one ::before is a phone tile's invisible tap area,
+    // half the 5px gap above and below (a 320px phone's 40px rows give 45px targets).
+    expect(css.match(/[^\n]*::before/g)).toEqual(['  .spy--phone .spy-grid .spy-tile::before']);
+    expect(css).toMatch(/\.spy--phone \.spy-grid \.spy-tile::before \{\s*content: '';\s*position: absolute;\s*inset: -2\.5px 0;/);
     // Under that the picture moves behind the name (the backdrop) and the name takes the tile's width: no tile loses its picture.
     expect(ladder(least(smPicture, NAME_ROOM.sm))).toMatch(/\.spy-grid \.spy-tile--sm \.spy-tile__picture \{\s*position: absolute;\s*inset: 0;/);
     expect(css).not.toMatch(/\.spy-tile__picture \{\s*display: none/);

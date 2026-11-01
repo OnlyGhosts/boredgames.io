@@ -388,10 +388,14 @@ button.quip-answer--selected:disabled {
 }
 
 /* ---------- Result ---------- */
+/* "<name> wins the final!": a long name wraps inside the card and keeps "wins" with it (HoldTogether). */
 .quip-result__headline {
+  max-width: 100%;
   font-size: 1.5rem;
   font-weight: 900;
   letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
   animation: fade-in 0.2s ease;
 }
 

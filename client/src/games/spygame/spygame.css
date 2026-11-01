@@ -1061,6 +1061,13 @@ button.spy-accuse__row:disabled {
     container: none / size;
   }
 
+  /* Its tap reaches half the gap above and below: a 320px phone's 40px rows give 45px targets. */
+  .spy--phone .spy-grid .spy-tile::before {
+    content: '';
+    position: absolute;
+    inset: -2.5px 0;
+  }
+
   /* The name sits at the tile's foot, on its picture (the backdrop, as in the ladder above). */
   .spy--phone .spy-grid .spy-tile {
     height: 100%;
