@@ -459,17 +459,47 @@ test.describe('the waiting overlay fits a small phone with three long names', ()
         const actions = (document.querySelector('.results-card__actions') as HTMLElement).getBoundingClientRect();
         const headline = document.querySelector('[data-testid="results-headline"]') as HTMLElement;
         const rows = [...document.querySelectorAll('[data-testid="results-entry"]')].map((row) => row.getBoundingClientRect());
+        const podium = document.querySelector('.podium') as HTMLElement;
+        // The winner (and the podium, where it shows) shows whole above Back to the room: with this headline, and with
+        // the longest one a winner's name can make (16 letters, two lines), swapped in for a moment (in this one task,
+        // so React never sees it) because the card grows with its content.
+        const whole = (): boolean => {
+          const shown = scroll.getBoundingClientRect();
+          const boxes = [document.querySelector('.results-hero') as HTMLElement, ...document.querySelectorAll('.podium__block')].map((el) => el.getBoundingClientRect());
+          return boxes.filter((box) => box.height > 0).every((box) => box.top >= shown.top - 0.5 && box.bottom <= shown.bottom + 0.5);
+        };
+        const asIs = whole();
+        const probe = document.createElement('h2');
+        probe.className = headline.className;
+        probe.innerHTML = 'WWWWWWWWWWWWWWW<span class="hold-together">W wins!</span>';
+        headline.style.display = 'none';
+        headline.after(probe);
+        const longest = whole();
+        probe.remove();
+        headline.style.removeProperty('display');
         return {
           sideways: scroll.scrollWidth - scroll.clientWidth,
           headline: headline.scrollWidth - headline.clientWidth,
           rowsOut: rows.filter((r) => r.left < card.left - 0.5 || r.right > card.right + 0.5).length,
           firstRowShows: rows[0].top < actions.top - 20,
+          podium: getComputedStyle(podium).display,
+          winnerShows: asIs && longest,
           fade: scroll.scrollHeight > scroll.clientHeight + 1 ? (scroll.getAttribute('data-fade') ?? '') : 'bottom',
         };
       });
       // Nothing scrolls the card sideways; the standings start above Back to the room (the mascot gives way on a short
-      // screen; on its side the list sits beside the winner), and where they run on, the cut edge fades.
-      expect(fit, `${size.width}x${size.height}`).toEqual({ sideways: 0, headline: 0, rowsOut: 0, firstRowShows: true, fade: expect.stringContaining('bottom') });
+      // screen; on its side the list sits beside the winner, with no room for the podium); the winner and any podium
+      // show whole; and where the standings run on, the cut edge fades.
+      const onItsSide = size.width > size.height;
+      expect(fit, `${size.width}x${size.height}`).toEqual({
+        sideways: 0,
+        headline: 0,
+        rowsOut: 0,
+        firstRowShows: true,
+        podium: onItsSide ? 'none' : 'flex',
+        winnerShows: true,
+        fade: expect.stringContaining('bottom'),
+      });
       for (const id of ['results-done', 'results-close']) {
         const box = await host.page.getByTestId(id).boundingBox();
         expect((box?.y ?? -1) >= 0 && (box?.y ?? 0) + (box?.height ?? 0) <= size.height + 0.5, `${id} on screen at ${size.width}x${size.height}`).toBe(true);

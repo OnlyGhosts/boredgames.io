@@ -2705,9 +2705,11 @@ button.exit-action--end:hover {
 }
 
 /*
- * A phone on its side: the standings on the left and the winner and the podium beside them, so the
- * first rows show at once (the close button sits over the winner's column, clear of the scores,
- * and the winner starts below it). The fades span both columns and take no room of their own.
+ * A phone on its side: the standings on the left and the winner beside them, so the first rows show
+ * at once (the close button sits over the winner's column, clear of the scores, and the winner starts
+ * below it). There is no room for the podium as well: under a long headline (a tie of two 16-letter
+ * names runs to three lines) it would be cut, and the standings already show each place with its
+ * face. The winner stays in view while the standings scroll, and the fades sit over the standings only.
  */
 @media (max-height: 440px) and (min-aspect-ratio: 3/2) {
   .results-card__scroll {
@@ -2719,25 +2721,25 @@ button.exit-action--end:hover {
   }
 
   .results-card__scroll::before {
-    grid-area: 1 / 1 / 2 / -1;
+    grid-area: 1 / 1 / 2 / 2;
     margin-bottom: -32px;
   }
 
   .results-card__scroll::after {
-    grid-area: 4 / 1 / 5 / -1;
+    grid-area: 4 / 1 / 5 / 2;
     margin-top: -48px;
   }
 
   .results-hero {
-    grid-area: 2 / 2;
+    grid-area: 2 / 2 / 4 / 3;
     justify-self: center;
+    position: sticky;
+    top: 0;
     padding-top: var(--space-2);
   }
 
   .results-card__scroll > .podium {
-    grid-area: 3 / 2;
-    justify-self: center;
-    margin-top: var(--space-3);
+    display: none;
   }
 
   .results-standings {

@@ -135,7 +135,8 @@ export function ResultsPopup({ results, meId, hostId = null, onClose }: Props) {
                     <span className="results-standings__score">{scoreShort(entry.score, unit)}</span>
                   ) : (
                     <span className="results-standings__note" data-testid="results-note">
-                      {noOrphan(entry.note)}
+                      {/* A number stays with the word before it ("hand 1"), so a wrap never splits them. */}
+                      {noOrphan(entry.note).replace(/ (?=\d)/g, ' ')}
                     </span>
                   )}
                   {entry.peak !== undefined && (

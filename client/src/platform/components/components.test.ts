@@ -1521,6 +1521,21 @@ describe('results popup', () => {
     expect(['bob', 'carol', 'host', 'dan'].map((name) => li(name).includes('results-standings__row--noted'))).toEqual([false, false, true, true]);
   });
 
+  it('keeps a hand or round with its number when a long note wraps, never "Out in hand" over "1, to …"', () => {
+    const html = popup(
+      'bob',
+      results({
+        gameId: 'poker',
+        entries: [
+          { playerId: 'bob', name: 'bob', avatar: AV, score: 1000, rank: 1 },
+          { playerId: 'jane', name: 'Bartholomew Jane', avatar: AV, score: 0, rank: 2, note: 'Out in hand 1, to WWWWWWWWWWWWWWWW' },
+        ],
+      }),
+    );
+    expect(tagsWith(html, 'results-note')).toHaveLength(1);
+    expect(html).toContain('>Out in hand 1, to WWWWWWWWWWWWWWWW<');
+  });
+
   it('shows each player’s best moment under their name, small and muted, and no line for a player the game gave none (at the starting stack)', () => {
     const html = popup(
       'carol',
@@ -1626,6 +1641,9 @@ describe('results popup', () => {
     const side = css.slice(css.indexOf('@media (max-height: 440px) and (min-aspect-ratio: 3/2) {'));
     expect(side).toMatch(/\.results-card__scroll \{[^}]*grid-template-columns: minmax\(0, 1fr\) minmax\(0, 1fr\)/);
     expect(side).toMatch(/\.results-standings \{[^}]*grid-area: 2 \/ 1 \/ 4 \/ 2/);
+    // No room for the podium beside a long headline (the standings show each place), and the winner stays in view.
+    expect(side).toMatch(/\.results-card__scroll > \.podium \{\s*display: none;/);
+    expect(side).toMatch(/\.results-hero \{[^}]*position: sticky;/);
   });
 
   it('tells a host who played alone that they ended it, and anyone else that the host did', () => {
