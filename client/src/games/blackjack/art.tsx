@@ -18,6 +18,9 @@ export function BlackjackArt() {
           <stop offset="0" stopColor="#f8dd9c" />
           <stop offset="1" stopColor="#d9a93f" />
         </linearGradient>
+        <clipPath id={id('chipside')}>
+          <path d="M74 91v7a16 5.5 0 0 0 32 0v-7z" />
+        </clipPath>
         <pattern id={id('dots')} width="6" height="6" patternUnits="userSpaceOnUse">
           <circle cx="3" cy="3" r="1.2" fill="#ffffff" opacity=".45" />
         </pattern>
@@ -32,11 +35,16 @@ export function BlackjackArt() {
         <path d="M72 46c0 0-13 9.5-13 17.5 0 5.4 5.6 7.8 10.4 4.6L67 76h10l-2.4-7.9c4.8 3.2 10.4.8 10.4-4.6C85 55.5 72 46 72 46z" fill="#262a24" />
         <path d="M66 54c1.5-2 3-3.4 4-4.2" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" opacity=".55" />
       </g>
-      <ellipse cx="90" cy="98" rx="16" ry="5.5" fill="#b07f24" />
-      <rect x="74" y="91" width="32" height="7" fill="#c99a35" />
+      {/* The chip: its side, with the edge inserts a casino chip has, spaced round it (narrower towards the sides) and clipped to the side so none pokes past it; its face, with an even ring of inserts and an inner ring. */}
+      <path d="M74 91v7a16 5.5 0 0 0 32 0v-7z" fill="#b8861f" />
+      <g clipPath={url('chipside')} fill="#ffffff" opacity=".85">
+        <rect x="88.5" y="91" width="3" height="14" />
+        <rect x="75.39" y="91" width="1.5" height="14" />
+        <rect x="103.11" y="91" width="1.5" height="14" />
+      </g>
       <ellipse cx="90" cy="91" rx="16" ry="5.5" fill={url('chip')} />
-      <ellipse cx="90" cy="91" rx="9.5" ry="3.2" fill="none" stroke="#ffffff" strokeWidth="1.6" strokeDasharray="3 3" />
-      <path d="M76 93.5v4M83 95v4M97 95v4M104 93.5v4" stroke="#ffffff" strokeWidth="2" opacity=".7" />
+      <ellipse cx="90" cy="91" rx="12.6" ry="4.3" fill="none" stroke="#ffffff" strokeWidth="1.8" pathLength={100} strokeDasharray="8.333 8.333" strokeDashoffset="4.167" opacity=".9" />
+      <ellipse cx="90" cy="91" rx="7.6" ry="2.6" fill="none" stroke="#ffffff" strokeWidth="1.2" opacity=".7" />
     </ShadedArt>
   );
 }
