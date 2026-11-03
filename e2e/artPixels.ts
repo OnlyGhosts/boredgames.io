@@ -1,23 +1,26 @@
 import { inflateSync } from 'node:zlib';
 
 /**
- * Pixel checks on a screenshot of a game tile's picture (art.spec.ts): the flaws a flat picture
- * with a 2.2-unit edge round every shape can show when it is drawn at a few pixels a unit. The
- * picture is 64 units wide and a tile shows it about 69 to 96px wide, so at device pixel ratios 1
- * to 3 a unit is 1.1 to 4.5 pixels, and a slip of a fraction of a unit (a shape's copy peeking out beside
- * it, two outlines 0.2 apart, a point not quite on its neighbour) renders as a hairline, a sliver
- * or a lone fleck of colour. Three checks, all against the tile's own colour (the pixel in the
- * screenshot's corner, and every pixel of that colour joined to the border) and the picture's fills:
- * - hairline: a line, light or dark, narrower than 0.9 units that runs 2 units or more, between
- *   wider areas on both sides. Every deliberate line in a picture (a card back's frame, a chip's
- *   ring, an "A"'s crossbar) is 1.5 units or more; a wedge where two edges meet at a point is narrow
- *   for less than 2 units. Measured at 2 px a unit or more, where 0.9 units is 2 px or wider; at 1
- *   px a unit a hairline and a 1.5-unit line both fill one pixel.
- * - fill on tile: a solid patch of a fill colour (lime, lilac, paper) within two pixels of the
- *   tile, with at most one blended pixel between. Every fill is rimmed by its edge, 2.2 units wide
- *   (two pixels and more), so a fill that close to the tile has slipped outside its edge (a nib past
- *   its cone, a line's colour wider than its edge). A fill the tile's own colour is left out.
- * - fragment: a piece of the picture smaller than 1.5 units square on its own, clear of the rest.
+ * Pixel checks on screenshots of a game tile's picture (art.spec.ts). The live games' pictures are
+ * drawn in the soft shaded style (GameArt.tsx): a 120-unit canvas shown 64 to 72px square, so at
+ * device pixel ratios 1 to 3 a unit is 0.53 to 1.8 pixels. Both checks work against the tile: the
+ * pixel in the screenshot's corner, and every pixel that looks the same (under a just-noticeable
+ * difference) joined to the screenshot's border through such pixels.
+ * - fragment: a piece of the picture smaller than 3 units square on its own, clear of the rest (a
+ *   fleck where a shape slipped off another, or a speck of anti-aliasing). The picture is wherever
+ *   it differs from the tile on any of the tiles it is shot on, so a white shape on the light tile
+ *   is still one piece.
+ * - see-through: the tile showing through inside the picture. The same picture is shot on tiles of
+ *   different colours (dark, light, picked lilac), and every pixel that is the picture on all of them
+ *   must look the same on all of them, unless it lies within a few pixels of where the tile itself
+ *   shows: an anti-aliased outline, or the tip of a wedge of tile where two outlines meet at a point
+ *   or a rounded corner leaves a straight side. Two shapes that meet edge to edge each anti-alias
+ *   their own edge, so up to a quarter of the tile shows through along the whole join: a seam,
+ *   darker on the dark tile and lighter on the light one. A sliver of tile between two shapes that
+ *   should touch shows the same way.
+ * (The flat style's hairline and fill-on-tile checks went with it: a shaded picture has no outlines
+ * for a fill to slip past, and at under 2 pixels a unit its deliberate fine lines, a pencil band's
+ * grooves or a card's printed frame, are as narrow as any hairline.)
  */
 
 export interface Rgba {
@@ -86,7 +89,7 @@ export function decodePng(png: Buffer): Rgba {
 }
 
 export interface Flaw {
-  kind: 'hairline' | 'fill on tile' | 'fragment';
+  kind: 'fragment' | 'see-through';
   /** Where, in device pixels of the screenshot. */
   at: string;
   detail: string;
@@ -107,50 +110,26 @@ function lab(r: number, g: number, b: number): [number, number, number] {
   return [116 * y - 16, 500 * (x - y), 200 * (y - z)];
 }
 
-function hexRgb(hex: string): [number, number, number] {
-  return [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)) as [number, number, number];
-}
-
-/** A pixel is a colour when it matches to within this much a channel: the colour itself, not a blend with a neighbour. */
-const TOLERANCE = 3;
-/** A fill colour this close (CIE76 delta E) to the tile is the tile, and left out of the fill check. */
-const SAME_AS_TILE = 12;
-/** A fill pixel with a tile pixel this close (Chebyshev) has no edge between them. */
-const FILL_REACH = 2;
-/** The lightness step (L*) a line has to make against both sides to count. */
-const STEP = 8;
-/** A hairline is narrower than this many units; a wedge is narrow for less than LENGTH units. */
-const WIDTH = 0.9;
-const LENGTH = 2;
-/** Measured in units: how far a hairline can be told from a 1.5-unit line. */
-const HAIRLINE_MIN_SCALE = 2;
+/** Two colours look the same under this CIE76 delta E: a just-noticeable difference. */
+const SAME = 2.3;
 /** A piece of the picture on its own smaller than this many units square is a fleck. */
-const FRAGMENT_UNITS = 1.5;
+const FRAGMENT_UNITS = 3;
+/** How far into the picture, in device pixels from the nearest pixel of tile, the tile may still show: an anti-aliased edge, or the tip of a wedge of tile. */
+const SEE_THROUGH_DEPTH = 6;
 
-const near = (data: Uint8Array, i: number, rgb: ArrayLike<number>): boolean =>
-  Math.abs(data[i * 4] - rgb[0]) <= TOLERANCE && Math.abs(data[i * 4 + 1] - rgb[1]) <= TOLERANCE && Math.abs(data[i * 4 + 2] - rgb[2]) <= TOLERANCE;
-
-/**
- * How many pixels of the picture are a colour (#rrggbb), to within 3 a channel: the tile around the
- * picture is left out, so on the lilac tile this counts the lilac inside the picture's outlines (a
- * shape filled in the tile's own colour, which is what the picked tile's paler lilac is there to
- * prevent), not the tile.
- */
-export function pixelsOf(img: Rgba, hex: string): number {
-  const rgb = hexRgb(hex);
-  const isTile = tileMask(img);
-  let n = 0;
-  for (let i = 0; i < img.width * img.height; i++) if (!isTile[i] && near(img.data, i, rgb)) n++;
-  return n;
+function deltaE(a: Rgba, i: number, b: Rgba, j: number): number {
+  const p = lab(a.data[i * 4], a.data[i * 4 + 1], a.data[i * 4 + 2]);
+  const q = lab(b.data[j * 4], b.data[j * 4 + 1], b.data[j * 4 + 2]);
+  return Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]);
 }
 
-/** The tile: every pixel of the corner pixel's colour that is joined to the screenshot's border through such pixels (not an ink-and-paper blend inside a shape that happens to match). */
-function tileMask({ width, height, data }: Rgba): Uint8Array {
-  const tile = [data[0], data[1], data[2]];
+/** The tile: every pixel that looks like the corner pixel and is joined to the screenshot's border through such pixels (not a pixel inside a shape that happens to match). */
+export function tileMask(img: Rgba): Uint8Array {
+  const { width, height } = img;
   const mask = new Uint8Array(width * height);
   const stack: number[] = [];
   const push = (i: number) => {
-    if (!mask[i] && near(data, i, tile)) {
+    if (!mask[i] && deltaE(img, i, img, 0) < SAME) {
       mask[i] = 1;
       stack.push(i);
     }
@@ -174,55 +153,27 @@ function tileMask({ width, height, data }: Rgba): Uint8Array {
   return mask;
 }
 
-/**
- * The flaws in a screenshot of a picture, drawn at `pxPerUnit` device pixels a unit, with `fills`
- * the picture's fill colours as hex (lime, lilac, paper; the picked tile's paler lilac).
- */
-export function artFlaws(img: Rgba, pxPerUnit: number, fills: string[]): Flaw[] {
-  const { width, height, data } = img;
-  const n = width * height;
-  const isTile = tileMask(img);
-  const tileLab = lab(data[0], data[1], data[2]);
-  const fillRgb = fills.map(hexRgb).filter((rgb) => Math.hypot(...lab(...rgb).map((v, i) => v - tileLab[i])) > SAME_AS_TILE);
-  const light = new Float32Array(n);
-  const isFill = new Uint8Array(n);
-  for (let i = 0; i < n; i++) {
-    light[i] = lab(data[i * 4], data[i * 4 + 1], data[i * 4 + 2])[0];
-    if (fillRgb.some((f) => near(data, i, f))) isFill[i] = 1;
-  }
-  // A solid fill pixel: itself and its four neighbours are the fill, so an anti-aliased fringe pixel that happens to match does not count.
-  const solid = (x: number, y: number) =>
-    x > 0 && y > 0 && x < width - 1 && y < height - 1 && isFill[y * width + x] && isFill[y * width + x - 1] && isFill[y * width + x + 1] && isFill[(y - 1) * width + x] && isFill[(y + 1) * width + x];
-  const flaws: Flaw[] = [];
+/** How much of the screenshot is the picture rather than the tile, 0 to 1. */
+export function coverage(img: Rgba): number {
+  const tile = tileMask(img);
+  let n = 0;
+  for (const t of tile) if (!t) n++;
+  return n / tile.length;
+}
 
-  // Fill on tile: a solid fill pixel with a tile pixel within reach.
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      if (!solid(x, y)) continue;
-      for (let dy = -FILL_REACH; dy <= FILL_REACH; dy++) {
-        for (let dx = -FILL_REACH; dx <= FILL_REACH; dx++) {
-          const [nx, ny] = [x + dx, y + dy];
-          if (nx < 0 || ny < 0 || nx >= width || ny >= height || !isTile[ny * width + nx]) continue;
-          const o = (y * width + x) * 4;
-          flaws.push({ kind: 'fill on tile', at: `${x},${y}`, detail: `fill rgb(${data[o]},${data[o + 1]},${data[o + 2]}) meets the tile at ${nx},${ny}` });
-          dy = dx = FILL_REACH + 1;
-        }
-      }
-    }
-  }
-
-  // Fragments: connected pieces (eight neighbours) of everything that is not the tile, smaller than a 1.5-unit square.
-  const seen = new Uint8Array(n);
-  const minArea = (FRAGMENT_UNITS * pxPerUnit) ** 2;
-  for (let start = 0; start < n; start++) {
-    if (isTile[start] || seen[start]) continue;
+/** The connected pieces (eight neighbours) of the pixels `on` marks, each with its size and box. */
+function pieces(width: number, height: number, on: (i: number) => boolean): { area: number; minX: number; minY: number; maxX: number; maxY: number; pixels: number[] }[] {
+  const seen = new Uint8Array(width * height);
+  const found = [];
+  for (let start = 0; start < width * height; start++) {
+    if (!on(start) || seen[start]) continue;
     const stack = [start];
+    const pixels: number[] = [];
     seen[start] = 1;
-    let area = 0;
     let [minX, minY, maxX, maxY] = [width, height, 0, 0];
     while (stack.length) {
       const i = stack.pop()!;
-      area++;
+      pixels.push(i);
       const [x, y] = [i % width, Math.floor(i / width)];
       [minX, minY, maxX, maxY] = [Math.min(minX, x), Math.min(minY, y), Math.max(maxX, x), Math.max(maxY, y)];
       for (let dy = -1; dy <= 1; dy++) {
@@ -230,79 +181,88 @@ export function artFlaws(img: Rgba, pxPerUnit: number, fills: string[]): Flaw[] 
           const [nx, ny] = [x + dx, y + dy];
           if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
           const j = ny * width + nx;
-          if (!isTile[j] && !seen[j]) {
+          if (on(j) && !seen[j]) {
             seen[j] = 1;
             stack.push(j);
           }
         }
       }
     }
-    if (area < minArea) flaws.push({ kind: 'fragment', at: `${minX},${minY}`, detail: `${area}px of picture on its own, ${maxX - minX + 1}x${maxY - minY + 1}px, clear of the rest` });
+    found.push({ area: pixels.length, minX, minY, maxX, maxY, pixels });
   }
+  return found;
+}
 
-  // Hairlines: along every row and every column, a bump or a dip in lightness narrower than 0.9 units at half its height, chained over 2 units of scanlines.
-  if (pxPerUnit >= HAIRLINE_MIN_SCALE) {
-    const maxWidth = Math.floor(WIDTH * pxPerUnit);
-    const minLength = Math.ceil(LENGTH * pxPerUnit);
-    for (const across of ['x', 'y'] as const) {
-      const lines = across === 'x' ? height : width;
-      const len = across === 'x' ? width : height;
-      const at = (line: number, i: number) => (across === 'x' ? line * width + i : i * width + line);
-      interface Run {
-        a: number;
-        b: number;
-        sign: 1 | -1;
-        from: number;
-        count: number;
-        step: number;
-      }
-      let open: Run[] = [];
-      const close = (run: Run, line: number) => {
-        if (run.count < minLength) return;
-        const [x, y] = across === 'x' ? [run.a, run.from] : [run.from, run.a];
-        const [x1, y1] = across === 'x' ? [run.a, line - 1] : [line - 1, run.a];
-        flaws.push({
-          kind: 'hairline',
-          at: `${x},${y}`,
-          detail: `a ${run.sign > 0 ? 'light' : 'dark'} line ${run.b - run.a + 1}px wide (under ${WIDTH} units) runs ${run.count}px ${across === 'x' ? 'down' : 'across'} to ${x1},${y1}, ${run.step.toFixed(0)} L* off its sides`,
-        });
-      };
-      for (let line = 0; line < lines; line++) {
-        const found: Run[] = [];
-        for (const sign of [1, -1] as const) {
-          const v = (i: number) => sign * light[at(line, i)];
-          for (let m = 1; m < len - 1; m++) {
-            if (v(m) < v(m - 1) || v(m) < v(m + 1)) continue;
-            // A local peak: walk down each side to the valley floors; the bump stands on the higher one.
-            let l = m;
-            while (l > 0 && v(l - 1) <= v(l)) l--;
-            let r = m;
-            while (r < len - 1 && v(r + 1) <= v(r)) r++;
-            const base = Math.max(v(l), v(r));
-            const step = v(m) - base;
-            if (step < STEP) continue;
-            const half = base + step / 2;
-            let a = m;
-            while (a > l && v(a - 1) > half) a--;
-            let b = m;
-            while (b < r && v(b + 1) > half) b++;
-            if (b - a + 1 > maxWidth) continue;
-            if (!found.some((f) => f.sign === sign && f.a <= b && f.b >= a)) found.push({ a, b, sign, from: line, count: 1, step });
-          }
-        }
-        const next: Run[] = [];
-        for (const f of found) {
-          const prev = open.find((o) => o.sign === f.sign && o.a <= f.b + 1 && o.b >= f.a - 1);
-          if (prev) {
-            open.splice(open.indexOf(prev), 1);
-            next.push({ ...prev, a: f.a, b: f.b, count: prev.count + 1, step: Math.max(prev.step, f.step) });
-          } else next.push(f);
-        }
-        for (const o of open) close(o, line);
-        open = next;
-      }
-      for (const o of open) close(o, lines);
+/**
+ * The flecks in a picture drawn at `pxPerUnit` device pixels a unit: pieces of it smaller than 3
+ * units square, clear of the rest. `shots` is the picture on tiles of different colours, and the
+ * picture is wherever it differs from the tile on any of them: a white shape matches the light tile
+ * and a dark one nearly matches the dark tile, so on one tile alone a detail inside such a shape
+ * would look like a piece on its own.
+ */
+export function fragments(shots: Record<string, Rgba>, pxPerUnit: number): Flaw[] {
+  const { width, height } = sameSize(shots);
+  const masks = Object.values(shots).map(tileMask);
+  const minArea = (FRAGMENT_UNITS * pxPerUnit) ** 2;
+  return pieces(width, height, (i) => masks.some((m) => !m[i]))
+    .filter((p) => p.area < minArea)
+    .map((p) => ({ kind: 'fragment', at: `${p.minX},${p.minY}`, detail: `${p.area}px of picture on its own, ${p.maxX - p.minX + 1}x${p.maxY - p.minY + 1}px, clear of the rest` }));
+}
+
+/** The size the shots share (the same picture in the same box), or an error. */
+function sameSize(shots: Record<string, Rgba>): { width: number; height: number } {
+  const [first, ...rest] = Object.entries(shots);
+  const { width, height } = first[1];
+  for (const [name, img] of rest) if (img.width !== width || img.height !== height) throw new Error(`${name}: ${img.width}x${img.height}, not ${width}x${height} like ${first[0]}`);
+  return { width, height };
+}
+
+/**
+ * Where the tile shows through inside a picture: `shots` is the same picture on tiles of different
+ * colours, keyed by the tile. A pixel that is the picture on every tile and more than 6 pixels from
+ * the nearest pixel of tile on any of them has to look the same on all of them.
+ */
+export function seeThrough(shots: Record<string, Rgba>): Flaw[] {
+  const names = Object.keys(shots);
+  const [first] = names;
+  const { width, height } = sameSize(shots);
+  // How far each pixel is from the nearest pixel of tile on any of the shots (eight neighbours, in pixels).
+  const depth = new Int32Array(width * height).fill(-1);
+  let ring: number[] = [];
+  const masks = names.map((name) => tileMask(shots[name]));
+  for (let i = 0; i < width * height; i++) {
+    if (masks.some((m) => m[i])) {
+      depth[i] = 0;
+      ring.push(i);
     }
   }
-  return flaws;
+  for (let d = 1; ring.length; d++) {
+    const next: number[] = [];
+    for (const i of ring) {
+      const [x, y] = [i % width, Math.floor(i / width)];
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const [nx, ny] = [x + dx, y + dy];
+          if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+          const j = ny * width + nx;
+          if (depth[j] < 0) {
+            depth[j] = d;
+            next.push(j);
+          }
+        }
+      }
+    }
+    ring = next;
+  }
+  // The pixel at depth -1 has no tile anywhere near it (a screenshot with no tile at all): count it as deep.
+  const differs = (i: number) => (depth[i] < 0 || depth[i] > SEE_THROUGH_DEPTH) && names.some((name) => deltaE(shots[name], i, shots[first], i) >= SAME);
+  return pieces(width, height, differs).map((p) => {
+    const worst = p.pixels.reduce((w, i) => Math.max(w, ...names.map((name) => deltaE(shots[name], i, shots[first], i))), 0);
+    const deepest = p.pixels.reduce((w, i) => Math.max(w, depth[i]), 0);
+    return {
+      kind: 'see-through',
+      at: `${p.minX},${p.minY}`,
+      detail: `${p.area}px across ${p.maxX - p.minX + 1}x${p.maxY - p.minY + 1}px look different on different tiles (delta E up to ${worst.toFixed(0)}), up to ${deepest}px inside the picture`,
+    };
+  });
 }

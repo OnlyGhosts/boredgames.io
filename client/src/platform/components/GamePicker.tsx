@@ -69,7 +69,7 @@ export function GamePicker({ room, isHost, game }: Props) {
 }
 
 /**
- * One game on the grid: its picture (the module's Art, in the mascots' style) and its name under
+ * One game on the grid: its picture (the module's Art, in the soft shaded style: GameArt.tsx) and its name under
  * it, both on the one neutral panel (no strip of their own). The picked one fills lilac with its
  * name in bold: no badge, no line; `aria-checked` carries the state.
  */

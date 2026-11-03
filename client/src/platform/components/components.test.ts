@@ -627,7 +627,7 @@ describe('wordmark and mascots', () => {
     for (const g of GAME_LIST) {
       expect(tokens).toContain(`--game-${g.id}: ${g.accent};`);
     }
-    // The pictures are drawn in the mascots’ palette through tokens the same in both themes, every edge deep lime or deep lilac and never grey, a white shape borrowing its neighbour’s (client/src/games/art.test.ts checks they read).
+    // The flat frame’s palette (the template game’s picture, and the How to play heroes’ lime edge and paper) through tokens the same in both themes, every edge deep lime or deep lilac and never grey (client/src/games/art.test.ts checks they read); the live games’ pictures are shaded and carry their own colours.
     expect(tokens).toContain('--game-paper: #f7f5ec;');
     for (const edge of ['--game-edge-lime', '--game-edge-lilac', '--game-edge-lime-picked', '--game-edge-lilac-picked']) expect(tokens.match(new RegExp(`${edge}: #[0-9a-f]{6};`, 'g')), edge).toHaveLength(1);
     expect(tokens).not.toContain('--game-edge-paper');
@@ -659,7 +659,9 @@ describe('wordmark and mascots', () => {
     expect(ruleOf(lobby, '.game-tile')).toContain('background: var(--color-surface)');
     expect(ruleOf(lobby, '.game-tile')).toContain('overflow: hidden');
     expect(ruleOf(lobby, '.game-tile__art')).toContain('height: 84px');
-    expect(ruleOf(lobby, '.game-tile__art .game-art')).toContain('max-width: 96px');
+    // The picture is square: 72px, never wider than the tile (a phone's is 64px, below).
+    expect(ruleOf(lobby, '.game-tile__art .game-art')).toContain('width: 72px');
+    expect(ruleOf(lobby, '.game-tile__art .game-art')).toContain('max-width: 100%');
     expect(ruleOf(lobby, '.game-tile__name')).toContain('font-family: var(--font-display)');
     expect(ruleOf(lobby, '.game-tile__name')).not.toContain('border');
     // One surface: no rule anywhere (any stylesheet, any state, any width) gives the picture area or the name a background or a
@@ -678,7 +680,7 @@ describe('wordmark and mascots', () => {
     expect(named).toBeGreaterThanOrEqual(5);
     expect(ruleOf(lobby, '.game-tile.is-selected')).toContain('background: var(--color-secondary)');
     expect(ruleOf(lobby, '.game-tile.is-selected')).toContain('color: var(--color-secondary-contrast)');
-    // On the picked lilac tile, and only there, the picture’s two edges take their deeper cuts and its lilac fill a paler one, so a lilac shape is still a shape there.
+    // On the picked lilac tile, and only there, the flat picture’s two edges take their deeper cuts and its lilac fill a paler one, so a lilac shape is still a shape there.
     expect(ruleOf(lobby, '.game-tile.is-selected')).toContain('--game-edge-lime: var(--game-edge-lime-picked);');
     expect(ruleOf(lobby, '.game-tile.is-selected')).toContain('--game-edge-lilac: var(--game-edge-lilac-picked);');
     expect(ruleOf(lobby, '.game-tile.is-selected')).toContain('--game-lilac: var(--game-lilac-picked);');
@@ -699,6 +701,7 @@ describe('wordmark and mascots', () => {
     expect(lobby).not.toContain('game-tile__check');
     // A phone gives the picture a little less room; the narrowest phones shrink the name so "The Spy Game" fits its tile.
     expect(mediaBlock(lobby, '(max-width: 760px)')).toMatch(/\.game-tile__art \{[^}]*height: 72px/);
+    expect(mediaBlock(lobby, '(max-width: 760px)')).toMatch(/\.game-tile__art \.game-art \{[^}]*width: 64px/);
     expect(lobby).toMatch(/@media \(max-width: 359px\) \{[^@]*\.game-tile__name \{[^}]*font-size: 0.75rem/);
   });
 });

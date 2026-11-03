@@ -1,18 +1,47 @@
-/** Scribble’s lobby picture: a lime marker with a lilac cap, its white cone edged in the body’s deep lime and its deep lilac nib on the lilac squiggle it drew. */
-import { ART, GameArt, Line, shape } from '../../platform/components/GameArt';
+/** Scribble’s lobby picture: a lime pencil with a wooden tip, a metal band and a coral eraser, over the lilac squiggle it drew, with a gold sparkle and a mint dot, in the shaded style (GameArt.tsx). */
+import { ShadedArt, useArtIds } from '../../platform/components/GameArt';
 
 export function ScribbleArt() {
+  const { id, url } = useArtIds();
   return (
-    <GameArt game="scribble">
-      {/* The squiggle starts under the marker’s point and leaves it steeply, dipping first, so it never runs along the marker’s underside. */}
-      <Line d="M12 36c2 4 6 4.5 10 4s9-5 13-3s8 4 12 3s5-4 6-2" fill="lilac" width={2.4} />
-      <g transform="rotate(-35 33 20)">
-        <rect x="20" y="14" width="29" height="12" rx="1.5" {...shape('lime')} />
-        <rect x="45" y="13" width="8" height="14" rx="1.5" {...shape('lilac')} />
-        <path d="M20 14l-12 6l12 6z" {...shape('paper', 'lime')} />
-        {/* The nib: the cone’s point in the deep lilac of the squiggle it draws. Its sides run 0.2 into the cone’s edge (which meets itself 2.46 in from the point), so no seam of paper shows between the two where their anti-aliasing meets. */}
-        <path d="M10 20l6-3v6z" fill={ART.edgeLilac} />
+    <ShadedArt game="scribble">
+      <defs>
+        <linearGradient id={id('body')} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#e2f7a6" />
+          <stop offset=".5" stopColor="#c7e976" />
+          <stop offset="1" stopColor="#93bb3e" />
+        </linearGradient>
+        <linearGradient id={id('wood')} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#fbe7c2" />
+          <stop offset="1" stopColor="#e2bd7e" />
+        </linearGradient>
+        <linearGradient id={id('eraser')} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#f7b3a3" />
+          <stop offset="1" stopColor="#e0735c" />
+        </linearGradient>
+        <linearGradient id={id('band')} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#f1f2ec" />
+          <stop offset=".5" stopColor="#b9beb1" />
+          <stop offset="1" stopColor="#8e9488" />
+        </linearGradient>
+      </defs>
+      <path d="M14 98c9-11 18 9 28-1s19-11 28-1 17 9 25 0" fill="none" stroke="#a699d5" strokeWidth="6" strokeLinecap="round" />
+      <path d="M14 98c9-11 18 9 28-1s19-11 28-1 17 9 25 0" fill="none" stroke="#d8d0f5" strokeWidth="2" strokeLinecap="round" transform="translate(0 -1.5)" opacity=".7" />
+      <g transform="rotate(-38 62 58)">
+        {/* Under the pencil and hidden by it (inset from every outline): where two of its parts meet edge to edge (the tip and the body, the body and the band, the band and the eraser), their two anti-aliased edges would let the tile show through as a seam; this keeps the pencil under them. */}
+        <path d="M29.5 49.5H86v17H29.5z" fill={url('body')} />
+        <path d="M91 53.5h3v9h-3z" fill={url('band')} />
+        <path d="M30 48L12 58l18 10z" fill={url('wood')} />
+        <path d="M18.5 54.4L12 58l6.5 3.6z" fill="#262a24" />
+        <rect x="30" y="48" width="54" height="20" fill={url('body')} />
+        <rect x="30" y="50" width="54" height="4" fill="#ffffff" opacity=".45" />
+        <rect x="84" y="47" width="9" height="22" rx="1.5" fill={url('band')} />
+        <path d="M86.5 47v22M90 47v22" stroke="#7d8378" strokeWidth=".9" opacity=".7" />
+        <rect x="93" y="47" width="14" height="22" rx="6" fill={url('eraser')} />
+        <rect x="95" y="49.5" width="9" height="3.5" rx="1.75" fill="#ffffff" opacity=".5" />
       </g>
-    </GameArt>
+      <path d="M98 18l2.6 6.4L107 27l-6.4 2.6L98 36l-2.6-6.4L89 27l6.4-2.6z" fill="#f4d181" />
+      <circle cx="24" cy="28" r="3" fill="#86d9a3" />
+    </ShadedArt>
   );
 }

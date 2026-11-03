@@ -102,7 +102,7 @@ export interface GameClientModule<V = unknown, S = Record<string, unknown>> {
   Screen: ComponentType<GameScreenProps<V, S>>;
   /** The rules the lobby's How to play shows (client/src/games/<id>/rules.ts). */
   rules: GameRules;
-  /** The game's picture on its lobby tile: an inline SVG in the mascots' style (client/src/games/<id>/art.tsx). */
+  /** The game's picture on its lobby tile: an inline SVG in the soft shaded style, drawn in GameArt.tsx's ShadedArt frame (client/src/games/<id>/art.tsx). */
   Art: ComponentType;
   /** The game's sound effects; the platform starts loading them when the game screen mounts. */
   sounds?: AnySoundBank;

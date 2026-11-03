@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { createElement } from 'react';
+import { createElement, Fragment } from 'react';
 import { renderToString } from 'react-dom/server';
 import { installBrowserGlobals } from '../test/env';
 
@@ -11,7 +11,7 @@ const { GAMES } = await import('./index');
 const { GAME_LIST } = await import('@shared/platform/games');
 const { registerGames } = await import('../platform/registry');
 const { GamePicker } = await import('../platform/components/GamePicker');
-const { ART, ART_VIEWBOX, EDGE_WIDTH } = await import('../platform/components/GameArt');
+const { ART, ART_VIEWBOX, EDGE_WIDTH, SHADED_VIEWBOX } = await import('../platform/components/GameArt');
 const { room } = await import('../test/fixtures');
 const { HERO, HERO_EDGE, RulesHeroArt } = await import('../platform/components/RulesHero');
 
@@ -79,15 +79,94 @@ function hex(name: string): string {
 }
 
 describe('every game’s picture', () => {
-  it('is an inline SVG in the GameArt frame, hidden from assistive tech (the name is beside it), drawn in tokens only', () => {
+  it('is an inline SVG, hidden from assistive tech (the name is beside it), with no text and no shadow', () => {
     for (const g of GAME_LIST) {
       const html = renderToString(createElement(GAMES[g.id].Art));
-      expect(html, g.id).toMatch(/^<svg /);
-      expect(html, g.id).toContain('aria-hidden="true"');
-      expect(html, g.id).toContain(`data-art="${g.id}"`);
-      expect(html, g.id).toContain(`viewBox="${ART_VIEWBOX}"`);
-      // No shadow: a picture is its shapes and nothing else (GameArt.tsx says why), so nothing is drawn twice and no copy of a shape can peek out beside it.
+      // The live games draw in the shaded frame, the hidden template game still in the flat one.
+      const viewBox = g.status === 'live' ? SHADED_VIEWBOX : ART_VIEWBOX;
+      expect(html, g.id).toMatch(new RegExp(`^<svg class="game-art" viewBox="${viewBox}" aria-hidden="true" focusable="false" data-art="${g.id}">`));
+      // A letter (Blackjack's ace) is a path: text takes the platform's subpixel smoothing and shows coloured fringes a path does not.
+      expect(html, g.id).not.toMatch(/<text[\s>]/);
       expect(html, g.id).not.toContain('game-art__shadow');
+    }
+  });
+
+  it('shows on its lobby tile: every live game for the host, the one current game for a guest', () => {
+    registerGames(GAMES);
+    const host = renderToString(createElement(GamePicker, { room: room(), isHost: true, game: null }));
+    const live = GAME_LIST.filter((g) => g.status === 'live');
+    expect(tiles(host)).toHaveLength(live.length);
+    for (const tile of tiles(host)) {
+      const id = tile.match(/data-game="([a-z]+)"/)?.[1];
+      expect(tile).toContain(`<span class="game-tile__art"><svg class="game-art" viewBox="${SHADED_VIEWBOX}" aria-hidden="true" focusable="false" data-art="${id}">`);
+      expect(tile.indexOf('data-art=')).toBeLessThan(tile.indexOf('class="game-tile__name"'));
+    }
+    const guest = renderToString(createElement(GamePicker, { room: room({ gameId: 'poker' }), isHost: false, game: null }));
+    expect(tiles(guest)).toHaveLength(1);
+    expect(guest.match(/data-art="/g)).toHaveLength(1);
+    expect(guest).toContain('data-art="poker"');
+  });
+});
+
+describe('the live games’ shaded pictures', () => {
+  const live = GAME_LIST.filter((g) => g.status === 'live');
+  /** Every live picture twice in one tree, as two of them can sit on one page (the admin's Live rooms page shows one per room), cut into its svgs. */
+  const twice = (): { game: string; svg: string }[] =>
+    renderToString(createElement(Fragment, null, ...live.flatMap((g) => [createElement(GAMES[g.id].Art, { key: `${g.id}-1` }), createElement(GAMES[g.id].Art, { key: `${g.id}-2` })])))
+      .split(/(?=<svg )/)
+      .map((svg) => ({ game: svg.match(/data-art="([a-z]+)"/)?.[1] ?? '', svg }));
+  const idsIn = (svg: string): string[] => [...svg.matchAll(/ id="([^"]+)"/g)].map((m) => m[1]);
+  const refsIn = (svg: string): string[] => [...svg.matchAll(/url\(#([^)]+)\)/g)].map((m) => m[1]);
+
+  it('are shaded: each picture fills its shapes with gradients it defines itself, and nothing in it is drawn in a theme token', () => {
+    expect(live.map((g) => g.id).sort()).toEqual(['blackjack', 'poker', 'quipgame', 'scribble', 'spygame']);
+    for (const g of live) {
+      const html = renderToString(createElement(GAMES[g.id].Art));
+      expect(html, g.id).toMatch(/^<svg [^>]*><defs>/);
+      expect(html.match(/<(?:linearGradient|radialGradient) /g)?.length ?? 0, g.id).toBeGreaterThan(0);
+      // The same colours on every tile and in both themes: no theme token can change a picture.
+      expect(html, g.id).not.toContain('var(--');
+    }
+  });
+
+  it('gives every gradient, pattern and clip path an id of its own in each rendered picture, so the same picture twice on one page never shares one', () => {
+    const svgs = twice();
+    expect(svgs.map((s) => s.game)).toEqual(live.flatMap((g) => [g.id, g.id]));
+    const ids = svgs.flatMap((s) => idsIn(s.svg));
+    expect(ids.length).toBeGreaterThanOrEqual(2 * live.length);
+    const usedTwice = ids.filter((id, i) => ids.indexOf(id) !== i);
+    expect(usedTwice).toEqual([]);
+    // Only the definitions have ids, all of them through useArtIds: a literal id would come out the same in both copies.
+    for (const { game, svg } of svgs) {
+      for (const [, tag, id] of svg.matchAll(/<([a-zA-Z]+) id="([^"]+)"/g)) {
+        expect(['linearGradient', 'radialGradient', 'pattern', 'clipPath'], `${game} <${tag} id="${id}">`).toContain(tag);
+        expect(id, game).toMatch(/^art-[a-z]+-/);
+      }
+    }
+    // Which is needed: the pictures share names (Scribble's body, the face in three of them).
+    const names = svgs.filter((_, i) => i % 2 === 0).flatMap((s) => idsIn(s.svg).map((id) => id.split('-')[1]));
+    expect(names.filter((n, i) => names.indexOf(n) !== i).length).toBeGreaterThan(0);
+  });
+
+  it('finds every url(#…) inside its own svg, and uses every definition it makes', () => {
+    for (const { game, svg } of twice()) {
+      const ids = idsIn(svg);
+      const refs = refsIn(svg);
+      expect(refs.length, game).toBeGreaterThan(0);
+      for (const ref of refs) expect(ids, `${game} url(#${ref})`).toContain(ref);
+      for (const id of ids) expect(refs, `${game} uses #${id}`).toContain(id);
+    }
+  });
+});
+
+describe('the template game’s flat picture', () => {
+  /** The pictures still drawn in the flat frame (GameArt): the hidden template game’s. */
+  const flat = GAME_LIST.filter((g) => g.status !== 'live');
+
+  it('is drawn in the flat palette’s tokens only', () => {
+    expect(flat.map((g) => g.id)).toEqual(['template']);
+    for (const g of flat) {
+      const html = renderToString(createElement(GAMES[g.id].Art));
       const markup = html.match(/<(?:path|rect|circle|ellipse|line|polygon)\b[^>]*>/g) ?? [];
       expect(new Set(markup).size, `${g.id} draws nothing twice`).toBe(markup.length);
       // The mascots' palette comes through the theme tokens, never a raw colour, so both themes draw it alike.
@@ -125,7 +204,7 @@ describe('every game’s picture', () => {
   });
 
   it('has no black or grey outline: every shape carries a deep lime or deep lilac edge, a white one borrowed from a colour beside it, and ink is only ever a filled detail', () => {
-    for (const g of GAME_LIST) {
+    for (const g of flat) {
       const html = renderToString(createElement(GAMES[g.id].Art));
       // Ink never draws a line: an ink stroke would meet the dark tile.
       expect(html, g.id).not.toContain(`stroke="${ART.ink}"`);
@@ -237,14 +316,14 @@ describe('every game’s picture', () => {
   });
 
   it('sits on the half-unit grid, draws letters as paths, keeps every line 1.5 units or wider and says even-odd wherever a path has a second subpath', () => {
-    // A tile shows a picture at 1.1 to 4.5 pixels a unit, where a slip of a fraction of a unit renders as a hairline or a sliver (GameArt.tsx):
+    // A tile shows a picture at 1 to 3.4 pixels a unit, where a slip of a fraction of a unit renders as a hairline or a sliver (GameArt.tsx):
     // shapes and lines (anything with an edge) sit on the half-unit grid, so two that touch share the coordinate they touch on; a transform
     // turns about a grid point or shifts by grid steps; a letter is a path (text takes subpixel smoothing and shows coloured fringes); no
     // deliberate line (a printed frame, a Line's fill) is thinner than 1.5 units; and a path with more than one subpath says even-odd, because
     // under the default nonzero rule two subpaths wound opposite ways cancel where they overlap (the spade once lost the top of its stem that way).
     const onGrid = (n: number) => Math.abs(n * 2 - Math.round(n * 2)) < 1e-9;
     const numbers = (text: string) => (text.match(/-?\d*\.?\d+/g) ?? []).map(Number);
-    for (const g of GAME_LIST) {
+    for (const g of flat) {
       const html = renderToString(createElement(GAMES[g.id].Art));
       expect(html, g.id).not.toMatch(/<text[\s>]/);
       let shapes = 0;
@@ -263,89 +342,6 @@ describe('every game’s picture', () => {
       }
       expect(shapes, g.id).toBeGreaterThan(0);
     }
-  });
-
-  it('leans Poker’s chip on the stack with its outline crossing every outline of the stack at 30 degrees or more, never grazing one', () => {
-    // The leaning chip is the one place two curved outlines of different shapes meet. Where two edges cross at a shallow angle, or run
-    // close without crossing, the fill between them tapers to a hairline (GameArt.tsx): the chip once met the top face's rim at 4
-    // degrees, a tangency that read clean only because the two dark edges lay on each other, and a nudge of a unit or two would have
-    // opened a lime sliver between them. So this measures, in the picture's units: the chip's outline (sampled every quarter degree,
-    // tilted as drawn) against the top face, each side's lower rim and the stack's two ends, the angle between the two tangents at every
-    // crossing, and the distance where they do not cross (two 2.2 edges and 1.5 of fill between is the least that stays clean).
-    const html = renderToString(createElement(GAMES.poker.Art));
-    const stroked = elements(html).filter((e) => e.attrs.stroke);
-    const num = (v: string | undefined) => Number(v);
-    // A side of the stack: `M<left> <top>a<rx> <ry> 0 0 0 <2rx> 0v<depth>...`, the front half of its rim at `top` and again `depth` lower.
-    const sides = stroked.map((e) => e.attrs.d?.match(/^M([\d.]+) ([\d.]+)a([\d.]+) ([\d.]+) 0 0 0 ([\d.]+) 0v([\d.]+)a/)).filter((m): m is RegExpMatchArray => m != null).map((m) => ({ left: num(m[1]), top: num(m[2]), rx: num(m[3]), ry: num(m[4]), depth: num(m[6]) }));
-    expect(sides.length).toBeGreaterThanOrEqual(2);
-    const [left, rx, ry] = [sides[0].left, sides[0].rx, sides[0].ry];
-    for (const side of sides) expect([side.left, side.rx, side.ry]).toEqual([left, rx, ry]);
-    const [top, chip] = stroked.filter((e) => e.tag === 'ellipse');
-    expect([num(top.attrs.cx), num(top.attrs.cy), num(top.attrs.rx), num(top.attrs.ry)]).toEqual([left + rx, Math.min(...sides.map((s) => s.top)), rx, ry]);
-    const tilt = html.match(/<g transform="rotate\((-?[\d.]+) (-?[\d.]+) (-?[\d.]+)\)"><ellipse /);
-    expect(tilt, 'the chip is the ellipse in the tilted group').toBeTruthy();
-    const [angle, px, py] = tilt!.slice(1).map(Number);
-    expect([px, py]).toEqual([num(chip.attrs.cx), num(chip.attrs.cy)]);
-    const outline: [number, number][] = [];
-    for (let a = 0; a < 360; a += 0.25) {
-      const [x, y] = [num(chip.attrs.rx) * Math.cos((a * Math.PI) / 180), num(chip.attrs.ry) * Math.sin((a * Math.PI) / 180)];
-      const [c, s] = [Math.cos((angle * Math.PI) / 180), Math.sin((angle * Math.PI) / 180)];
-      outline.push([px + x * c - y * s, py + x * s + y * c]);
-    }
-    const at = (i: number) => outline[(i + outline.length) % outline.length];
-    const tangent = (i: number): [number, number] => [at(i + 1)[0] - at(i - 1)[0], at(i + 1)[1] - at(i - 1)[1]];
-    const degrees = (sin: number) => (Math.asin(Math.min(1, sin)) * 180) / Math.PI;
-    /** How the chip's outline meets one outline of the stack: `f` is signed, zero on it; `grad` its gradient (the outline's normal); `on` says which samples count. */
-    const meets = (f: (p: [number, number]) => number, grad: (p: [number, number]) => [number, number], on: (p: [number, number]) => boolean) => {
-      const angles: number[] = [];
-      let closest = Infinity;
-      for (let i = 0; i < outline.length; i++) {
-        const [p, q] = [at(i), at(i + 1)];
-        if (!on(p) && !on(q)) continue;
-        const g = grad(p);
-        const gl = Math.hypot(...g);
-        closest = Math.min(closest, Math.abs(f(p)) / gl);
-        if (f(p) < 0 !== f(q) < 0) {
-          const t = tangent(i);
-          angles.push(degrees(Math.abs(t[0] * g[0] + t[1] * g[1]) / (Math.hypot(...t) * gl)));
-        }
-      }
-      return { angles, closest };
-    };
-    const ellipse = (cx: number, cy: number, lowerHalf: boolean) =>
-      meets(([x, y]) => ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2 - 1, ([x, y]) => [(2 * (x - cx)) / rx ** 2, (2 * (y - cy)) / ry ** 2], ([, y]) => !lowerHalf || y >= cy);
-    const bottom = Math.max(...sides.map((s) => s.top + s.depth));
-    const end = (x: number) => meets(([x0]) => x0 - x, () => [1, 0], ([, y]) => y >= num(top.attrs.cy) && y <= bottom);
-    const outlines: Record<string, ReturnType<typeof meets>> = { 'top face': ellipse(left + rx, num(top.attrs.cy), false), 'right end': end(left + 2 * rx), 'left end': end(left) };
-    for (const rim of new Set(sides.map((s) => s.top + s.depth))) outlines[`rim at ${rim}`] = ellipse(left + rx, rim, true);
-    for (const [name, { angles, closest }] of Object.entries(outlines)) {
-      for (const a of angles) expect(a, `the chip crosses the ${name} at ${a.toFixed(1)} degrees`).toBeGreaterThanOrEqual(30);
-      if (!angles.length) expect(closest, `the chip clears the ${name}`).toBeGreaterThanOrEqual(2 * EDGE_WIDTH + 1.5);
-    }
-    // And it does lean on the stack: over the top face's rim and the stack's right end, well inside the picture.
-    expect(outlines['top face'].angles.length).toBeGreaterThanOrEqual(2);
-    expect(outlines['right end'].angles).toHaveLength(1);
-    for (const [x, y] of outline) {
-      expect(x + EDGE_WIDTH / 2).toBeLessThanOrEqual(64);
-      expect(y + EDGE_WIDTH / 2).toBeLessThanOrEqual(46);
-      expect(y - EDGE_WIDTH / 2).toBeGreaterThanOrEqual(0);
-    }
-  });
-
-  it('shows on its lobby tile: every live game for the host, the one current game for a guest', () => {
-    registerGames(GAMES);
-    const host = renderToString(createElement(GamePicker, { room: room(), isHost: true, game: null }));
-    const live = GAME_LIST.filter((g) => g.status === 'live');
-    expect(tiles(host)).toHaveLength(live.length);
-    for (const tile of tiles(host)) {
-      const id = tile.match(/data-game="([a-z]+)"/)?.[1];
-      expect(tile).toContain(`<span class="game-tile__art"><svg class="game-art" viewBox="${ART_VIEWBOX}" aria-hidden="true" focusable="false" data-art="${id}">`);
-      expect(tile.indexOf('data-art=')).toBeLessThan(tile.indexOf('class="game-tile__name"'));
-    }
-    const guest = renderToString(createElement(GamePicker, { room: room({ gameId: 'poker' }), isHost: false, game: null }));
-    expect(tiles(guest)).toHaveLength(1);
-    expect(guest.match(/data-art="/g)).toHaveLength(1);
-    expect(guest).toContain('data-art="poker"');
   });
 });
 

@@ -1,23 +1,42 @@
-/** Blackjack’s lobby picture: a lime card back fanned behind the ace of spades, the ace’s white face edged in the back’s deep lime. */
-import { ART, GameArt, shape } from '../../platform/components/GameArt';
+/** Blackjack’s lobby picture: the ace of spades over a dotted green card back, and a gold chip in front, in the shaded style (GameArt.tsx). */
+import { ShadedArt, useArtIds } from '../../platform/components/GameArt';
 
 export function BlackjackArt() {
+  const { id, url } = useArtIds();
   return (
-    <GameArt game="blackjack">
-      <g transform="translate(-1 -1)">
-        {/* The two cards fan 40 degrees apart, so wherever the ace’s edge crosses the back’s edge or its printed frame it crosses cleanly, clear of either card’s rounded corners. */}
-        <g transform="rotate(-24 28 24)">
-          <rect x="17" y="6" width="22" height="32" rx="3" {...shape('lime')} />
-          {/* The back’s printed frame, in the deep lime of its own edge; the ace’s card covers its right side. */}
-          <rect x="21" y="10" width="14" height="24" rx="1.5" fill="none" stroke={ART.edgeLime} strokeWidth={1.5} />
-        </g>
-        <g transform="rotate(16 40 24)">
-          <rect x="29" y="8" width="22" height="32" rx="3" {...shape('paper', 'lime')} />
-          {/* The ace, a path (never text), and its spade, one outline with the stem, both ink well inside the paper face. */}
-          <path d="M32.5 19.5L35.5 11.5L37.5 11.5L40.5 19.5L38.5 19.5L38 18L35 18L34.5 19.5ZM35.5 16.5L37.5 16.5L36.5 13.5Z" fill={ART.ink} fillRule="evenodd" />
-          <path d="M40 22l-6 7a3.5 3.5 0 0 0 5 4l-1.5 3.5h5l-1.5-3.5a3.5 3.5 0 0 0 5-4z" fill={ART.ink} />
-        </g>
+    <ShadedArt game="blackjack">
+      <defs>
+        <linearGradient id={id('back')} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#b2ecc4" />
+          <stop offset="1" stopColor="#4fae73" />
+        </linearGradient>
+        <linearGradient id={id('face')} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#ffffff" />
+          <stop offset="1" stopColor="#ebe9df" />
+        </linearGradient>
+        <linearGradient id={id('chip')} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#f8dd9c" />
+          <stop offset="1" stopColor="#d9a93f" />
+        </linearGradient>
+        <pattern id={id('dots')} width="6" height="6" patternUnits="userSpaceOnUse">
+          <circle cx="3" cy="3" r="1.2" fill="#ffffff" opacity=".45" />
+        </pattern>
+      </defs>
+      <g transform="rotate(-14 44 58)">
+        <rect x="20" y="24" width="48" height="68" rx="8" fill={url('back')} />
+        <rect x="25" y="29" width="38" height="58" rx="5" fill={url('dots')} stroke="#ffffff" strokeOpacity=".6" strokeWidth="1.5" />
       </g>
-    </GameArt>
+      <g transform="rotate(10 72 60)">
+        <rect x="48" y="24" width="48" height="68" rx="8" fill={url('face')} />
+        <path d="M54.5 41l4-11 4 11M56 37h5" fill="none" stroke="#262a24" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M72 46c0 0-13 9.5-13 17.5 0 5.4 5.6 7.8 10.4 4.6L67 76h10l-2.4-7.9c4.8 3.2 10.4.8 10.4-4.6C85 55.5 72 46 72 46z" fill="#262a24" />
+        <path d="M66 54c1.5-2 3-3.4 4-4.2" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" opacity=".55" />
+      </g>
+      <ellipse cx="90" cy="98" rx="16" ry="5.5" fill="#b07f24" />
+      <rect x="74" y="91" width="32" height="7" fill="#c99a35" />
+      <ellipse cx="90" cy="91" rx="16" ry="5.5" fill={url('chip')} />
+      <ellipse cx="90" cy="91" rx="9.5" ry="3.2" fill="none" stroke="#ffffff" strokeWidth="1.6" strokeDasharray="3 3" />
+      <path d="M76 93.5v4M83 95v4M97 95v4M104 93.5v4" stroke="#ffffff" strokeWidth="2" opacity=".7" />
+    </ShadedArt>
   );
 }

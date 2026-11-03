@@ -435,9 +435,10 @@ button.game-tile:active {
 
 /*
  * Selected: the whole panel fills lilac, the picture and the name in bold ink on it; the fill alone
- * marks it, no badge and no line. On the lilac the picture’s edges take the deeper cuts of the same
- * two hues and its lilac fill a paler one (tokens.css), so a lilac shape is still a shape on the
- * tile, filled and rimmed, not an outline.
+ * marks it, no badge and no line. The live games’ shaded pictures draw the same on every tile; the
+ * template game’s flat one (GameArt) takes the deeper cuts of its two edge hues and a paler lilac
+ * fill here (tokens.css), so a lilac shape is still a shape on the tile, filled and rimmed, not an
+ * outline.
  */
 .game-tile.is-selected {
   --game-edge-lime: var(--game-edge-lime-picked);
@@ -455,9 +456,10 @@ button.game-tile:active {
   padding: 8px 10px 4px;
 }
 
+/* The picture is square (a 120 canvas, GameArt.tsx): 72px, a little less on a phone, centred and never wider than the tile. */
 .game-tile__art .game-art {
-  width: 100%;
-  max-width: 96px;
+  width: 72px;
+  max-width: 100%;
   height: auto;
 }
 
@@ -483,6 +485,11 @@ button.game-tile:active {
 @media (max-width: 760px) {
   .game-tile__art {
     height: 72px;
+    padding: 6px 10px 2px;
+  }
+
+  .game-tile__art .game-art {
+    width: 64px;
   }
 }
 

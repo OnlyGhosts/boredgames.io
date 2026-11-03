@@ -1,11 +1,47 @@
-import type { ReactNode } from 'react';
+import { useId, type ReactNode } from 'react';
 import type { GameId } from '@shared/platform/games';
 
 /**
- * The frame every game’s lobby picture (GameClientModule.Art) is drawn in: a 64x46 canvas in the
+ * The frame every live game’s lobby picture (GameClientModule.Art) is drawn in: the soft shaded
+ * style, a 120x120 canvas of shapes filled with linear and radial gradients (light at the top,
+ * deeper at the bottom), a pattern or a clip path where a shape needs one, soft white highlights
+ * (translucent strokes) and no outlines. The tile shows it 72px square on a desktop and 64px on a
+ * phone (lobby.css), on the dark theme’s graphite panel, the light theme’s white one and the picked
+ * tile’s lilac, in the same colours in both themes.
+ *
+ * - Every gradient, pattern and clip path takes its id from `useArtIds()` and every reference to
+ *   one its `url()`: the pictures share names like `body` and `lilac`, and a picture can render
+ *   twice on one page (the admin’s Live rooms page shows one per room), so an id is unique to the
+ *   rendered instance and a `url(#…)` always finds the definition inside its own svg.
+ * - The drawing stays inside the canvas with a little air round it, so nothing is clipped and the
+ *   tile shows at the picture’s corners.
+ * - A letter is a path, never `<text>`: text takes the platform’s subpixel smoothing and shows
+ *   coloured fringes that a path does not.
+ */
+export const SHADED_VIEWBOX = '0 0 120 120';
+
+/** A picture’s ids, unique to this rendered instance: `id('body')` names a gradient, pattern or clip path, `url('body')` points at it. */
+export function useArtIds(): { id: (name: string) => string; url: (name: string) => string } {
+  const instance = useId().replace(/[^a-zA-Z0-9_-]/g, '');
+  const id = (name: string) => `art-${name}-${instance}`;
+  return { id, url: (name) => `url(#${id(name)})` };
+}
+
+/** The shaded frame: the svg every live game’s picture is drawn in, decorative (the tile’s name says what it is). */
+export function ShadedArt({ game, children }: { game: GameId; children: ReactNode }) {
+  return (
+    <svg className="game-art" viewBox={SHADED_VIEWBOX} aria-hidden="true" focusable="false" data-art={game}>
+      {children}
+    </svg>
+  );
+}
+
+/**
+ * The flat frame the hidden template game’s picture (Click Race, client/src/games/template/art.tsx)
+ * is still drawn in, the lobby pictures’ style before the shaded one: a 64x46 canvas in the
  * mascots’ flat style, drawn to read on every tile it sits on: the dark theme’s graphite panel, the
- * light theme’s white one and the picked tile’s lilac. A tile shows it about 69 to 96px wide, so at
- * a device pixel ratio of 1 to 3 a unit is 1.1 to 4.5 pixels, and the rules below are what keeps a
+ * light theme’s white one and the picked tile’s lilac. A tile shows it 72px wide (64px on a phone),
+ * so at a device pixel ratio of 1 to 3 a unit is 1 to 3.4 pixels, and the rules below are what keeps a
  * picture clean at every one of those sizes.
  *
  * - Shapes are flat lime, lilac or paper, and every edge is deep lime or deep lilac: no grey and no
