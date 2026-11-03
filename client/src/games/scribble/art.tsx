@@ -1,4 +1,4 @@
-/** Scribble’s lobby picture: a lime pencil with a wooden tip, a metal band and a coral eraser, over the lilac squiggle it drew, with a gold sparkle and a mint dot, in the shaded style (GameArt.tsx). */
+/** Scribble’s lobby picture: a lime pencil with a wooden tip, a metal band and a coral eraser, over the lilac squiggle it drew, with a gold sparkle, in the shaded style (GameArt.tsx). */
 import { ShadedArt, useArtIds } from '../../platform/components/GameArt';
 
 export function ScribbleArt() {
@@ -25,8 +25,10 @@ export function ScribbleArt() {
           <stop offset="1" stopColor="#8e9488" />
         </linearGradient>
       </defs>
-      <path d="M14 98c9-11 18 9 28-1s19-11 28-1 17 9 25 0" fill="none" stroke="#a699d5" strokeWidth="6" strokeLinecap="round" />
-      <path d="M14 98c9-11 18 9 28-1s19-11 28-1 17 9 25 0" fill="none" stroke="#d8d0f5" strokeWidth="2" strokeLinecap="round" transform="translate(0 -1.5)" opacity=".7" />
+      {/* The squiggle: a deep lilac edge round a paler lilac line, so it reads as a solid stroke on the dark tile and on the picked lilac one alike. */}
+      <path d="M14 98c9-11 18 9 28-1s19-11 28-1 17 9 25 0" fill="none" stroke="#5e4fa3" strokeWidth="10" strokeLinecap="round" />
+      <path d="M14 98c9-11 18 9 28-1s19-11 28-1 17 9 25 0" fill="none" stroke="#b9aee8" strokeWidth="6.4" strokeLinecap="round" />
+      <path d="M14 98c9-11 18 9 28-1s19-11 28-1 17 9 25 0" fill="none" stroke="#ece8fb" strokeWidth="2" strokeLinecap="round" transform="translate(0 -1.4)" opacity=".85" />
       <g transform="rotate(-38 62 58)">
         {/* Under the pencil and hidden by it (inset from every outline): where two of its parts meet edge to edge (the tip and the body, the body and the band, the band and the eraser), their two anti-aliased edges would let the tile show through as a seam; this keeps the pencil under them. */}
         <path d="M29.5 49.5H86v17H29.5z" fill={url('body')} />
@@ -41,7 +43,6 @@ export function ScribbleArt() {
         <rect x="95" y="49.5" width="9" height="3.5" rx="1.75" fill="#ffffff" opacity=".5" />
       </g>
       <path d="M98 18l2.6 6.4L107 27l-6.4 2.6L98 36l-2.6-6.4L89 27l6.4-2.6z" fill="#f4d181" />
-      <circle cx="24" cy="28" r="3" fill="#86d9a3" />
     </ShadedArt>
   );
 }

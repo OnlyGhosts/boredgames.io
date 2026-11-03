@@ -1,4 +1,4 @@
-/** The Spy Game’s lobby picture: a spy in a lilac hat with a lime band, a shadowed face with only the eyes showing, a coral scarf and a tan coat with the collar up, in the shaded style (GameArt.tsx). */
+/** The Spy Game’s lobby picture: a spy in a lilac hat with a lime band, a shadowed face with only the eyes showing, a chunky coral scarf with lime stripes and a tan coat with the collar up, in the shaded style (GameArt.tsx). */
 import { ShadedArt, useArtIds } from '../../platform/components/GameArt';
 
 export function SpygameArt() {
@@ -47,11 +47,21 @@ export function SpygameArt() {
       <ellipse cx="68" cy="59" rx="3.6" ry="2.4" fill="#ffffff" />
       <circle cx="53.4" cy="59" r="1.4" fill="#171a16" />
       <circle cx="69.4" cy="59" r="1.4" fill="#171a16" />
-      <path d="M39 70c6.4 4.4 13.4 6.6 21 6.6S74.6 74.4 81 70v10.4c-6.4 4.4-13.4 6.6-21 6.6s-14.6-2.2-21-6.6z" fill={url('scarf')} />
-      <path d="M43 73.4c5 2.6 10.4 4 16 4.2" fill="none" stroke="#ffffff" strokeWidth="2.2" strokeLinecap="round" opacity=".55" />
-      <path d="M66.5 82.5h9.5l-1.6 19.5c-.2 1.8-1.6 3-3.2 3s-3-1.2-3.2-3z" fill={url('tail')} />
-      <path d="M68.6 104.4v3M71.2 104.8v3.2M73.8 104.4v3" stroke="#c8573f" strokeWidth="1.6" strokeLinecap="round" />
-      <rect x="64.5" y="76.5" width="12" height="9" rx="4" fill="#e77b63" />
+      {/* The scarf: a thick wrap over the lower face, knotted at one side, its two tails hanging over the coat with lime stripes (the hat band's lime) and a short fringe. */}
+      <g transform="rotate(9 56 80)">
+        <path d="M51.5 80h10.5l-1.2 22.4c-.1 1.5-1.3 2.6-2.8 2.6h-3.4c-1.5 0-2.7-1.1-2.8-2.6z" fill="#cf5f48" />
+        <path d="M52 92.5h9.6M52.2 97.5h9.2" stroke="#c7e976" strokeWidth="2.4" />
+        <path d="M54.4 105.2v2.8M56.8 105.4v3M59.2 105.2v2.8" stroke="#b44c37" strokeWidth="1.6" strokeLinecap="round" />
+      </g>
+      <path d="M43 80h12l-1.2 26.4c-.1 1.6-1.4 2.8-3 2.8h-3.6c-1.6 0-2.9-1.2-3-2.8z" fill={url('tail')} />
+      <path d="M43.6 95h10.8M43.8 100h10.4" stroke="#c7e976" strokeWidth="2.4" />
+      <path d="M46.4 109.2v3M49 109.4v3.2M51.6 109.2v3" stroke="#c8573f" strokeWidth="1.6" strokeLinecap="round" />
+      <path d="M37 66.5c7 5 15 7.4 23 7.4s16-2.4 23-7.4l1 12.6c-7 5.6-15.6 8.4-24 8.4s-17-2.8-24-8.4z" fill={url('scarf')} />
+      <path d="M38.6 74c7 4.6 14.4 6.8 21.4 6.8S74.4 78.6 81.4 74" fill="none" stroke="#c8573f" strokeWidth="1.6" strokeLinecap="round" opacity=".55" />
+      <path d="M42 70.2c5.4 3 11.6 4.6 18 4.8" fill="none" stroke="#ffffff" strokeWidth="2.2" strokeLinecap="round" opacity=".55" />
+      <ellipse cx="49" cy="81" rx="7.6" ry="6.2" fill="#e77b63" />
+      <path d="M44.6 82.4c2.8 1.4 5.8 1.5 8.8.4" fill="none" stroke="#c8573f" strokeWidth="1.5" strokeLinecap="round" opacity=".7" />
+      <path d="M45.4 78.4c1.4-.9 3.2-1.4 5-1.4" fill="none" stroke="#ffffff" strokeWidth="1.8" strokeLinecap="round" opacity=".6" />
       <ellipse cx="60" cy="46" rx="38" ry="9" fill={url('brim')} />
       <path d="M38 45c0-19 9-27 22-27s22 8 22 27c-7 2.4-14 3.4-22 3.4S45 47.4 38 45z" fill={url('hat')} />
       <path d="M38.4 37.5c7 2.4 14 3.4 21.6 3.4s14.6-1 21.6-3.4l.4 7.5c-7 2.4-14 3.4-22 3.4s-15-1-22-3.4z" fill="#c7e976" />
