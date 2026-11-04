@@ -2259,7 +2259,6 @@ button.exit-action--end:hover {
   gap: 8px;
   width: 100%;
   padding-top: var(--space-2);
-  border-top: 1px dashed var(--color-border);
 }
 
 .waiting__remove .btn {
@@ -2423,11 +2422,11 @@ button.exit-action--end:hover {
   right: var(--space-3);
 }
 
+/* No line above the button: the gap says where the standings end, and where they scroll on, the fade (.scroll-fade) does. */
 .results-card__actions {
   width: 100%;
   flex: none;
   padding-top: var(--space-3);
-  border-top: 1px solid var(--color-border);
 }
 
 .results-hero {
