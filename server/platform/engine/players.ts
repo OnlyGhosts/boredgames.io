@@ -94,7 +94,15 @@ export function connectedForGame(p: PlatformPlayerData): boolean {
 
 /** What a game module may see of the participating players, in join order. */
 export function platformPlayers(data: PlatformRoomData): PlatformPlayer[] {
-  return participants(data).map((p) => ({ id: p.id, name: p.name, joinOrder: p.joinOrder, connected: connectedForGame(p), idle: p.connected && p.idle === true, score: p.score }));
+  return participants(data).map((p) => ({
+    id: p.id,
+    name: p.name,
+    joinOrder: p.joinOrder,
+    connected: connectedForGame(p),
+    idle: p.connected && p.idle === true,
+    score: p.score,
+    avatar: { ...p.avatar },
+  }));
 }
 
 /** What a game module may see of the spectators, in join order. */

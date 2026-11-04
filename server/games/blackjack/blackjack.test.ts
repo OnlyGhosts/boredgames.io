@@ -8,7 +8,7 @@ import { defaultPlatformSettings } from '../../../shared/platform/settings.js';
 import type { Effect } from '../../platform/engine/effects.js';
 import { nextDeadline } from '../../platform/engine/time.js';
 import { viewFor } from '../../platform/engine/view.js';
-import { AVATAR, START, chatTexts, endGame, noticeTexts, errorsOf, restart, sim, standings, startGame, type Sim } from '../../platform/engine/testHarness.js';
+import { AVATAR, GOD_AVATAR, START, chatTexts, endGame, noticeTexts, errorsOf, restart, sim, standings, startGame, type Sim } from '../../platform/engine/testHarness.js';
 import { BLACKJACK_DEAL, BLACKJACK_FINAL_HOLD_MS, BLACKJACK_REVEAL, MIN_DEAL_GAP_MS, dealAllowanceMs, revealAllowanceMs } from '../../../shared/games/blackjack/deal.js';
 import { AWAY_NOTICE_MS } from '../../../shared/platform/constants.js';
 import { RESUME_SETTLE_MS } from '../waiting.js';
@@ -2068,5 +2068,43 @@ describe('Blackjack: a phone that went quiet', () => {
     idle(s, alice, 'Alice');
     expect(view(s).away).toEqual([]);
     expect(view(s).waitingFor).toEqual([bob]);
+  });
+});
+
+describe('Blackjack: god mode', () => {
+  it('never busts a god-mode hand across many seeded hits and doubles, while near misses on the look still bust', () => {
+    // Driven through the module itself, as the long runs are. Only jord has god mode: Bob wears the pink ghost under another name, and the other jord wears another colour.
+    const players = [
+      { id: 'jord', name: 'jord', joinOrder: 0, connected: true, score: 0, avatar: GOD_AVATAR },
+      { id: 'bob', name: 'Bob', joinOrder: 1, connected: true, score: 0, avatar: GOD_AVATAR },
+      { id: 'pale', name: 'Jord', joinOrder: 2, connected: true, score: 0, avatar: { ...GOD_AVATAR, color: GOD_AVATAR.color + 1 } },
+    ];
+    const settings = { ...defaultPlatformSettings(gameById('blackjack')), ...blackjackModule.settings.defaults, startingChips: 100_000 };
+    const ctx = { now: START, rng: seeded(2027), newId: () => 'x', settings, players, spectators: [], hostId: 'jord' };
+    let game = blackjackModule.start(ctx).data;
+    const send = (playerId: string, msg: BlackjackClientMessage): void => {
+      game = blackjackModule.handle(ctx, game, { type: 'message', playerId, msg }).data;
+    };
+    const moves = { hit: 0, double: 0 };
+    const busts: Record<string, number> = { jord: 0, bob: 0, pale: 0 };
+    for (let round = 0; round < 600; round++) {
+      for (const p of players) send(p.id, { t: 'bet', amount: 1 });
+      // Every other round doubles whatever it can; otherwise every hand hits until it is done (a 21 stands by itself).
+      for (let guard = 0; guard < 200 && game.phase.kind === 'acting'; guard++) {
+        const { playerId } = game.phase;
+        const move = round % 2 === 1 && blackjackModule.view(game, playerId, ctx).actions.canDouble ? 'double' : 'hit';
+        if (playerId === 'jord') moves[move] += 1;
+        send(playerId, { t: move });
+      }
+      if (game.phase.kind !== 'results') throw new Error(`no results pause but ${game.phase.kind}`);
+      for (const [playerId, hands] of Object.entries(game.lastRound?.hands ?? {})) for (const h of hands) if (handTotal(h.cards).total > 21) busts[playerId] += 1;
+      ctx.now = game.phase.endsAt;
+      game = blackjackModule.handle(ctx, game, { type: 'tick' }).data;
+    }
+    expect(busts.jord).toBe(0);
+    expect(moves.hit).toBeGreaterThan(500);
+    expect(moves.double).toBeGreaterThan(200);
+    expect(busts.bob).toBeGreaterThan(100);
+    expect(busts.pale).toBeGreaterThan(100);
   });
 });

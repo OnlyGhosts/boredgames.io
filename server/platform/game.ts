@@ -7,6 +7,7 @@
  * view, CMsg = its client messages, SMsg = its server messages.
  */
 import type { z } from 'zod';
+import type { Avatar } from '../../shared/platform/avatar.js';
 import type { GameMeta } from '../../shared/platform/games.js';
 import type { ChatKind, RoomPhase } from '../../shared/platform/protocol.js';
 import type { PlatformSettings } from '../../shared/platform/settings.js';
@@ -31,6 +32,8 @@ export interface PlatformPlayer {
    */
   idle?: boolean;
   score: number;
+  /** The player's look as it stands (only isGodMode reads it). Absent in hand-built test players. */
+  avatar?: Avatar;
 }
 
 /**

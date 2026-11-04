@@ -1,6 +1,6 @@
 /** Deterministic helpers for engine tests: counter-based ids, rng () => 0, explicit clocks. */
 import { expect } from 'vitest';
-import type { Avatar } from '../../../shared/platform/avatar.js';
+import { AVATAR_COLORS, AVATAR_FACES, type Avatar } from '../../../shared/platform/avatar.js';
 import type { GameId } from '../../../shared/platform/games.js';
 import { GAME_TEST_FIXTURES, TEST_WORDS, enoughNames } from '../../games/testFixtures.js';
 import type { PlatformRoomMessage } from '../drivers/types.js';
@@ -12,6 +12,8 @@ import { createRoomData, type PlatformRoomData } from './state.js';
 
 export const START = new Date('2026-01-01T12:00:00Z').getTime();
 export const AVATAR: Avatar = { color: 0, emoji: 0 };
+/** The pink ghost: worn by a player named jord, it is god mode (server/platform/godMode.ts). */
+export const GOD_AVATAR: Avatar = { color: AVATAR_COLORS.indexOf('#ec4899'), emoji: AVATAR_FACES.findIndex((f) => f.emoji === '👻') };
 export { TEST_WORDS };
 
 /** Ids and tokens come from counters, so the same sequence of actions always yields the same state. */
@@ -93,13 +95,14 @@ export function readyUp(s: Sim, ids: string[]): void {
 /**
  * Seats `names` (the first one creates the room; filler players are added up to the game's
  * minPlayers), applies the game's deterministic test settings, readies everyone and starts the game.
+ * Everyone wears AVATAR unless `avatars` gives a name its own look.
  */
-export function startGame(s: Sim, names: string[], settings: Record<string, unknown> = {}): string[] {
+export function startGame(s: Sim, names: string[], settings: Record<string, unknown> = {}, avatars: Record<string, Avatar> = {}): string[] {
   const ids = enoughNames(s.data.gameId, names).map((name, i) => {
     s.apply(
       i === 0
-        ? { type: 'create', gameId: s.data.gameId, name, avatar: AVATAR, connectionId: `conn-${name}` }
-        : { type: 'join', name, avatar: AVATAR, connectionId: `conn-${name}` },
+        ? { type: 'create', gameId: s.data.gameId, name, avatar: avatars[name] ?? AVATAR, connectionId: `conn-${name}` }
+        : { type: 'join', name, avatar: avatars[name] ?? AVATAR, connectionId: `conn-${name}` },
     );
     return s.playerId(name);
   });

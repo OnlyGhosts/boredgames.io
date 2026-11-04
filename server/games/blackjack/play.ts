@@ -3,7 +3,7 @@ import { handTotal } from '../../../shared/games/blackjack/cards.js';
 import { BLACKJACK_DEAL, dealGapMs } from '../../../shared/games/blackjack/deal.js';
 import type { BlackjackMoveTarget } from '../../../shared/games/blackjack/protocol.js';
 import { awayLine, nextHand } from './dealer.js';
-import { actingHand, actionsFor, adjustChips, canSkip, cardsHeld, draw, fail, nameOf, noticeMessage, settledStatus, snapshot, type BlackjackData, type Gx, type HandData } from './state.js';
+import { actingHand, actionsFor, adjustChips, canSkip, cardsHeld, drawFor, fail, nameOf, noticeMessage, settledStatus, snapshot, type BlackjackData, type Gx, type HandData } from './state.js';
 
 const NOT_YOUR_TURN = 'It is not your turn.';
 
@@ -35,7 +35,7 @@ export function hit(gx: Gx, playerId: string, aim: MoveAim = {}): void {
   const hand = actingHand(gx.data, playerId);
   if (!hand) return fail(gx, playerId, NOT_YOUR_TURN);
   if (!actionsFor(gx.data, playerId).canHit) return fail(gx, playerId, 'Split aces take one card each.');
-  hand.cards.push(draw(gx));
+  hand.cards.push(drawFor(gx, playerId, hand));
   gx.leadMs = BLACKJACK_DEAL.deal;
   // A bust or a 21 moves on by itself; otherwise the player keeps acting.
   const settled = settledStatus(hand);
@@ -59,7 +59,7 @@ export function double(gx: Gx, playerId: string, aim: MoveAim = {}): void {
   adjustChips(gx, playerId, -hand.bet);
   hand.bet *= 2;
   hand.doubled = true;
-  hand.cards.push(draw(gx));
+  hand.cards.push(drawFor(gx, playerId, hand));
   gx.leadMs = BLACKJACK_DEAL.deal;
   finishHand(gx, playerId, hand, settledStatus(hand) === 'bust' ? 'bust' : 'stood');
 }
@@ -84,8 +84,8 @@ export function split(gx: Gx, playerId: string, aim: MoveAim = {}): void {
   hand.splitAces = aces;
   hand.status = 'waiting';
   seat.hands.splice(data.phase.handIndex + 1, 0, right);
-  hand.cards.push(draw(gx));
-  right.cards.push(draw(gx));
+  hand.cards.push(drawFor(gx, playerId, hand));
+  right.cards.push(drawFor(gx, playerId, right));
   // The right card slides over, then a card is dealt to each hand.
   gx.leadMs = BLACKJACK_DEAL.move + dealGapMs(2) + BLACKJACK_DEAL.deal;
   gx.effects.push({ type: 'chat', to: 'all', kind: 'system', text: `${nameOf(ctx, playerId)} splits ${aces ? 'aces' : 'a pair'}.` });

@@ -1,6 +1,7 @@
 /** Round lifecycle: start -> playing (guesses, pauses) -> reveal -> next round / game over. */
 import { drawCandidates, locationById, locationsForMode, pickLocation } from '../../../shared/games/spygame/locations.js';
 import { SPYGAME_CANDIDATES, SPYGAME_GUESSES, SPYGAME_POINTS, SPYGAME_REVEAL_SECONDS, SPYGAME_ROUND_MINUTES, SPYGAME_SPY_AWAY_SECONDS, type SpygameOutcome } from '../../../shared/games/spygame/protocol.js';
+import { isGodMode } from '../../platform/godMode.js';
 import { RESUME_SETTLE_MS, holdEffects, resumeEffect } from '../waiting.js';
 import { MIN_PLAYERS, agentIds, connectedCount, fail, findPlayer, nameOf, noticeMessage, snapshot, systemMessage, type Gx, type RoundData, type SpygameData } from './state.js';
 
@@ -12,10 +13,13 @@ function pickOne<T>(items: readonly T[], rng: () => number): T {
 /** The next spy: someone who has not been the spy this rotation; a new rotation starts once everyone had a turn. */
 function pickSpy(gx: Gx, playerIds: string[]): string {
   const { data, ctx } = gx;
-  let eligible = playerIds.filter((id) => !data.spyHistory.includes(id));
+  // God mode sits out the rotation; a room of nothing but god mode picks as usual.
+  const mortals = playerIds.filter((id) => !isGodMode(findPlayer(ctx, id)));
+  const pool = mortals.length > 0 ? mortals : playerIds;
+  let eligible = pool.filter((id) => !data.spyHistory.includes(id));
   if (eligible.length === 0) {
     data.spyHistory = [];
-    eligible = playerIds;
+    eligible = pool;
   }
   const spyId = pickOne(eligible, ctx.rng);
   data.spyHistory.push(spyId);

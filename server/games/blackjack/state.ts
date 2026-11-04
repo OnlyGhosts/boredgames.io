@@ -1,8 +1,9 @@
 /** Blackjack's JSON-safe game state (the module's `D`), its working context and the queries over it. */
-import { drawCard, handTotal, isBust, isNatural, isPair } from '../../../shared/games/blackjack/cards.js';
+import { BLACKJACK, cardValue, drawCard, handTotal, isBust, isNatural, isPair } from '../../../shared/games/blackjack/cards.js';
 import type { BlackjackActions, BlackjackControls, BlackjackServerMessage, BlackjackSettings, Card, HandOutcome, HandStatus } from '../../../shared/games/blackjack/protocol.js';
 import { gameById } from '../../../shared/platform/games.js';
 import type { GameCtx, GameEffect, PlatformPlayer } from '../../platform/game.js';
+import { isGodMode } from '../../platform/godMode.js';
 
 export interface HandData {
   cards: Card[];
@@ -245,6 +246,21 @@ export function adjustChips(gx: Gx, playerId: string, delta: number): void {
 /** The next card from the endless deck: drawn on its own from the 52 with the injected rng. */
 export function draw(gx: Gx): Card {
   return drawCard(gx.ctx.rng);
+}
+
+/** Enough redraws that a god-mode hand never busts in practice, and few enough that a stuck rng cannot spin forever. */
+const GOD_MODE_REDRAWS = 1000;
+
+/**
+ * The next card for a player's own hand (a hit, a double, a split hand's second card). God mode
+ * (isGodMode) never busts: the card is drawn again until it fits. An ace fits any hand under a hard 21.
+ */
+export function drawFor(gx: Gx, playerId: string, hand: HandData): Card {
+  let card = draw(gx);
+  if (!isGodMode(findPlayer(gx.ctx, playerId))) return card;
+  const hard = hand.cards.reduce((sum, c) => sum + cardValue(c.rank), 0);
+  for (let tries = 0; hard < BLACKJACK && tries < GOD_MODE_REDRAWS && isBust([...hand.cards, card]); tries++) card = draw(gx);
+  return card;
 }
 
 /** Keys of the shoe that rooms stored before the endless deck still carry; nothing reads them. */

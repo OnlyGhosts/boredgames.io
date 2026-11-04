@@ -8,7 +8,7 @@ import { SPYGAME_CANDIDATES, SPYGAME_REVEAL_SECONDS, SPYGAME_ROUND_MINUTES, SPYG
 import { RECONNECT_GRACE_MS } from '../../../shared/platform/constants.js';
 import { nextDeadline } from '../../platform/engine/time.js';
 import { viewFor } from '../../platform/engine/view.js';
-import { AVATAR, START, chatTexts, endGame, errorsOf, noticeTexts, sim, standings, startGame, type Sim } from '../../platform/engine/testHarness.js';
+import { AVATAR, GOD_AVATAR, START, chatTexts, endGame, errorsOf, noticeTexts, sim, standings, startGame, type Sim } from '../../platform/engine/testHarness.js';
 import { RESUME_SETTLE_MS } from '../waiting.js';
 import { spygameModule, type SpygameData } from './module.js';
 
@@ -880,5 +880,56 @@ describe('The Spy Game: holding for missing players', () => {
     kicked.platform(host, { t: 'kick', playerId: kicked.playerId('Carol') });
     expect(kicked.data).toMatchObject({ phase: 'lobby', game: null, waiting: null });
     expect(kicked.data.players.map((p) => p.id)).toEqual([host, d]);
+  });
+});
+
+/** A seeded uniform rng (mulberry32), for the long runs. */
+function seeded(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** Every round's spy, the spy naming the location each time and the host skipping the reveal, to the end of the game. */
+function spiesToTheEnd(s: Sim, hostId: string): string[] {
+  const spies: string[] = [];
+  while (s.data.phase === 'playing') {
+    spies.push(data(s).current.spyId);
+    spyWins(s);
+    s.game(hostId, { t: 'nextRound' });
+  }
+  return spies;
+}
+
+describe('The Spy Game: god mode', () => {
+  it('never makes a god-mode player the spy across many seeded rounds, while the others still take their turns', () => {
+    for (let seed = 1; seed <= 40; seed++) {
+      const s = sim('spygame', 'ABCD', START, seeded(seed));
+      const [alice, bob, jord, dave] = startGame(s, ['Alice', 'Bob', 'jord', 'Dave'], { rounds: 9 }, { jord: GOD_AVATAR });
+      const spies = spiesToTheEnd(s, alice);
+      expect(spies).toHaveLength(9);
+      expect(spies).not.toContain(jord);
+      // The rotation goes round the other three, once each, then again.
+      for (let i = 0; i < 9; i += 3) expect(new Set(spies.slice(i, i + 3))).toEqual(new Set([alice, bob, dave]));
+    }
+    // The same seat without the look takes its turn like anyone else.
+    const s = sim('spygame', 'ABCD', START, seeded(1));
+    const [alice, , jord] = startGame(s, ['Alice', 'Bob', 'jord', 'Dave'], { rounds: 4 });
+    expect(spiesToTheEnd(s, alice)).toContain(jord);
+  });
+
+  it('falls back to the usual pick when every player has god mode, so a round can always start', () => {
+    const s = sim('spygame', 'ABCD', START, seeded(3));
+    const ids = startGame(s, ['jord', 'Jord', 'JORD'], { rounds: 6 }, { jord: GOD_AVATAR, Jord: GOD_AVATAR, JORD: GOD_AVATAR });
+    const spies = spiesToTheEnd(s, ids[0]);
+    expect(spies).toHaveLength(6);
+    // The usual rotation: everyone once, then round again.
+    expect(new Set(spies.slice(0, 3))).toEqual(new Set(ids));
+    expect(new Set(spies.slice(3))).toEqual(new Set(ids));
   });
 });
