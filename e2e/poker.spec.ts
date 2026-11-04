@@ -695,6 +695,50 @@ test('no page errors were raised in any browser', async () => {
  * longest a phone shows (they once ran 33px past its left edge), the words still over the cards.
  */
 /**
+ * The table's clock (useTableNow) wakes for the next moment the drawing changes. A timer may fire a
+ * hair before Date.now() reaches that moment (a busy machine, a wall clock stepped back): the clock
+ * once took the same moment as its next and never woke again, leaving the deal frozen half dealt and
+ * every move greyed out on my turn. Every timer here fires 20ms early; the deal still lands and the
+ * moves come on.
+ */
+test('a timer that fires a little early never freezes the deal: on my turn the moves come on', async ({ browser, baseURL }) => {
+  test.setTimeout(60_000);
+  const base = baseURL ?? 'http://localhost:4173';
+  const ctx = await browser.newContext({ viewport: SMALL, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
+  await ctx.addInitScript(() => {
+    const real = window.setTimeout.bind(window);
+    window.setTimeout = ((fn: TimerHandler, ms?: number, ...args: unknown[]) => real(fn, Math.max(0, (ms ?? 0) - 20), ...args)) as typeof window.setTimeout;
+  });
+  const page = await ctx.newPage();
+  let bots: TableBot[] = [];
+  try {
+    const code = await createParty(page, 'Hana', 'poker');
+    bots = await tableBots(2, code, base, { game: 'poker', hold: true });
+    await expectReadyCount(page, 3);
+    await page.getByTestId('start-game').click();
+    const screen = page.getByTestId('poker-screen');
+    await expect(screen).toHaveAttribute('data-phase', 'acting');
+    const myId = await page.getByTestId('my-area').getAttribute('data-player-id');
+    const turn = async () => (await screen.getAttribute('data-turn-player')) ?? '';
+    for (let moves = 0; moves < 4; moves++) {
+      await expect.poll(turn, { message: 'someone to act' }).not.toBe('');
+      const id = await turn();
+      if (id === myId) break;
+      const bot = bots.find((b) => b.id === id);
+      if (!bot) throw new Error(`no bot has the turn: ${id}`);
+      bot.move({ t: 'call' });
+      await expect.poll(turn, { message: `the turn passes from ${bot.name}` }).not.toBe(id);
+    }
+    expect(await turn(), 'my turn came round').toBe(myId);
+    await expect(page.locator('[data-testid="my-card"][data-face="up"]')).toHaveCount(2);
+    await expect(page.getByTestId('action-fold')).toBeEnabled();
+  } finally {
+    for (const bot of bots) bot.close();
+    await ctx.close();
+  }
+});
+
+/**
  * A 100,000 table of three on a 320px phone (me and two players on bare sockets, moved by the spec):
  * a seat that calls my 12,000 raise gets a pill of chips beside its line, and the 142px tile
  * squeezes the line to "Call 12k" while they fly in; once the street has closed and the chips have
