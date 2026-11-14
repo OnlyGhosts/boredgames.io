@@ -4,7 +4,7 @@ import type { GameResults, ResultEntry } from '@shared/platform/protocol';
 import { noOrphan, scoreShort, scoreWords, thousands } from '../lib/format';
 import { PHONE_QUERY, useMediaQuery } from '../lib/media';
 import { PLATFORM_SOUNDS } from '../lib/platformSounds';
-import { crowned, endReasonLine, rankedEntries, resultsHeadline, resultsPlace, topEntries } from '../lib/results';
+import { crowned, endReasonLine, loneEntry, noteText, rankedEntries, resultsHeadline, resultsPlace, statRows, topEntries } from '../lib/results';
 import { useModalFocus } from '../lib/useModalFocus';
 import { useScrollFade } from '../lib/useScrollFade';
 import { Avatar } from './Avatar';
@@ -36,9 +36,10 @@ interface Props {
 /**
  * The end of a game, however it ended, as a popup over the lobby: the winner, the places and the
  * scores (points, or a card table's chips; a player who went out says when instead; a best moment
- * under a name) with a small celebration. Closing it (the button, the X, Escape, or a tap outside on a
- * desktop) leaves the player in the lobby, ready for the next game. A modal dialog: the card takes
- * the focus and Tab stays inside until it goes.
+ * under a name) with a small celebration. One player alone has no table: how they went out sits
+ * under the headline and their game in numbers takes the standings' place. Closing it (the button,
+ * the X, Escape, or a tap outside on a desktop) leaves the player in the lobby, ready for the next
+ * game. A modal dialog: the card takes the focus and Tab stays inside until it goes.
  */
 export function ResultsPopup({ results, meId, hostId = null, onClose }: Props) {
   const cardRef = useRef<HTMLDivElement | null>(null);
@@ -57,12 +58,17 @@ export function ResultsPopup({ results, meId, hostId = null, onClose }: Props) {
   const iWon = meId !== null && champions.some((e) => e.playerId === meId);
   const unit = gameById(results.gameId).scoreUnit;
   const place = resultsPlace(results, meId, unit);
-  // Alone, there is nobody to beat: the headline says how they finished, and there is no table of one.
-  const solo = results.entries.length === 1;
+  // Two or more ranked players make a table: the podium and the standings.
+  const table = results.entries.length > 1;
+  // Alone, there is nobody to beat: the headline says how they finished, and their numbers stand where the table would.
+  const lone = loneEntry(results);
+  // The lone player is the one reading; anyone else watched them.
+  const mine = lone !== null && lone.playerId === meId;
+  const rows = lone ? statRows(lone) : [];
   // A host who played alone and ended it hears it as their own doing, not "the host".
-  const reason = endReasonLine(results, solo && meId !== null && meId === hostId);
+  const reason = endReasonLine(results, lone !== null && meId !== null && meId === hostId);
   // Something to smile about: a winner, or a lone player who kept some of their score.
-  const cheerful = celebrate || (solo && (results.entries[0]?.score ?? 0) > 0);
+  const cheerful = celebrate || (lone !== null && lone.score > 0);
 
   // Once per popup: the cue belongs to the moment it appears.
   const wonAtMount = useRef(iWon);
@@ -71,7 +77,7 @@ export function ResultsPopup({ results, meId, hostId = null, onClose }: Props) {
   }, []);
 
   return (
-    <div className="results-popup" role="dialog" aria-modal="true" aria-label="Final scores" data-testid="overlay-game-end" data-winner={iWon} data-reason={results.reason}>
+    <div className="results-popup" role="dialog" aria-modal="true" aria-label={table ? 'Final scores' : 'Game over'} data-testid="overlay-game-end" data-winner={iWon} data-reason={results.reason}>
       {/* A phone closes it with the button only: a stray tap beside the card must not skip the scores. */}
       <button type="button" className="results-popup__backdrop" aria-label="Close" tabIndex={-1} onClick={isPhone ? undefined : onClose} data-testid="results-backdrop" />
       {celebrate && <Confetti />}
@@ -81,14 +87,19 @@ export function ResultsPopup({ results, meId, hostId = null, onClose }: Props) {
             {cheerful ? <PhoneHappy className="results-hero__mascot" /> : <PhoneBored className="results-hero__mascot" />}
             <p className="overlay__kicker results-hero__kicker">{`${gameById(results.gameId).name} · Game over`}</p>
             <h2 className="overlay__title results-hero__title" data-testid="results-headline">
-              <Headline text={resultsHeadline(results, unit)} />
+              <Headline text={resultsHeadline(results, unit, meId)} />
             </h2>
             {champions.length > 0 && (
               <p className="results-hero__points" data-testid="results-points">
                 {scoreLine(champions[0].score, champions.length > 1, unit)}
               </p>
             )}
-            {!solo && (
+            {lone?.note !== undefined && (
+              <p className="results-hero__note" data-testid="results-note">
+                {noteText(lone.note)}
+              </p>
+            )}
+            {!mine && (
               <p className={`results-place${iWon ? ' results-place--won' : ''}`} data-testid="results-place">
                 {place ?? 'You watched this one'}
               </p>
@@ -114,7 +125,20 @@ export function ResultsPopup({ results, meId, hostId = null, onClose }: Props) {
             </ol>
           )}
 
-          {!solo && (
+          {lone !== null && rows.length > 0 && (
+            <section className="results-stats" aria-label={mine ? 'Your game' : `${lone.name}’s game`} data-testid="results-stats">
+              <dl className="results-stats__list">
+                {rows.map((row) => (
+                  <div key={row.label} className="results-stats__row" data-testid="results-stat" data-stat={row.label}>
+                    <dt className="results-stats__label">{noOrphan(row.label)}</dt>
+                    <dd className="results-stats__value">{row.value}</dd>
+                  </div>
+                ))}
+              </dl>
+            </section>
+          )}
+
+          {table && (
             <ol className="results-standings" aria-label="Final standings">
               {ordered.map((entry) => (
                 <li
@@ -135,8 +159,7 @@ export function ResultsPopup({ results, meId, hostId = null, onClose }: Props) {
                     <span className="results-standings__score">{scoreShort(entry.score, unit)}</span>
                   ) : (
                     <span className="results-standings__note" data-testid="results-note">
-                      {/* A number stays with the word before it ("hand 1"), so a wrap never splits them. */}
-                      {noOrphan(entry.note).replace(/ (?=\d)/g, ' ')}
+                      {noteText(entry.note)}
                     </span>
                   )}
                   {entry.peak !== undefined && (

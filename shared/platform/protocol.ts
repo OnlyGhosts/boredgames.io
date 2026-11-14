@@ -45,6 +45,16 @@ export interface PlayerPublic {
 /** A room is in its lobby between games and 'playing' while one runs; a finished game goes straight back to the lobby. */
 export type RoomPhase = 'lobby' | 'playing';
 
+/** One number from a player's game, named by the game ("Rounds won", 6 of 14); the client formats it. */
+export interface ResultStat {
+  /** A word or two in sentence case, 14 characters at most ("Best streak") and shorter beside a chip amount ("Best win"), said once in its list. */
+  label: string;
+  /** A count or a chip amount, raw. */
+  value: number;
+  /** Out of how many, when the number is a share: "6 of 14". */
+  of?: number;
+}
+
 /** One player's line in a finished game's standings, kept whole so it reads right after they leave. */
 export interface ResultEntry {
   playerId: string;
@@ -57,6 +67,8 @@ export interface ResultEntry {
   note?: string;
   /** Their best moment: the highest score they held, when the game deems it worth showing ("Peaked at 3,200"). */
   peak?: number;
+  /** Their game in a few numbers, set by the game. Only a result with one entry carries them: the popup shows them where the standings would be. */
+  stats?: ResultStat[];
 }
 
 /** How a game came to an end: on its own, by the host's End game, or with too few players left. */

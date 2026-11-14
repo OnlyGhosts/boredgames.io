@@ -9,7 +9,7 @@
 import type { z } from 'zod';
 import type { Avatar } from '../../shared/platform/avatar.js';
 import type { GameMeta } from '../../shared/platform/games.js';
-import type { ChatKind, RoomPhase } from '../../shared/platform/protocol.js';
+import type { ChatKind, ResultStat, RoomPhase } from '../../shared/platform/protocol.js';
 import type { PlatformSettings } from '../../shared/platform/settings.js';
 import type { MaybePromise } from './drivers/types.js';
 import { deepEqual } from './json.js';
@@ -166,6 +166,8 @@ export interface GameStanding {
   note?: string;
   /** Their best moment, the highest score they held: give it only when it says something the score does not ("Peaked at 3,200"). */
   peak?: number;
+  /** Their game in a few numbers ("Rounds won", 6 of 14), the most telling first: only what the game counted from its start. A player ranked alone reads them; a list with a figure that is not a number is left off whole. */
+  stats?: ResultStat[];
 }
 
 export interface GameServerModule<S = unknown, D = unknown, V = unknown, CMsg = unknown, SMsg = unknown> {

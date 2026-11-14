@@ -1,11 +1,13 @@
-/** The party rules through the pure engine: the game context a module receives, game switches, and rooms stored before the party fields existed. */
+/** The party rules through the pure engine: the game context a module receives, game switches, rooms stored before the party fields existed, and which results carry a game's numbers. */
 import { describe, expect, it } from 'vitest';
 import { QUIPGAME_VOTE_SECONDS, QUIPGAME_WRITE_SECONDS } from '../../../shared/games/quipgame/protocol.js';
 import { SPYGAME_ROUND_MINUTES } from '../../../shared/games/spygame/protocol.js';
 import { GAME_IDS, gameById } from '../../../shared/platform/games.js';
+import type { ResultEntry, ResultStat } from '../../../shared/platform/protocol.js';
 import { GAMES } from '../../games/index.js';
 import { GAME_TEST_FIXTURES, enoughNames } from '../../games/testFixtures.js';
 import { gameCtx } from './delegate.js';
+import { rankPlayers } from './lobby.js';
 import { applyAction } from './reduce.js';
 import { upgradeRoomData, type PlatformPlayerData, type PlatformRoomData, type RoomSettingsData } from './state.js';
 import { AVATAR, Ids, chatTexts, ctxAt, errorsOf, readyUp, sim, startGame, type Sim } from './testHarness.js';
@@ -415,5 +417,40 @@ describe('rooms stored before the Scribble rename', () => {
     const played = applyAction(legacy, { type: 'tick' }, ctxAt(s.now + 60 * 60_000, new Ids()));
     expect(played.data.gameId).toBe('scribble');
     expect(['playing', 'lobby']).toContain(played.data.phase);
+  });
+});
+
+describe('a game’s numbers in the results', () => {
+  const player = (id: string, joinOrder: number, score: number) => ({ id, name: id, avatar: AVATAR, score, joinOrder }) as PlatformPlayerData;
+  const lone = (stats: ResultStat[]): ResultEntry => rankPlayers([player('a', 0, 5)], () => ({ stats }))[0];
+  const stats = [
+    { label: 'Taps', value: 3, of: 9 },
+    { label: 'Misses', value: 0 },
+  ];
+
+  it('ride on a result of one entry only', () => {
+    expect(lone(stats)).toEqual({ playerId: 'a', name: 'a', avatar: AVATAR, score: 5, rank: 1, stats });
+    for (const table of [
+      [player('a', 0, 5), player('b', 1, 3)],
+      [player('a', 0, 5), player('b', 1, 3), player('c', 2, 1)],
+    ]) {
+      for (const entry of rankPlayers(table, () => ({ stats }))) expect(entry, `a table of ${table.length}`).not.toHaveProperty('stats');
+    }
+  });
+
+  it('go whole or not at all: never an empty list, nor one with a figure that is not a number, a gap or a row without its label', () => {
+    const gap: ResultStat[] = [];
+    gap[1] = { label: 'Taps', value: 3 };
+    const unnamed = [{ value: 3 }] as unknown as ResultStat[];
+    const bad = [
+      [],
+      [...stats, { label: 'Best run', value: NaN }],
+      [...stats, { label: 'Best run', value: Infinity }],
+      [{ label: 'Taps', value: 3, of: NaN }],
+      [{ label: 'Taps', value: 3, of: Infinity }],
+      gap,
+      unnamed,
+    ];
+    for (const list of bad) expect(lone(list), JSON.stringify(list)).not.toHaveProperty('stats');
   });
 });

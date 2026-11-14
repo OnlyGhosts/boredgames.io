@@ -18,7 +18,7 @@ import { bet, dealIfReady, dealNow, sitOut } from './betting.js';
 import { nextHand } from './dealer.js';
 import { double, hit, skip, split, stand, standAway } from './play.js';
 import { beginRound, endGame, finishGame, resumeIfHeld, seatPlayer, settleDue, snapshotOrResume } from './round.js';
-import { findPlayer, type BlackjackData, type Ctx, type Gx, type SeatData } from './state.js';
+import { countsWhole, findPlayer, type BlackjackData, type Ctx, type Gx, type SeatData } from './state.js';
 import { viewFor } from './view.js';
 
 type Result = GameResult<BlackjackData, BlackjackServerMessage>;
@@ -172,6 +172,26 @@ function peakOf(seat: SeatData | undefined, start: number): GameStanding {
   return seat?.peak !== undefined && seat.peak > Math.max(start, seat.chips) ? { peak: seat.peak } : {};
 }
 
+/**
+ * A seat's game in numbers for the results, the most telling first: nothing for a seat never dealt a
+ * round, for one stored before the counts were kept, or at a table whose counts are short (the settle
+ * drops those, but a game can end before the next one).
+ */
+function statsOf(data: BlackjackData, playerId: string): GameStanding {
+  const s = data.seats[playerId]?.stats;
+  if (!s || s.rounds === 0 || !countsWhole(data)) return {};
+  return {
+    stats: [
+      { label: 'Rounds won', value: s.won, of: s.rounds },
+      { label: 'Pushes', value: s.pushed },
+      { label: 'Blackjacks', value: s.blackjacks },
+      { label: 'Busts', value: s.busts },
+      { label: 'Best streak', value: s.bestStreak },
+      ...(s.bestWin > 0 ? [{ label: 'Best win', value: s.bestWin }] : []),
+    ],
+  };
+}
+
 export const blackjackModule: GameServerModule<BlackjackSettings, BlackjackData, BlackjackView, BlackjackClientMessage, BlackjackServerMessage> = {
   meta: gameById('blackjack'),
   settings: defineSettings(blackjackSettingsSchema, DEFAULT_BLACKJACK_SETTINGS),
@@ -182,8 +202,8 @@ export const blackjackModule: GameServerModule<BlackjackSettings, BlackjackData,
   view: viewFor,
   hostMessages: new Set(['dealNow', 'skip']),
   end: (ctx, data) => withDraft(data, (draft, effects) => endGame({ ctx, data: draft, effects })),
-  // How they went out, with their best moment.
-  standing: (data, playerId, settings) => ({ ...standing(data, playerId), ...peakOf(data.seats[playerId], settings.startingChips) }),
+  // How they went out, with their best moment and their game in numbers.
+  standing: (data, playerId, settings) => ({ ...standing(data, playerId), ...peakOf(data.seats[playerId], settings.startingChips), ...statsOf(data, playerId) }),
   milestone: (data) => `${data.round}:${data.phase.kind}${data.phase.kind === 'acting' ? `:${data.phase.playerId}:${data.phase.handIndex}` : ''}`,
 };
 

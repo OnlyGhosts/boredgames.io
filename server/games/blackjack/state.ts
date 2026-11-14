@@ -32,6 +32,41 @@ export interface LastRoundData {
   revealEndsAt: number;
 }
 
+/** A seat's game in counts, added to at each settle it was dealt into. */
+export interface SeatStats {
+  /** Rounds dealt in and settled. */
+  rounds: number;
+  /** Rounds that paid back more than was staked (the chat's "wins"). */
+  won: number;
+  /** Rounds that paid the stakes back and no more (the chat's "pushes"). */
+  pushed: number;
+  /** Naturals dealt (the chat's "has blackjack!"), one pushed by the dealer's included. */
+  blackjacks: number;
+  /** Hands that went over 21. */
+  busts: number;
+  /** Rounds won in a row, running: a push ends the run as a loss does. */
+  streak: number;
+  /** The longest run of rounds won in a row. */
+  bestStreak: number;
+  /** The most chips won in one round, net of its stakes; 0 until a round is won. */
+  bestWin: number;
+}
+
+export function newSeatStats(): SeatStats {
+  return { rounds: 0, won: 0, pushed: 0, blackjacks: 0, busts: 0, streak: 0, bestStreak: 0, bestWin: 0 };
+}
+
+/**
+ * Whether every round settled so far added to the seats' counts: the last one settled is the last one
+ * counted. A table a server from before the counts ran for a while comes back with rounds settled and
+ * the stamp behind, and its counts are short.
+ */
+export function countsWhole(data: BlackjackData): boolean {
+  // Between hands the last settled round is the table still on show; once the next is dealt it is the round before this one.
+  const settled = data.lastRound ? data.lastRound.round : data.round - 1;
+  return (data.counted ?? 0) === settled;
+}
+
 export interface SeatData {
   /** Chips in hand; stakes leave it when bet and come back with the payout. The platform score mirrors it. */
   chips: number;
@@ -44,6 +79,8 @@ export interface SeatData {
   outRound?: number;
   /** The most chips they held after any settle, from the starting stack (absent in rooms stored before it existed). */
   peak?: number;
+  /** Their game in counts, from the start (absent in rooms stored before it existed: the results then say nothing rather than count from the middle). */
+  stats?: SeatStats;
   /** Chose to sit this round's hand out while the bets were open (absent in rooms stored before it existed). */
   sittingOut?: boolean;
 }
@@ -72,6 +109,8 @@ export interface BlackjackData {
   dealer: Card[];
   holeHidden: boolean;
   lastRound: LastRoundData | null;
+  /** The last settled round the seats' counts include: every settle is numbered one on from the last (a round abandoned undealt takes its number back). Absent before the first settle, and in rooms stored before the counts were kept. */
+  counted?: number;
   /** The host ended the game: it ends once the hand in play settles. */
   endRequested: boolean;
 }

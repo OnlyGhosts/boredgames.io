@@ -1672,6 +1672,166 @@ describe('results popup', () => {
     expect(ruleOf(css, '.results-card__actions')).toContain('flex: none');
   });
 
+  it('shows a lone player their game: how they went out under the headline, then a row for each number and their best moment, where the standings would be', () => {
+    const alone = results({
+      gameId: 'blackjack',
+      entries: [
+        {
+          playerId: 'host',
+          name: 'host',
+          avatar: AV,
+          score: 0,
+          rank: 1,
+          note: 'Out in round 14',
+          peak: 3200,
+          stats: [
+            { label: 'Rounds won', value: 6, of: 14 },
+            { label: 'Pushes', value: 1 },
+            { label: 'Blackjacks', value: 0 },
+            { label: 'Busts', value: 3 },
+            { label: 'Best streak', value: 4 },
+            { label: 'Best win', value: 999999999999 },
+          ],
+        },
+      ],
+    });
+    const html = popup('host', alone);
+    expect(headline(html)).toBe('You ran out of chips');
+    expect(tagWith(html, 'overlay-game-end')).toContain('aria-label="Game over"');
+    // The number stays with "round" (a no-break space), as in a standings row.
+    expect(textOf(html, 'results-note')).toBe('Out in round\u00a014');
+    expect(tagWith(html, 'results-note')).toContain('class="results-hero__note"');
+    const block = tagWith(html, 'results-stats');
+    expect(block).toMatch(/^<section /);
+    expect(block).toContain('aria-label="Your game"');
+    // A description list: each row a term and its figure.
+    expect(html).toContain('<dl class="results-stats__list"><div class="results-stats__row"');
+    expect(tagsWith(html, 'results-stat').map((row) => attr(row, 'data-stat'))).toEqual(['Rounds won', 'Pushes', 'Blackjacks', 'Busts', 'Best streak', 'Best win', 'Peaked at']);
+    // A label's two words and a share stay together; every figure is in full.
+    expect(html).toContain('<dt class="results-stats__label">Rounds\u00a0won</dt><dd class="results-stats__value">6\u00a0of\u00a014</dd>');
+    for (const text of ['>1<', '>0<', '>3<', '>4<', '>999,999,999,999<', '>3,200<']) expect(html).toContain(text);
+    // No table of one and no place line; nothing in the block for the keyboard to stop on, so Tab reaches Back to the room first.
+    for (const id of ['results-entry', 'results-place', 'results-peak', 'results-step']) expect(html).not.toContain(`data-testid="${id}"`);
+    expect(html.slice(html.indexOf(block), html.indexOf('class="results-card__actions"'))).not.toMatch(/<button|<a\b|tabindex/);
+    expect(html.indexOf('data-testid="results-done"')).toBeGreaterThan(html.lastIndexOf('data-testid="results-stat"'));
+    expect(html.indexOf('data-testid="results-stats"')).toBeGreaterThan(html.indexOf('data-testid="results-headline"'));
+  });
+
+  it('lists nothing for a lone player whose game sent no numbers, and what an older game did send', () => {
+    const bare = popup('bob', results({ entries: [{ playerId: 'bob', name: 'bob', avatar: AV, score: 240, rank: 1 }] }));
+    expect(headline(bare)).toBe('You finished with 240 points');
+    for (const id of ['results-stats', 'results-stat', 'results-note', 'results-entry', 'results-place']) expect(bare).not.toContain(`data-testid="${id}"`);
+    // Results from before the numbers were sent: the note and the best moment a full room would read.
+    const older = popup(
+      'bob',
+      results({ gameId: 'poker', reason: 'players', entries: [{ playerId: 'bob', name: 'bob', avatar: AV, score: 0, rank: 1, note: 'Out in hand 3, to Alice and Carol', peak: 4600 }] }),
+    );
+    expect(textOf(older, 'results-note').replace(/\u00a0/g, ' ')).toBe('Out in hand 3, to Alice and Carol');
+    expect(tagsWith(older, 'results-stat').map((row) => attr(row, 'data-stat'))).toEqual(['Peaked at']);
+    expect(older).toContain('>4,600<');
+  });
+
+  it('tells someone who watched a lone player whose game it was: the name in the headline and on the block, and that they watched', () => {
+    const alone = results({
+      gameId: 'blackjack',
+      entries: [{ playerId: 'bob', name: 'bob', avatar: AV, score: 0, rank: 1, note: 'Out in round 14', peak: 3200, stats: [{ label: 'Rounds won', value: 6, of: 14 }] }],
+    });
+    for (const watcher of ['host', null]) {
+      const html = popup(watcher, alone);
+      expect(headline(html)).toBe('bob ran out of chips');
+      expect(textOf(html, 'results-place')).toBe('You watched this one');
+      expect(textOf(html, 'results-note').replace(/\u00a0/g, ' ')).toBe('Out in round 14');
+      expect(tagWith(html, 'results-stats')).toContain('aria-label="bob’s game"');
+      expect(tagsWith(html, 'results-stat').map((row) => attr(row, 'data-stat'))).toEqual(['Rounds won', 'Peaked at']);
+      expect(html).not.toContain('data-testid="results-entry"');
+    }
+    expect(headline(popup('bob', alone))).toBe('You ran out of chips');
+    expect(popup('bob', alone)).not.toContain('data-testid="results-place"');
+    const stillIn = results({ gameId: 'blackjack', entries: [{ playerId: 'bob', name: 'bob', avatar: AV, score: 1250, rank: 1 }] });
+    expect(headline(popup('host', stillIn))).toBe('bob finished with 1,250 chips');
+  });
+
+  it('keeps a full room’s results as they were, whatever its entries carry, and draws no empty list when nobody was ranked', () => {
+    const carrying = results({ entries: results().entries.map((e) => ({ ...e, stats: [{ label: 'Taps', value: 3 }] })) });
+    expect(popup('bob', carrying)).toBe(popup('bob'));
+    expect(tagWith(popup('bob'), 'overlay-game-end')).toContain('aria-label="Final scores"');
+    const nobody = popup('host', results({ entries: [] }));
+    expect(headline(nobody)).toBe('Thanks for playing!');
+    expect(textOf(nobody, 'results-place')).toBe('You watched this one');
+    expect(nobody).not.toContain('results-standings');
+    expect(nobody).not.toContain('results-stats');
+  });
+
+  it('keeps the note and the numbers out of the hero when a table’s first entry carries them', () => {
+    const everyoneOut = results({
+      gameId: 'blackjack',
+      entries: [
+        { playerId: 'bob', name: 'bob', avatar: AV, score: 0, rank: 1, note: 'Out in round 9', peak: 2400, stats: [{ label: 'Rounds won', value: 3, of: 9 }] },
+        { playerId: 'host', name: 'host', avatar: AV, score: 0, rank: 2, note: 'Out in round 4' },
+      ],
+    });
+    const html = popup('bob', everyoneOut);
+    expect(html).not.toContain('results-hero__note');
+    expect(html).not.toContain('results-stats');
+    expect(tagsWith(html, 'results-note').map((tag) => attr(tag, 'class'))).toEqual(['results-standings__note', 'results-standings__note']);
+  });
+
+  it('puts how a lone player went out under the headline, above the place line and the reason', () => {
+    const watched = results({ gameId: 'blackjack', reason: 'host', entries: [{ playerId: 'bob', name: 'bob', avatar: AV, score: 0, rank: 1, note: 'Out in round 14' }] });
+    const html = popup('host', watched);
+    const at = (id: string): number => html.indexOf(`data-testid="${id}"`);
+    expect(at('results-headline')).toBeGreaterThan(-1);
+    expect(at('results-note')).toBeGreaterThan(at('results-headline'));
+    expect(at('results-place')).toBeGreaterThan(at('results-note'));
+    expect(at('results-reason')).toBeGreaterThan(at('results-place'));
+  });
+
+  it('gives the numbers the standings’ box and row rule, lets a long figure take the next line whole, and sets them beside the headline on a phone on its side', () => {
+    const css = stylesheet('components.css');
+    for (const line of ['width: 100%', 'flex: none', 'border: 1px solid var(--color-border)', 'border-radius: var(--radius-item)', 'background: var(--color-surface-3)']) {
+      expect(ruleOf(css, '.results-stats ')).toContain(line);
+      expect(ruleOf(css, '.results-standings ')).toContain(line);
+    }
+    // The browser's own margins on a description list and its values are gone.
+    expect(ruleOf(css, '.results-stats__list')).toContain('margin: 0');
+    expect(ruleOf(css, '.results-stats__value')).toContain('margin: 0 0 0 auto');
+    // A figure too long for its label's line takes the next one, at the right: never cut, split mid-figure or shortened.
+    for (const line of ['flex-wrap: wrap', 'min-height: 36px']) expect(ruleOf(css, '.results-stats__row ')).toContain(line);
+    // At 0.9rem a figure of thirteen digits shares its label's line on every phone, on its side too.
+    expect(ruleOf(css, '.results-stats__row ')).toContain('font-size: 0.9rem');
+    expect(ruleOf(css, '.results-stats__row + .results-stats__row')).toContain('border-top: 1px solid var(--color-border)');
+    for (const part of ['label', 'value']) expect(ruleOf(css, `.results-stats__${part}`)).toContain('overflow-wrap: anywhere');
+    expect(ruleOf(css, '.results-stats__value')).toContain('font-variant-numeric: tabular-nums');
+    // A 16-letter name in the note breaks rather than clips.
+    expect(ruleOf(css, '.results-hero__note')).toContain('overflow-wrap: anywhere');
+    // Short screens: the rows tighten in a block of their own, after the mascot's and before the sideways rules (which still win). It reaches
+    // past the mascot's 600px: a window wider than 760px has the big mascot back at 601px, and room under it for seven 36px rows only from 614px.
+    expect(mediaBlock(css, '(max-height: 620px)')).toMatch(/^@media \(max-height: 620px\) \{\s*\.results-stats__row \{\s*min-height: 32px;\s*padding-block: 2px;/);
+    expect(mediaBlock(css, '(max-height: 600px)')).not.toContain('.results-stats__row');
+    expect(css.indexOf('@media (max-height: 620px) {')).toBeLessThan(css.indexOf('@media (max-height: 440px) and (min-aspect-ratio: 3/2) {'));
+    const side = mediaBlock(css, '(max-height: 440px) and (min-aspect-ratio: 3/2)');
+    expect(side).toMatch(/\.results-stats,\s*\.results-standings \{\s*grid-area: 2 \/ 1 \/ 4 \/ 2;/);
+    expect(side).toMatch(/\.results-stats__row \{\s*min-height: 28px;/);
+    // A list shorter than the words beside it sits level with them, not at the top.
+    expect(side).toMatch(/\.results-stats \{\s*margin-block: auto;/);
+    // Beside the numbers the headline keeps a phone's size; alone with nothing to list it takes both columns.
+    expect(side).toMatch(/\.results-card__scroll:has\(> \.results-stats\) \.results-hero__title \{\s*font-size: 1\.3rem;/);
+    expect(side).toMatch(/\.results-hero:only-child \{\s*grid-area: 2 \/ 1 \/ 4 \/ 3;/);
+    // The smallest phone on its side: seven rows fit only with no padding above and below each.
+    expect(mediaBlock(css, '(max-height: 340px) and (min-aspect-ratio: 3/2)')).toMatch(/\.results-stats__row \{\s*min-height: 24px;\s*padding-block: 0;/);
+    // On a window wider than 760px the card has 24px of padding, not 16px: seven 28px rows need 356px there (377px above a home bar), so its rows tighten sooner.
+    const wideSide = '(max-height: 380px) and (min-width: 761px) and (min-aspect-ratio: 3/2)';
+    expect(mediaBlock(css, wideSide)).toMatch(/\.results-stats__row \{\s*min-height: 24px;\s*padding-block: 0;/);
+    // Both tighten the sideways block's 28px, so both come after it; they set the same, so either may come first.
+    const sideAt = css.indexOf('@media (max-height: 440px) and (min-aspect-ratio: 3/2) {');
+    for (const query of ['(max-height: 340px) and (min-aspect-ratio: 3/2)', wideSide]) expect(css.indexOf(`@media ${query} {`), query).toBeGreaterThan(sideAt);
+    // The padding the wide block answers to: 24px on the card, 16px up to 760px wide, which is where that block starts.
+    expect(ruleOf(css, '.overlay__card ')).toContain('padding: var(--space-5)');
+    expect(css).toMatch(/@media \(max-width: 760px\) \{\s*\.overlay__card \{\s*padding: var\(--space-4\);/);
+    // Every one of these blocks tightens the row's own rule, which comes before them all.
+    expect(css.indexOf('\n.results-stats__row {')).toBeLessThan(css.indexOf('@media (max-height: 620px) {'));
+  });
+
   it('is a modal dialog whose card (never a button) takes the focus, with no focus ring around it', () => {
     const html = popup('host');
     const dialog = tagWith(html, 'overlay-game-end');

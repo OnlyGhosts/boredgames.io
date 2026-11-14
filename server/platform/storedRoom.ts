@@ -36,7 +36,18 @@ const resultsSchema = z.object({
   id: z.string(),
   gameId: z.string(),
   reason: z.enum(['finished', 'host', 'players']),
-  entries: z.array(z.object({ playerId: z.string(), name: z.string(), avatar: avatarSchema, score: z.number(), rank: z.number().int(), note: z.string().optional(), peak: z.number().optional() })),
+  entries: z.array(
+    z.object({
+      playerId: z.string(),
+      name: z.string(),
+      avatar: avatarSchema,
+      score: z.number(),
+      rank: z.number().int(),
+      note: z.string().optional(),
+      peak: z.number().optional(),
+      stats: z.array(z.object({ label: z.string(), value: z.number(), of: z.number().optional() })).optional(),
+    }),
+  ),
 });
 
 const chatSchema = z.object({

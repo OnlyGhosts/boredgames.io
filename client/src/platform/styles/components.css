@@ -2487,6 +2487,16 @@ button.exit-action--end:hover {
   font-weight: 700;
 }
 
+/* Alone, how they went out sits under the headline in the kicker's type (there is no standings row to carry it); a long name breaks rather than clip. */
+.results-hero__note {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-wrap-style: balance;
+}
+
 .results-reason {
   margin-top: 4px;
   padding: 2px 10px;
@@ -2634,6 +2644,57 @@ button.exit-action--end:hover {
   }
 }
 
+/*
+ * A lone player's game in numbers, where the standings would be and in their box: a label and its
+ * figure to a row, shorter than a standings row (no avatar), the same rule between rows. A figure
+ * too long to share its label's line takes the next one, still at the right; nothing is cut.
+ */
+.results-stats {
+  width: 100%;
+  flex: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-item);
+  background: var(--color-surface-3);
+}
+
+.results-stats__list {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.results-stats__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  align-content: center;
+  gap: 0 var(--space-3);
+  min-height: 36px;
+  padding: 4px 12px;
+  font-size: 0.9rem;
+}
+
+.results-stats__row + .results-stats__row {
+  border-top: 1px solid var(--color-border);
+}
+
+.results-stats__label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--color-text-muted);
+  font-weight: 600;
+  text-align: left;
+}
+
+.results-stats__value {
+  min-width: 0;
+  margin: 0 0 0 auto;
+  overflow-wrap: anywhere;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
 .confetti {
   position: absolute;
   inset: 0;
@@ -2697,6 +2758,18 @@ button.exit-action--end:hover {
   }
 }
 
+/*
+ * Seven rows fit a 320x568 phone under the tallest headline. They stay short a little past 600px:
+ * a window wider than 760px has the big mascot back at 601px tall, and room under it for seven of
+ * the taller rows only from 614px.
+ */
+@media (max-height: 620px) {
+  .results-stats__row {
+    min-height: 32px;
+    padding-block: 2px;
+  }
+}
+
 @media (max-height: 440px) {
   .results-hero__mascot {
     display: none;
@@ -2741,8 +2814,45 @@ button.exit-action--end:hover {
     display: none;
   }
 
+  .results-stats,
   .results-standings {
     grid-area: 2 / 1 / 4 / 2;
+  }
+
+  /* A short list sits level with the lines beside it; the auto margins give way when it is the taller, so a long one starts at the top and scrolls like the standings. */
+  .results-stats {
+    margin-block: auto;
+  }
+
+  /* Seven rows beside the headline with room to spare, a phone's home bar included. */
+  .results-stats__row {
+    min-height: 28px;
+  }
+
+  /* Beside their numbers the headline is half a card wide on every phone, the wide ones too: the phone's size keeps "999,999,999,999 chips" whole. */
+  .results-card__scroll:has(> .results-stats) .results-hero__title {
+    font-size: 1.3rem;
+  }
+
+  /* Nothing to put beside it (a lone player with no numbers, or nobody ranked): the headline keeps the middle of the card. */
+  .results-hero:only-child {
+    grid-area: 2 / 1 / 4 / 3;
+  }
+}
+
+/* The smallest phone on its side (568x320): seven rows still show without scrolling. */
+@media (max-height: 340px) and (min-aspect-ratio: 3/2) {
+  .results-stats__row {
+    min-height: 24px;
+    padding-block: 0;
+  }
+}
+
+/* On a window wider than 760px the card has 8px more padding on every side, so its rows tighten sooner: seven still show at 800x350, and at 812x375 above a home bar. */
+@media (max-height: 380px) and (min-width: 761px) and (min-aspect-ratio: 3/2) {
+  .results-stats__row {
+    min-height: 24px;
+    padding-block: 0;
   }
 }
 

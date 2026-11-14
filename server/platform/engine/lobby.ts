@@ -1,7 +1,7 @@
 /** Lobby actions (settings, profile, game choice, ready, sit-out, start), the host's End game and the way back to the lobby with the results. */
 import type { Avatar } from '../../../shared/platform/avatar.js';
 import { gameById, type GameId } from '../../../shared/platform/games.js';
-import type { GameEndReason, ResultEntry } from '../../../shared/platform/protocol.js';
+import type { GameEndReason, ResultEntry, ResultStat } from '../../../shared/platform/protocol.js';
 import { defaultPlatformSettings, platformSettingsPatchSchema, platformSettingsSchema, type PlatformSettings } from '../../../shared/platform/settings.js';
 import type { GameStanding } from '../game.js';
 import { applyGameResult, gameCtx } from './delegate.js';
@@ -149,8 +149,8 @@ function listNames(names: string[]): string {
  */
 export function rankPlayers(players: PlatformPlayerData[], standingOf: (playerId: string) => GameStanding = () => ({})): ResultEntry[] {
   const rows = players.map((p) => {
-    const { wentOut: out, note, peak } = standingOf(p.id);
-    return { p, out, note, peak };
+    const { wentOut: out, note, peak, stats } = standingOf(p.id);
+    return { p, out, note, peak, stats };
   });
   type Row = (typeof rows)[number];
   /** Above 0 when `a` finished ahead of `b`, 0 when level. */
@@ -160,6 +160,12 @@ export function rankPlayers(players: PlatformPlayerData[], standingOf: (playerId
     return a.out - b.out;
   };
   const ranked = rows.sort((a, b) => ahead(b, a) || a.p.joinOrder - b.p.joinOrder);
+  // A player's own numbers go only where the results show them: on the one entry of a player ranked alone.
+  const alone = ranked.length === 1;
+  // The list goes whole or not at all: a figure that is no number (a count read from a seat stored before it existed) or a row
+  // left out would not load from the store, nor draw. A copy, so that `every` looks at a gap in the list too.
+  const whole = (stats: ResultStat[]): boolean =>
+    stats.length > 0 && [...stats].every((s) => typeof s?.label === 'string' && Number.isFinite(s.value) && (s.of === undefined || Number.isFinite(s.of)));
   return ranked.map((r) => ({
     playerId: r.p.id,
     name: r.p.name,
@@ -168,6 +174,7 @@ export function rankPlayers(players: PlatformPlayerData[], standingOf: (playerId
     rank: 1 + ranked.filter((o) => ahead(o, r) > 0).length,
     ...(r.note !== undefined && { note: r.note }),
     ...(r.peak !== undefined && { peak: r.peak }),
+    ...(alone && r.stats !== undefined && whole(r.stats) && { stats: r.stats }),
   }));
 }
 

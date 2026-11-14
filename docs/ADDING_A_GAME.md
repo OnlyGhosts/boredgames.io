@@ -181,6 +181,23 @@ to the room, the X, Escape, a tap beside it on a desktop) leaves the player in t
 results stay in the lobby until the next game starts. A room stored on the retired `'ended'` phase
 loads as a lobby carrying its podium as the results.
 
+**One player ranked alone.** A game played solo, or one whose last player is all that is left,
+has nobody to rank against, so the popup shows no table: it says how they finished ("You finished
+with 1,250 chips"; to someone who watched, the player's name in place of "You") and, where the
+standings would be, lists their game in numbers. Those numbers are your game's: return `stats`
+from `standing` (rows of `{ label, value, of? }`: the label a word or two said once in the list, the
+value a raw count or amount that the client formats, `of` for a share, as in "Rounds won", 6 of 14)
+and the platform carries them on a result of one entry only, so a table of two or more is sent none.
+Count from the start of the game, in the one place the outcome is booked; a seat that cannot say
+(a room stored before you counted) returns no rows rather than numbers that start in the middle,
+and a list with a figure that is not a number is left off whole.
+The entry's `note` then sits under the headline and its `peak` is the last row ("Peaked at"), which
+the platform adds itself. Keep to seven rows in all, that one included: an eighth row scrolls on a
+small phone on its side (568x320, 740x360). Keep labels to 14 characters at most, and the label of
+a chip amount as short as "Best win": a figure that does not fit beside its label takes the next
+line, and seven rows then scroll on that phone.
+Blackjack lists Rounds won, Pushes, Blackjacks, Busts, Best streak and Best win.
+
 **End game and Leave room.** Every game's top bar and options sheet carry them; a game adds
 nothing. The host's End game (the platform message `endGame`, host only, while playing; behind a
 confirm step that says what happens) ends the game for everyone at once, on the scores so far, or
@@ -666,7 +683,8 @@ export interface GameServerModule<S = unknown, D = unknown, V = unknown, CMsg = 
   /**
    * How a participant's game went, for the results: `wentOut` (the round or hand they ran out in)
    * ranks them below everyone still in, the last out first; `note` shows in place of the score
-   * ("Out in round 14"); `peak` shows under the name ("Peaked at 3,200"), given only when it says something.
+   * ("Out in round 14"); `peak` shows under the name ("Peaked at 3,200"), given only when it says something;
+   * `stats` is their game in a few numbers ("Rounds won", 6 of 14), listed for a player ranked alone.
    */
   standing?(data: D, playerId: string, settings: RoomSettings<S>): GameStanding;
   /**
@@ -1265,7 +1283,8 @@ The platform test ids you will use: `home-create`, `home-join`, `code-input-0..3
 only), `start-game`, `waiting-for-host`, `sitout-toggle`, `edit-profile`,
 `leave-room`, `timer`
 (with `data-seconds`), `overlay-game-end`, `results-entry` (with `data-rank`, `data-name`,
-`data-score`), `results-headline`, `results-place`, `results-reason`, `results-done`,
+`data-score`), `results-headline`, `results-place`, `results-reason`, `results-note`,
+`results-stats`, `results-stat` (with `data-stat`), `results-done`,
 `results-close`, `end-game`, `end-game-confirm`, `end-game-yes`, `end-game-requested`,
 `game-leave-confirm`, `game-leave-yes`, `menu-sheet`,
 `toast`, `connection-notice` (with `data-status`; only rendered once the link has been gone
@@ -2286,7 +2305,7 @@ layout, which is a good reference for a non-scrolling phone game.
 | [`GuessTiles`](../client/src/platform/components/GuessTiles.tsx) | `mask`, `draft`, `onDraftChange(draft)`, `onSubmit(text): boolean`, `canSend` | Type into the blanks of a masked word (layout in [`lib/wordMask.ts`](../client/src/platform/lib/wordMask.ts): `draft` is a `GuessDraft` kept by `typeDraft`, and a revealed letter is part of the word, so the caret may rest on it, typing it types over it, any other letter lands after it, and `guessText` sends the typed text with those letters put back); Scribble's guess bar; test ids `guess-input`, `guess-send` |
 | [`Timer`](../client/src/platform/components/Timer.tsx) | `endsAt: number \| null \| undefined`, `warnUnder?` (10), `tickUnder?`, `size?: 'md' \| 'lg'`, `paused?`, `settling?`, `label?` (a small word under the ring: what it counts when that is not the usual clock), `data?` (extra data attributes) | Server-clock countdown in a ring whose lime arc empties toward the deadline (the length is the time left when this client first saw the deadline; reduced motion steps it once a second); plain seconds up to 99, m:ss beyond; the danger colour in the last 5 seconds (never with `warnUnder` 0); `tickUnder` plays a tick cue for the final seconds |
 | [`BottomSheet`](../client/src/platform/components/BottomSheet.tsx) | `open`, `title`, `onClose()`, `children`, `testId`, `className?`, `label?`, `hideTitle?` | Phone sheet with focus trap and Escape; `${testId}-close`, `${testId}-backdrop`. `className="sheet--dialog"` makes it a centred box over the dimmed page from 1024px (the lobby's Change my look); Escape and a click on the page around it still close it. `hideTitle` is for a confirm step whose own question says what it is ("Leave the room?"): no title row repeating it, the close button alone over the panel's corner, the title naming the dialog for screen readers |
-| [`ResultsPopup`](../client/src/platform/components/ResultsPopup.tsx) | `results`, `meId`, `onClose()` | Rendered by the shell over the lobby once a game ended (the store's `results`); you never render it. The small happy phone (96px at most), "Scribble · Game over", "Alice wins!" and the score in the game's `scoreUnit` (points, or a card table's chips), where you came, why it ended early (`results-reason`), the top three on small lime / lilac / graphite blocks (`results-step`), every player in order (`results-entry` with `data-rank`) and a brief confetti; a game cut short by too few players crowns nobody. Back to the room, the X, Escape or (a desktop) a tap beside it closes it for good |
+| [`ResultsPopup`](../client/src/platform/components/ResultsPopup.tsx) | `results`, `meId`, `hostId?`, `onClose()` | Rendered by the shell over the lobby once a game ended (the store's `results`); you never render it. The small happy phone (96px at most), "Scribble · Game over", "Alice wins!" and the score in the game's `scoreUnit` (points, or a card table's chips), where you came, why it ended early (`results-reason`), the top three on small lime / lilac / graphite blocks (`results-step`), every player in order (`results-entry` with `data-rank`) and a brief confetti; a game cut short by too few players crowns nobody. One player ranked alone has no table: how they went out (`results-note`) sits under the headline, and their game in numbers (`results-stats`, a `results-stat` row with `data-stat` for each of the game's `stats`, then "Peaked at") takes the standings' place; someone who watched reads the player's name. Back to the room, the X, Escape or (a desktop) a tap beside it closes it for good |
 | [`Toasts`](../client/src/platform/components/Toasts.tsx), [`ConnectionNotice`](../client/src/platform/components/ConnectionNotice.tsx) | none | Both are rendered once by the shell; add toasts with `usePlatformStore.getState().addToast(kind, text)` (errors stay until dismissed), never for the connection: the notice says that (`noticeFor` in `lib/connectionNotice.ts` words it, with room for a second line) |
 | [`Icons`](../client/src/platform/components/Icons.tsx) | `Icon({ paths, size?, ...svg })` (1.8px round stroke) plus `DiceIcon`, `CrownIcon`, `CheckIcon`, `CopyIcon`, `ShareIcon`, `ChatIcon`, `AlertIcon`, `LinkIcon`, `CloseIcon`, `UsersIcon`, `ChevronIcon`, `LogoutIcon`, `PlayIcon`, `KickIcon`, `SparkIcon`, `EditIcon`, `SendIcon`, `UploadIcon`, `MoreIcon`, `MoonIcon` | Build game icons from the `Icon` primitive (24×24 stroke paths), as The Spy Game's [`Icons.tsx`](../client/src/games/spygame/components/Icons.tsx) does |
 

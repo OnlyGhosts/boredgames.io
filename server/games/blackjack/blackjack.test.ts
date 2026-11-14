@@ -141,6 +141,9 @@ const notes = (s: Sim): Array<string | null> | undefined => s.data.results?.entr
 /** Each player's best moment in the results (null: none worth showing). */
 const peaks = (s: Sim): Array<number | null> | undefined => s.data.results?.entries.map((e) => e.peak ?? null);
 
+/** Each player's game in numbers in the results (null: none sent). */
+const stats = (s: Sim) => s.data.results?.entries.map((e) => e.stats ?? null);
+
 /** The final table's pause runs out: the results. */
 const finish = (s: Sim): Effect[] => {
   const { phase } = data(s);
@@ -192,8 +195,24 @@ describe('Blackjack: the table', () => {
     expect(data(s).phase).toEqual({ kind: 'betting' });
     // The starting stack is everyone's highest so far.
     expect(data(s).seats).toEqual({
-      [alice]: { chips: 1000, bet: 0, hands: [], bustedOut: false, sittingOut: false, peak: 1000 },
-      [bob]: { chips: 1000, bet: 0, hands: [], bustedOut: false, sittingOut: false, peak: 1000 },
+      [alice]: {
+        chips: 1000,
+        bet: 0,
+        hands: [],
+        bustedOut: false,
+        sittingOut: false,
+        peak: 1000,
+        stats: { rounds: 0, won: 0, pushed: 0, blackjacks: 0, busts: 0, streak: 0, bestStreak: 0, bestWin: 0 },
+      },
+      [bob]: {
+        chips: 1000,
+        bet: 0,
+        hands: [],
+        bustedOut: false,
+        sittingOut: false,
+        peak: 1000,
+        stats: { rounds: 0, won: 0, pushed: 0, blackjacks: 0, busts: 0, streak: 0, bestStreak: 0, bestWin: 0 },
+      },
     });
     expect([score(s, alice), score(s, bob)]).toEqual([1000, 1000]);
     expect(chatTexts(s.effects)).toContain('Round 1: place your bets!');
@@ -1330,7 +1349,7 @@ describe('Blackjack: rounds', () => {
     nextRound(s);
     expect(view(s)).toMatchObject({ phase: 'betting', round: 2 });
     // No shoe, size or reshuffle flag in the state or the view.
-    expect(Object.keys(data(s)).sort()).toEqual(['dealer', 'endRequested', 'holeHidden', 'lastRound', 'order', 'phase', 'round', 'seats']);
+    expect(Object.keys(data(s)).sort()).toEqual(['counted', 'dealer', 'endRequested', 'holeHidden', 'lastRound', 'order', 'phase', 'round', 'seats']);
     expect(view(s)).not.toHaveProperty('shoeRemaining');
     expect(view(s)).not.toHaveProperty('reshuffled');
     expect(chatTexts(s.effects).filter((line) => /shoe|shuffl/i.test(line))).toEqual([]);
@@ -2106,5 +2125,275 @@ describe('Blackjack: god mode', () => {
     expect(moves.double).toBeGreaterThan(200);
     expect(busts.bob).toBeGreaterThan(100);
     expect(busts.pale).toBeGreaterThan(100);
+  });
+});
+
+describe('Blackjack: a lone player’s game in numbers', () => {
+  /** A round Alice wins by 10: 19 against the dealer's 17. */
+  const win = (s: Sim, id: string): void => {
+    rig(s, '10S', '10D', '9H', '7C');
+    act(s, id, { t: 'bet', amount: 10 });
+    act(s, id, { t: 'stand' });
+  };
+  /** A round Alice loses by 10: 16 against 17. */
+  const lose = (s: Sim, id: string): void => {
+    rig(s, '10S', '10D', '6H', '7C');
+    act(s, id, { t: 'bet', amount: 10 });
+    act(s, id, { t: 'stand' });
+  };
+  /** A round Alice pushes: 17 each. */
+  const push = (s: Sim, id: string): void => {
+    rig(s, '10S', '10D', '7H', '7C');
+    act(s, id, { t: 'bet', amount: 10 });
+    act(s, id, { t: 'stand' });
+  };
+
+  it('tells a lone player their game as the chat called each round: rounds won, pushes, blackjacks, busts, the best run and the biggest win', () => {
+    const s = table();
+    const [alice] = startGame(s, ['Alice'], { startingChips: 100 });
+    // A split: 8 3 doubled to 21 wins 20, 8 K 5 busts and loses 10. The chat's word for the round is a win of 10.
+    rig(s, '8S', '10D', '8H', '7C', '3D', 'KH', 'KS', '5C');
+    act(s, alice, { t: 'bet', amount: 10 });
+    act(s, alice, { t: 'split' });
+    act(s, alice, { t: 'double' });
+    act(s, alice, { t: 'hit' });
+    expect(chatTexts(s.effects).slice(-1)).toEqual(['Alice wins 10.']);
+    expect(data(s).seats[alice].stats).toEqual({ rounds: 1, won: 1, pushed: 0, blackjacks: 0, busts: 1, streak: 1, bestStreak: 1, bestWin: 10 });
+    nextRound(s);
+    // A natural the dealer's natural pushes at the peek: a blackjack dealt, a round pushed, the run over.
+    rig(s, 'AS', 'AD', 'KH', 'KS');
+    act(s, alice, { t: 'bet', amount: 10 });
+    expect(data(s).seats[alice].stats).toEqual({ rounds: 2, won: 1, pushed: 1, blackjacks: 1, busts: 1, streak: 0, bestStreak: 1, bestWin: 10 });
+    nextRound(s);
+    // A natural paid 3 to 2.
+    rig(s, 'AS', '9D', 'KH', '8S');
+    act(s, alice, { t: 'bet', amount: 10 });
+    expect(data(s).seats[alice].stats).toEqual({ rounds: 3, won: 2, pushed: 1, blackjacks: 2, busts: 1, streak: 1, bestStreak: 1, bestWin: 15 });
+    nextRound(s);
+    rig(s, '10S', '9D', '6H', '8S');
+    act(s, alice, { t: 'bet', amount: 125 });
+    act(s, alice, { t: 'stand' });
+    finish(s);
+    expect(s.data.results?.entries).toEqual([
+      {
+        playerId: alice,
+        name: 'Alice',
+        avatar: AVATAR,
+        score: 0,
+        rank: 1,
+        note: 'Out in round 4',
+        peak: 125,
+        stats: [
+          { label: 'Rounds won', value: 2, of: 4 },
+          { label: 'Pushes', value: 1 },
+          { label: 'Blackjacks', value: 2 },
+          { label: 'Busts', value: 1 },
+          { label: 'Best streak', value: 1 },
+          { label: 'Best win', value: 15 },
+        ],
+      },
+    ]);
+    // Room data survives a JSON round trip unchanged: no row carries `of: undefined`.
+    expect(JSON.parse(JSON.stringify(s.data.results))).toStrictEqual(s.data.results);
+  });
+
+  it('counts a run of rounds won in a row: a push ends it as a loss does, and the best one is kept', () => {
+    const s = table();
+    const [alice] = startGame(s, ['Alice']);
+    for (const round of [win, win, push, win, win, win, lose, win]) {
+      round(s, alice);
+      nextRound(s);
+    }
+    expect(data(s).seats[alice].stats).toMatchObject({ rounds: 8, won: 6, pushed: 1, streak: 1, bestStreak: 3, bestWin: 10 });
+    end(s, alice);
+    expect(stats(s)?.[0]).toContainEqual({ label: 'Best streak', value: 3 });
+    expect(stats(s)?.[0]).toContainEqual({ label: 'Rounds won', value: 6, of: 8 });
+  });
+
+  it('counts no blackjack for 21 on two cards of a split hand: the chat names none, and each pays 1 to 1', () => {
+    const s = table();
+    const [alice] = startGame(s, ['Alice']);
+    // Kings split, an ace on each: 21 twice against the dealer's 17, neither a natural.
+    rig(s, 'KS', '7D', 'KH', '10C', 'AD', 'AH');
+    act(s, alice, { t: 'bet', amount: 10 });
+    act(s, alice, { t: 'split' });
+    while (data(s).phase.kind === 'acting') act(s, alice, { t: 'stand' });
+    expect(lastHands(s, alice).map((h) => handTotal(h.cards).total)).toEqual([21, 21]);
+    expect(chatTexts(s.effects).join(' ')).not.toContain('blackjack');
+    expect(chatTexts(s.effects).slice(-1)).toEqual(['Alice wins 20.']);
+    expect(data(s).seats[alice].stats).toEqual({ rounds: 1, won: 1, pushed: 0, blackjacks: 0, busts: 0, streak: 1, bestStreak: 1, bestWin: 20 });
+  });
+
+  it('counts every hand that busts in a round, and keeps the biggest win when a smaller one follows', () => {
+    const s = table();
+    const [alice] = startGame(s, ['Alice']);
+    // A natural paid 15, then a plain win of 10: the best win stays 15.
+    rig(s, 'AS', '9D', 'KH', '8S');
+    act(s, alice, { t: 'bet', amount: 10 });
+    nextRound(s);
+    win(s, alice);
+    expect(data(s).seats[alice].stats).toMatchObject({ rounds: 2, won: 2, bestWin: 15 });
+    nextRound(s);
+    // Both hands of a split go over 21: two busts in one round.
+    rig(s, '8S', '10D', '8H', '7C', 'KD', 'KH', '5C', '6C');
+    act(s, alice, { t: 'bet', amount: 10 });
+    act(s, alice, { t: 'split' });
+    act(s, alice, { t: 'hit' });
+    act(s, alice, { t: 'hit' });
+    expect(chatTexts(s.effects).slice(-1)).toEqual(['Alice loses 20.']);
+    expect(data(s).seats[alice].stats).toMatchObject({ rounds: 3, won: 2, busts: 2, bestWin: 15 });
+  });
+
+  it('counts a split that wins one hand and busts the other as a push with one bust, and lists no biggest win without a round won', () => {
+    const s = table();
+    const [alice] = startGame(s, ['Alice']);
+    // 8 K stands on 18 and wins 10; 8 K 5 busts and loses 10: the chat says "Alice pushes."
+    rig(s, '8S', '10D', '8H', '7C', 'KD', 'KH', '5C');
+    act(s, alice, { t: 'bet', amount: 10 });
+    act(s, alice, { t: 'split' });
+    act(s, alice, { t: 'stand' });
+    act(s, alice, { t: 'hit' });
+    expect(chatTexts(s.effects).slice(-1)).toEqual(['Alice pushes.']);
+    nextRound(s);
+    end(s, alice);
+    expect(stats(s)).toEqual([
+      [
+        { label: 'Rounds won', value: 0, of: 1 },
+        { label: 'Pushes', value: 1 },
+        { label: 'Blackjacks', value: 0 },
+        { label: 'Busts', value: 1 },
+        { label: 'Best streak', value: 0 },
+      ],
+    ]);
+    expect(peaks(s)).toEqual([null]);
+  });
+
+  it('says nothing of a game that never dealt a round, nor of a seat stored before the counts were kept', () => {
+    const s = table();
+    const [alice] = startGame(s, ['Alice']);
+    end(s, alice);
+    expect(s.data.results?.entries[0]).not.toHaveProperty('stats');
+
+    const old = table();
+    const [carol] = startGame(old, ['Carol']);
+    // A room stored before the change: the seat has no counts, and never gets them mid-game.
+    const seat = { ...data(old).seats[carol] };
+    delete seat.stats;
+    old.data = { ...old.data, game: { ...data(old), seats: { [carol]: seat } } as BlackjackData };
+    win(old, carol);
+    expect(data(old).seats[carol]).not.toHaveProperty('stats');
+    nextRound(old);
+    end(old, carol);
+    expect(old.data.results?.entries[0]).not.toHaveProperty('stats');
+    expect(standings(old)).toEqual([{ playerId: carol, score: 1010, rank: 1 }]);
+  });
+
+  it('sends a table of two no numbers, while both seats count; and keeps the counts through a server restart', () => {
+    const s = table();
+    const [alice, bob] = startGame(s, ['Alice', 'Bob']);
+    rig(s, '10S', '10H', '10D', '9H', '6S', '7C');
+    betAll(s, [alice, bob]);
+    act(s, alice, { t: 'stand' });
+    act(s, bob, { t: 'stand' });
+    expect(data(s).seats[alice].stats).toMatchObject({ rounds: 1, won: 1 });
+    expect(data(s).seats[bob].stats).toMatchObject({ rounds: 1, won: 0 });
+    restart(s);
+    expect(data(s).seats[alice].stats).toMatchObject({ rounds: 1, won: 1 });
+    nextRound(s);
+    end(s, alice);
+    expect(s.data.results?.entries).toHaveLength(2);
+    expect(stats(s)).toEqual([null, null]);
+  });
+
+  it('counts a seat left alone by a leave from its first round, and keeps every label short and said once', () => {
+    const s = table();
+    const [alice, bob] = startGame(s, ['Alice', 'Bob']);
+    rig(s, '10S', '10H', '10D', '9H', '6S', '7C');
+    betAll(s, [alice, bob]);
+    act(s, alice, { t: 'stand' });
+    act(s, bob, { t: 'stand' });
+    nextRound(s);
+    s.apply({ type: 'leave', playerId: bob });
+    win(s, alice);
+    nextRound(s);
+    end(s, alice);
+    const mine = stats(s)?.[0] ?? [];
+    expect(mine).toContainEqual({ label: 'Rounds won', value: 2, of: 2 });
+    expect(mine).toContainEqual({ label: 'Best streak', value: 2 });
+    const labels = mine.map((row) => row.label);
+    expect(new Set(labels).size).toBe(labels.length);
+    for (const label of labels) expect(label.length, label).toBeLessThanOrEqual(14);
+  });
+
+  it('says nothing once a round was settled uncounted: a table an older server ran for a while and handed back', () => {
+    const s = table();
+    const [alice] = startGame(s, ['Alice']);
+    win(s, alice);
+    nextRound(s);
+    // The server from before the counts settles a round and leaves the seat's counts, and the round they reach, as they were.
+    const stale = structuredClone(data(s).seats[alice].stats);
+    const reached = data(s).counted;
+    lose(s, alice);
+    nextRound(s);
+    s.data = { ...s.data, game: { ...data(s), counted: reached, seats: { [alice]: { ...data(s).seats[alice], stats: stale } } } as BlackjackData };
+    expect(data(s)).toMatchObject({ round: 3, seats: { [alice]: { chips: 1000, stats: { rounds: 1, won: 1 } } } });
+    // Back on this server the counts would read "2 of 2" after three rounds: they go at the next settle.
+    win(s, alice);
+    expect(data(s).seats[alice]).not.toHaveProperty('stats');
+    nextRound(s);
+    end(s, alice);
+    expect(s.data.results?.entries[0]).not.toHaveProperty('stats');
+    expect(standings(s)).toEqual([{ playerId: alice, score: 1010, rank: 1 }]);
+  });
+
+  it('says nothing either when the game ends before another round settles here: by End game in the results pause, with the bets open or in a hold, or on the final table', () => {
+    /** A round lost with every chip down: the final table. */
+    const loseAll = (s: Sim, id: string): void => {
+      rig(s, '10S', '10D', '6H', '7C');
+      act(s, id, { t: 'bet', amount: chips(s, id) });
+      act(s, id, { t: 'stand' });
+    };
+    // The second round, how the game ends after it, and the chips it ends on.
+    const endings: Array<{ second: (s: Sim, id: string) => void; ends: Array<(s: Sim, id: string) => unknown>; score: number }> = [
+      { second: lose, ends: [end], score: 1000 },
+      { second: lose, ends: [nextRound, end], score: 1000 },
+      { second: lose, ends: [nextRound, (s, id) => disconnect(s, id, 'Alice'), (s, id) => reconnect(s, id, 'Alice'), end], score: 1000 },
+      { second: loseAll, ends: [finish], score: 0 },
+    ];
+    for (const { second, ends, score } of endings) {
+      for (const handedBack of [false, true]) {
+        const s = table();
+        const [alice] = startGame(s, ['Alice']);
+        win(s, alice);
+        nextRound(s);
+        const stale = structuredClone(data(s).seats[alice].stats);
+        const reached = data(s).counted;
+        second(s, alice);
+        // The server from before the counts settled the second round: the counts and the round they reach are as the first left them.
+        if (handedBack) s.data = { ...s.data, game: { ...data(s), counted: reached, seats: { [alice]: { ...data(s).seats[alice], stats: stale } } } as BlackjackData };
+        expect(data(s)).toMatchObject({ round: 2, counted: handedBack ? 1 : 2, lastRound: { round: 2 }, seats: { [alice]: { stats: { rounds: handedBack ? 1 : 2, won: 1 } } } });
+        for (const step of ends) step(s, alice);
+        expect(standings(s)).toEqual([{ playerId: alice, score, rank: 1 }]);
+        // Counted whole, the game reads "1 of 2" however it ends; handed back, "1 of 1" after two rounds is never sent.
+        if (handedBack) expect(s.data.results?.entries[0]).not.toHaveProperty('stats');
+        else expect(stats(s)?.[0]).toContainEqual({ label: 'Rounds won', value: 1, of: 2 });
+      }
+    }
+  });
+
+  it('goes on counting through a round that opened twice: bets nobody was there to place take the round number back', () => {
+    const s = table();
+    const [alice] = startGame(s, ['Alice']);
+    win(s, alice);
+    nextRound(s);
+    disconnect(s, alice, 'Alice');
+    expect(view(s)).toMatchObject({ phase: 'held', round: 1 });
+    reconnect(s, alice, 'Alice');
+    tick(s, RESUME_SETTLE_MS);
+    expect(view(s)).toMatchObject({ phase: 'betting', round: 2 });
+    win(s, alice);
+    nextRound(s);
+    end(s, alice);
+    expect(stats(s)?.[0]).toContainEqual({ label: 'Rounds won', value: 2, of: 2 });
   });
 });

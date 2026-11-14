@@ -3,6 +3,7 @@ import { CHOOSE_TIME_SECONDS } from '../../../shared/games/scribble/constants.js
 import { AWAY_NOTICE_MS, RECONNECT_GRACE_MS } from '../../../shared/platform/constants.js';
 import { GAME_IDS, type GameId } from '../../../shared/platform/games.js';
 import type { BlackjackData } from '../../games/blackjack/module.js';
+import type { SeatStats } from '../../games/blackjack/state.js';
 import { GAME_TEST_FIXTURES } from '../../games/testFixtures.js';
 import type { ScribbleData } from '../../games/scribble/state.js';
 import { POINTS_UNDONE_TEXT, RESTARTED_TURN_TEXT } from '../../games/scribble/turns.js';
@@ -117,6 +118,39 @@ describe('restoring rooms', () => {
     expect(loadStoredRoom(JSON.parse(JSON.stringify(stored)))).toBeNull();
     Object.assign(second, { note: 'Out in round 14', peak: '3,200' });
     expect(loadStoredRoom(JSON.parse(JSON.stringify(stored)))).toBeNull();
+  });
+
+  it('loads a lone player’s numbers as labels with numbers, and nothing else in their place', () => {
+    const s = sim('template');
+    const [alice] = startGame(s, ['Alice']);
+    endGame(s, alice);
+    const stored = JSON.parse(JSON.stringify(s.data)) as PlatformRoomData;
+    const [only] = stored.results?.entries ?? [];
+    only.stats = [
+      { label: 'Rounds won', value: 6, of: 14 },
+      { label: 'Best win', value: 999999999999 },
+    ];
+    expect(loadStoredRoom(JSON.parse(JSON.stringify(stored)))?.results?.entries).toEqual([only]);
+    expect(restoreLater({ ...s, data: stored }).data.results).toEqual(stored.results);
+    for (const bad of ['6 of 14', [{ label: 'Rounds won', value: '6' }], [{ value: 6 }], [{ label: 'Rounds won', value: 6, of: '14' }]]) {
+      Object.assign(only, { stats: bad });
+      expect(loadStoredRoom(JSON.parse(JSON.stringify(stored))), JSON.stringify(bad)).toBeNull();
+    }
+  });
+
+  it('never ends a game on numbers that would not load: a seat stored without its count of pushes sends none', () => {
+    const s = sim('blackjack');
+    const [alice] = startGame(s, ['Alice']);
+    // A seat stored before one of its counts existed: the count of pushes is missing, and the game reads it as it finds it.
+    const game = structuredClone(s.data.game) as BlackjackData;
+    delete (game.seats[alice].stats as Partial<SeatStats>).pushed;
+    s.data = { ...s.data, game };
+    s.game(alice, { t: 'bet', amount: 10 });
+    s.game(alice, { t: 'stand' });
+    endGame(s, alice);
+    expect(s.data.results?.entries).toHaveLength(1);
+    expect(s.data.results?.entries[0]).not.toHaveProperty('stats');
+    expect(loadStoredRoom(JSON.parse(JSON.stringify(s.data)))?.results).toEqual(s.data.results);
   });
 
   it('keeps a player already away on the grace they had, moved on by the downtime', () => {

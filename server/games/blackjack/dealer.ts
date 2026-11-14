@@ -1,9 +1,9 @@
 /** The play passing from hand to hand, the dealer's turn and the settle that sends the table to `lastRound`. */
-import { dealerShouldHit, handTotal, settleHand } from '../../../shared/games/blackjack/cards.js';
+import { dealerShouldHit, handTotal, isNatural, settleHand } from '../../../shared/games/blackjack/cards.js';
 import { revealAllowanceMs } from '../../../shared/games/blackjack/deal.js';
 import type { HandOutcome, HandStatus } from '../../../shared/games/blackjack/protocol.js';
 import { afterSettle } from './round.js';
-import { adjustChips, autoStatus, draw, isConnected, nameOf, noticeMessage, snapshot, systemMessage, type Gx, type SettledHand } from './state.js';
+import { adjustChips, autoStatus, countsWhole, draw, isConnected, nameOf, noticeMessage, snapshot, systemMessage, type Gx, type SeatStats, type SettledHand } from './state.js';
 
 export function awayLine(gx: Gx, playerId: string): string {
   return `${nameOf(gx.ctx, playerId)} is away and stands.`;
@@ -56,6 +56,19 @@ function dealerPlays(gx: Gx): void {
 
 const STATUS_OF: Record<HandOutcome, HandStatus> = { win: 'won', blackjack: 'blackjack', push: 'push', loss: 'lost' };
 
+/** Adds a settled round to a seat's counts, from the sums the chat line is written from. */
+function tallyRound(stats: SeatStats, hands: readonly SettledHand[], staked: number, back: number): void {
+  stats.rounds += 1;
+  if (back > staked) stats.won += 1;
+  else if (back === staked) stats.pushed += 1;
+  stats.blackjacks += hands.filter((h) => isNatural(h.cards, h.fromSplit)).length;
+  stats.busts += hands.filter((h) => h.status === 'bust').length;
+  // In a row means in a row: a push ends the run as a loss does.
+  stats.streak = back > staked ? stats.streak + 1 : 0;
+  stats.bestStreak = Math.max(stats.bestStreak, stats.streak);
+  stats.bestWin = Math.max(stats.bestWin, back - staked);
+}
+
 /**
  * Pays every hand against the dealer's cards, puts out whoever has no chips left, moves the
  * table to `lastRound` (cleared from the seats) and goes on to the next round or the end. The
@@ -67,6 +80,10 @@ export function settleRound(gx: Gx, peeked: boolean): void {
   const lines: string[] = [];
   const out: string[] = [];
   const settled: Record<string, SettledHand[]> = {};
+  // The counts are whole only while every settle so far added to them. A round settled uncounted (a server from
+  // before the counts ran the table for a while) leaves them short, so they go and the results say nothing.
+  if (!countsWhole(data)) for (const seat of Object.values(data.seats)) delete seat.stats;
+  data.counted = data.round;
   for (const id of data.order) {
     const seat = data.seats[id];
     settled[id] = seat.hands.map((hand) => {
@@ -77,6 +94,7 @@ export function settleRound(gx: Gx, peeked: boolean): void {
     const staked = settled[id].reduce((sum, h) => sum + h.bet, 0);
     const back = settled[id].reduce((sum, h) => sum + h.payout, 0);
     seat.peak = Math.max(seat.peak ?? 0, seat.chips);
+    if (seat.stats) tallyRound(seat.stats, settled[id], staked, back);
     const name = nameOf(ctx, id);
     lines.push(back > staked ? `${name} wins ${back - staked}` : back === staked ? `${name} pushes` : `${name} loses ${staked - back}`);
     if (seat.chips === 0) {

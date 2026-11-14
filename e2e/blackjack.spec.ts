@@ -1,6 +1,7 @@
 import { expect, test, type Browser, type BrowserContext, type Locator, type Page } from '@playwright/test';
 import { BLACKJACK_FINAL_HOLD_MS } from '../shared/games/blackjack/deal';
-import { closeResults, createParty, expectReadyCount, joinByCode, readyAll } from './party';
+import { BLACKJACK_SETTINGS_LIMITS } from '../shared/games/blackjack/protocol';
+import { closeResults, createParty, endGameAsHost, enterNameIfAsked, expectReadyCount, joinByCode, readyAll } from './party';
 import { tableBots, type TableBot } from './tableBots';
 import { cornersClear, seatFloors, stripShown, tilesReadable } from './tableFit';
 
@@ -996,6 +997,154 @@ test('a move picked before my turn: Pia taps Stand while Hana plays, and it stan
       picked = waiting;
     }
     expect(picked, 'a round where one hand waited on the other').not.toBeNull();
+    expect(errors).toEqual([]);
+  } finally {
+    for (const c of contexts) await c.close();
+  }
+});
+
+/** The numbers under a lone player's headline, as the popup lists them: each row's name and its figure. */
+async function statRowsOn(page: Page): Promise<string[][]> {
+  return page.getByTestId('results-stat').evaluateAll((els) => els.map((el) => [(el as HTMLElement).dataset.stat ?? '', el.querySelector('dd')?.textContent ?? '']));
+}
+
+/**
+ * How a lone player's results sit on the screen: nothing to scroll, every row's name and figure on
+ * one line inside the row, the list whole above Back to the room. Upright it runs under the headline
+ * on the button's edges; on its side it stands left of the headline. No line of the words beside or
+ * above it runs under the X's cross.
+ */
+async function loneResultsLayout(page: Page): Promise<Record<string, boolean>> {
+  return page.evaluate(() => {
+    const el = (selector: string) => document.querySelector(selector) as HTMLElement;
+    const box = (node: Element) => node.getBoundingClientRect();
+    /** Every line of the words under a node: the text itself, not the boxes around it. */
+    const lines = (node: Element) => {
+      const out: DOMRect[] = [];
+      const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
+      for (let text = walker.nextNode(); text; text = walker.nextNode()) {
+        const range = document.createRange();
+        range.selectNodeContents(text);
+        out.push(...[...range.getClientRects()].filter((r) => r.width > 0));
+      }
+      return out;
+    };
+    const oneLine = (rects: DOMRect[]) => rects.length > 0 && new Set(rects.map((r) => Math.round(r.top))).size === 1;
+    const leftOf = (rects: DOMRect[]) => Math.min(...rects.map((r) => r.left));
+    const rightOf = (rects: DOMRect[]) => Math.max(...rects.map((r) => r.right));
+    const scroll = el('.results-card__scroll');
+    const list = box(el('[data-testid="results-stats"]'));
+    const done = box(el('[data-testid="results-done"]'));
+    const cross = box(el('[data-testid="results-close"] svg'));
+    const hero = el('.results-hero');
+    const headline = lines(el('[data-testid="results-headline"]'));
+    const rows = [...document.querySelectorAll('[data-testid="results-stat"]')].map((row) => {
+      const name = lines(row.querySelector('dt') as Element);
+      const figure = lines(row.querySelector('dd') as Element);
+      const r = box(row);
+      const level = oneLine(name) && oneLine(figure) && Math.abs(name[0].top - figure[0].top) < 3;
+      return level && leftOf(name) >= r.left && rightOf(name) < leftOf(figure) && rightOf(figure) <= r.right;
+    });
+    const besideHeadline = list.right <= leftOf(headline);
+    const underHeadline = list.top >= box(hero).bottom && Math.abs(list.left - done.left) <= 0.5 && Math.abs(list.right - done.right) <= 0.5;
+    return {
+      nothingToScroll: scroll.scrollHeight - scroll.clientHeight <= 1,
+      rowsOnOneLine: rows.length > 0 && rows.every(Boolean),
+      listAboveButton: list.bottom <= done.top,
+      listInPlace: window.innerWidth > window.innerHeight ? besideHeadline : underHeadline,
+      wordsClearOfX: lines(hero).every((line) => line.right <= cross.left || line.left >= cross.right || line.bottom <= cross.top || line.top >= cross.bottom),
+    };
+  });
+}
+
+/** Every check of loneResultsLayout holding. */
+const LONE_FIT = { nothingToScroll: true, rowsOnOneLine: true, listAboveButton: true, listInPlace: true, wordsClearOfX: true };
+
+test('alone at the table: the results give my game in numbers, the largest stack fits a phone both ways, and someone watching reads my name', async ({ browser }) => {
+  test.setTimeout(120_000);
+  const phone = { viewport: PORTRAIT, isMobile: true, hasTouch: true, deviceScaleFactor: 2 };
+  const contexts = [await browser.newContext(phone), await browser.newContext(phone)];
+  const hana = await contexts[0].newPage();
+  const wren = await contexts[1].newPage();
+  const errors: string[] = [];
+  for (const p of [hana, wren]) p.on('pageerror', (err) => errors.push(err.message));
+  try {
+    // The largest stack the setting takes: a headline of thirteen digits (twelve after a loss) and a win of eleven.
+    const stack = BLACKJACK_SETTINGS_LIMITS.startingChips.max;
+    const code = await createParty(hana, 'Hana', 'blackjack');
+    await hana.getByTestId('settings-startingChips').fill(String(stack));
+    await hana.getByTestId('settings-startingChips').press('Enter');
+    await expect(hana.getByTestId('settings-startingChips')).toHaveValue(String(stack));
+    await hana.getByTestId('start-game').click();
+    await expect(hana.getByTestId('blackjack-screen')).toHaveAttribute('data-phase', 'betting');
+    // Wren comes in by the link once the game is on: she watches it.
+    await wren.goto(`/blackjack/${code}`);
+    await wren.getByTestId('home-join').click();
+    await enterNameIfAsked(wren, 'Wren');
+    await expect(wren.getByTestId('watching-note')).toBeVisible();
+
+    // One round at the offered bet, a stand if a turn comes (a blackjack on either side settles it at the deal).
+    await hana.getByTestId('place-bet').click();
+    const settled = hana.locator('[data-testid="my-hand"][data-outcome]');
+    await expect.poll(async () => (await canPlay(hana)) || (await settled.count()) > 0).toBe(true);
+    if ((await settled.count()) === 0) await hana.getByTestId('action-stand').click();
+    await expect(settled).toHaveCount(1);
+    const hand = await settled.evaluate((el) => {
+      const d = (el as HTMLElement).dataset;
+      return { bet: Number(d.bet), payout: Number(d.payout), cards: Number(d.cards), total: Number(d.total) };
+    });
+    const net = hand.payout - hand.bet;
+    const won = net > 0;
+    // Between hands the host ends it: the next round's bets are open and no stake is down.
+    await expect(hana.getByTestId('round-indicator')).toHaveAttribute('data-round', '2');
+    await expect(hana.getByTestId('blackjack-screen')).toHaveAttribute('data-phase', 'betting');
+    await endGameAsHost(hana);
+
+    // Hana's own results: how she finished, why it ended, and the round the table showed, counted. No table of one.
+    const mine = hana.getByTestId('overlay-game-end');
+    await expect(mine).toBeVisible({ timeout: BLACKJACK_FINAL_HOLD_MS + 3_000 });
+    await expect(hana.getByRole('dialog', { name: 'Game over' })).toBeVisible();
+    await expect(mine.getByTestId('results-headline')).toHaveText(`You finished with ${(stack + net).toLocaleString('en-US')} chips`);
+    await expect(mine.getByTestId('results-reason')).toHaveText('You ended the game.');
+    await expect(mine.getByRole('region', { name: 'Your game' })).toBeVisible();
+    const rows = [
+      ['Rounds won', `${won ? 1 : 0}\u00a0of\u00a01`],
+      ['Pushes', net === 0 ? '1' : '0'],
+      ['Blackjacks', hand.cards === 2 && hand.total === 21 ? '1' : '0'],
+      ['Busts', '0'],
+      ['Best streak', won ? '1' : '0'],
+      ...(won ? [['Best win', net.toLocaleString('en-US')]] : []),
+    ];
+    expect(await statRowsOn(hana)).toEqual(rows);
+    for (const id of ['results-entry', 'results-place', 'results-note']) await expect(mine.getByTestId(id)).toHaveCount(0);
+
+    // It fits a small phone, a phone, and both on their side, with nothing to scroll.
+    for (const size of [SMALL, PORTRAIT, { width: 667, height: 375 }, { width: 844, height: 390 }]) {
+      await hana.setViewportSize(size);
+      // The card's height cap follows --app-height, which a resize listener sets a frame or so after a
+      // viewport change: measured before it, the card still has the last screen's cap.
+      await expect
+        .poll(() => hana.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--app-height').trim()), { message: `--app-height at ${size.width}x${size.height}` })
+        .toBe(`${size.height}px`);
+      expect(await loneResultsLayout(hana), `the lone results at ${size.width}x${size.height}`).toEqual(LONE_FIT);
+    }
+    await hana.setViewportSize(PORTRAIT);
+
+    // Wren watched: the same numbers under Hana's name, never "You".
+    const hers = wren.getByTestId('overlay-game-end');
+    await expect(hers).toBeVisible();
+    await expect(hers.getByTestId('results-headline')).toHaveText(`Hana finished with ${(stack + net).toLocaleString('en-US')} chips`);
+    await expect(hers.getByTestId('results-place')).toHaveText('You watched this one');
+    await expect(hers.getByTestId('results-reason')).toHaveText('The host ended the game.');
+    await expect(hers.getByRole('region', { name: 'Hana’s game' })).toBeVisible();
+    expect(await statRowsOn(wren)).toEqual(rows);
+    await expect(hers.getByTestId('results-entry')).toHaveCount(0);
+    expect(await loneResultsLayout(wren), 'the watched results at 390x844').toEqual(LONE_FIT);
+
+    // Tab goes to Back to the room first: the numbers are for reading, not for pressing.
+    await hana.keyboard.press('Tab');
+    await expect(hana.getByTestId('results-done')).toBeFocused();
+    for (const p of [hana, wren]) await closeResults(p);
     expect(errors).toEqual([]);
   } finally {
     for (const c of contexts) await c.close();

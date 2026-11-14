@@ -5,7 +5,7 @@ import { installBrowserGlobals } from '../../test/env';
 installBrowserGlobals();
 
 const { player, room } = await import('../../test/fixtures');
-const { crowned, endReasonLine, rankedEntries, resultsHeadline, resultsPlace, resultsToShow } = await import('./results');
+const { crowned, endReasonLine, loneEntry, noteText, rankedEntries, resultsHeadline, resultsPlace, resultsToShow, statRows } = await import('./results');
 
 const AVATAR = { color: 0, emoji: 0 };
 const entry = (playerId: string, score: number, rank: number): ResultEntry => ({ playerId, name: playerId, avatar: AVATAR, score, rank });
@@ -43,14 +43,45 @@ describe('the results copy', () => {
   it('crowns nobody when one player played alone, and says how they finished instead', () => {
     const solo = (score: number) => results({ gameId: 'blackjack', entries: [entry('jord', score, 1)] });
     expect(crowned(solo(1250))).toBe(false);
-    expect(resultsHeadline(solo(0), 'chips')).toBe('You ran out of chips');
-    expect(resultsHeadline(solo(1250), 'chips')).toBe('You finished with 1,250 chips');
+    expect(resultsHeadline(solo(0), 'chips', 'jord')).toBe('You ran out of chips');
+    expect(resultsHeadline(solo(1250), 'chips', 'jord')).toBe('You finished with 1,250 chips');
+    // Anyone else reading watched them: the player's name, never "You".
+    expect(resultsHeadline(solo(0), 'chips', 'dan')).toBe('jord ran out of chips');
+    expect(resultsHeadline(solo(1250), 'chips', null)).toBe('jord finished with 1,250 chips');
+    expect(resultsHeadline(results({ entries: [entry('bob', 0, 1)] }), 'points', 'bob')).toBe('No points this time');
+    expect(resultsHeadline(results({ entries: [entry('bob', 0, 1)] }), 'points', 'dan')).toBe('bob scored no points');
     expect(resultsPlace(solo(0), 'jord', 'chips')).toBe('You ran out of chips');
     expect(resultsPlace(solo(1250), 'jord', 'chips')).toBe('You finished with 1,250 chips');
     expect(resultsPlace(solo(1), 'jord', 'chips')).toBe('You finished with 1 chip');
     expect(resultsPlace(results({ entries: [entry('bob', 4, 1)] }), 'bob')).toBe('You finished with 4 points');
     expect(resultsPlace(results({ entries: [entry('bob', 0, 1)] }), 'bob')).toBe('No points this time');
     expect(resultsPlace(results({ reason: 'players', entries: [entry('bob', 4, 1)] }), 'bob')).toBe('You finished with 4 points');
+  });
+
+  it('lays a lone player’s game out as rows: each number in full, a share as "6 of 14" held together, then their best moment', () => {
+    const mine: ResultEntry = {
+      ...entry('jord', 0, 1),
+      peak: 3200,
+      stats: [
+        { label: 'Rounds won', value: 0, of: 1 },
+        { label: 'Pushes', value: 1 },
+        { label: 'Best win', value: 999999999999 },
+        { label: 'Hands won', value: 1204, of: 2611 },
+      ],
+    };
+    expect(statRows(mine)).toEqual([
+      { label: 'Rounds won', value: '0\u00a0of\u00a01' },
+      { label: 'Pushes', value: '1' },
+      { label: 'Best win', value: '999,999,999,999' },
+      { label: 'Hands won', value: '1,204\u00a0of\u00a02,611' },
+      { label: 'Peaked at', value: '3,200' },
+    ]);
+    expect(statRows(entry('jord', 5, 1))).toEqual([]);
+    // One ranked player, whoever reads; never a table, never an empty result.
+    expect(loneEntry(results({ entries: [entry('jord', 5, 1)] }))?.playerId).toBe('jord');
+    expect(loneEntry(results())).toBeNull();
+    expect(loneEntry(results({ entries: [] }))).toBeNull();
+    expect(noteText('Out in hand 3, to Alice and Bob')).toBe('Out in hand\u00a03, to Alice and\u00a0Bob');
   });
 
   it('crowns nobody when everyone finished on nothing', () => {

@@ -1,12 +1,12 @@
 /** The round boundary: the results pause, the next round's betting, the end of the game, the host's End game and the holds. */
 import { RESUME_SETTLE_MS, holdEffects, resumeEffect } from '../waiting.js';
 import { BLACKJACK_FINAL_HOLD_MS } from '../../../shared/games/blackjack/deal.js';
-import { MIN_PLAYERS, activePlayers, adjustChips, connectedActive, dropLegacyShoe, noticeMessage, snapshot, systemMessage, type Gx } from './state.js';
+import { MIN_PLAYERS, activePlayers, adjustChips, connectedActive, dropLegacyShoe, newSeatStats, noticeMessage, snapshot, systemMessage, type Gx } from './state.js';
 
 /** Seats a player with the starting stack (at the start: nobody joins the game later). */
 export function seatPlayer(gx: Gx, playerId: string): void {
   if (gx.data.seats[playerId]) return;
-  gx.data.seats[playerId] = { chips: 0, bet: 0, hands: [], bustedOut: false, sittingOut: false, peak: gx.ctx.settings.startingChips };
+  gx.data.seats[playerId] = { chips: 0, bet: 0, hands: [], bustedOut: false, sittingOut: false, peak: gx.ctx.settings.startingChips, stats: newSeatStats() };
   adjustChips(gx, playerId, gx.ctx.settings.startingChips);
 }
 
